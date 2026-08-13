@@ -1,3 +1,5 @@
+![EZF Advance III](ezadvanceIII_image1.jpg) ![EZF Advance III](ezadvanceIII_image1.jpg)
+
 Please look at 
 [Project Summary](ezfadvanceIII_project_summary.md) 
 and 
