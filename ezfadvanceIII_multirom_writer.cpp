@@ -37,9 +37,9 @@ static constexpr unsigned char EP_IN  = 0x81;
 static constexpr int INTERFACE_NUMBER = 0;
 
 static constexpr size_t PROGRAM_BLOCK = 0x10000; // 64 KiB
-static constexpr size_t MAX_ROMS = 4;            // 4-ROM support capture-proven
 static constexpr size_t FLASH_WINDOW_SIZE = 0x800000; // 8 MiB local program window
 static constexpr size_t CARD_HALF_SIZE = 0x1000000;   // 128 Mbit / 16 MiB boundary
+static constexpr size_t CARD_192MBIT_SIZE = 0x1800000; // 192 Mbit / 24 MiB boundary
 static constexpr size_t MAX_CARD_IMAGE = 0x2000000;   // 256 Mbit / 32 MiB card
 static constexpr unsigned USB_TIMEOUT_MS = 15000;
 
@@ -62,7 +62,33 @@ static constexpr const char* host_platform_name()
 #endif
 }
 
-// ezfadvanceIII multi-ROM writer 0.5.10 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.5.12 for macOS, Linux and BSD.
+//
+// 0.5.12 removes the artificial five-ROM input limit. The writer now validates
+// capacity rather than imposing a small fixed ROM count:
+//   * total input ROM file bytes must not exceed 32 MiB / 256 Mbit;
+//   * the packed image plus loader must still fit the physical 32-MiB card;
+//   * the embedded loader has 120 structurally available 28-byte catalog slots,
+//     which is enforced as a safety bound rather than a claimed hardware/menu
+//     limit;
+//   * override syntax now supports multi-digit slots (for example --type10=3
+//     and --map10=6).
+// 4_4_4_4_8_8MB.pcap independently proves six active catalog entries, the same
+// 0x7080 loader, the same 125 relocations, the >=4-ROM zero-tail rule, and the
+// existing full-32-MiB erase/program/verify path.
+//
+// 0.5.11 adds capture-proven five-ROM and exact-24-MiB behavior from
+// 4_4_4_4_8MB.pcap:
+//   * five active 28-byte catalog entries are accepted;
+//   * the existing 0x7080 multi-ROM loader remains unchanged and still
+//     relocates at exactly 125 addresses;
+//   * the same final 26-byte zero tail seen with four ROMs is also used with
+//     five ROMs, so the zero-tail rule is now applied for 4 or 5 ROMs;
+//   * a 24-MiB image uses three 8-MiB erase/program windows;
+//   * exact 24-MiB post-write verification is now capture-proven: after
+//     window-2 programming, EZ3Manager transitions through the 0x00C0 mapping
+//     sequence and then performs linear 0x91 reads across all 24 MiB.
+// No new loader blob, save-map rule, packing rule, or USB framing is introduced.
 //
 // 0.5.10 is a Unix-like portability release. Protocol/image behavior is unchanged:
 //   * libusb header detection accepts either <libusb-1.0/libusb.h> or <libusb.h>;
@@ -158,7 +184,7 @@ static constexpr const char* host_platform_name()
 // The experimental 0.5.1 local-window verifier is removed: real hardware
 // proved its BANK1 read still returned window-0 data. Full read-back verify is
 // retained only for capture-proven geometries (<=8 MiB, exact 16 MiB, exact
-// 32 MiB, and the tiny Fire-Emblem-style tail immediately above 16 MiB).
+// 24 MiB, exact 32 MiB, and the tiny Fire-Emblem-style tail immediately above 16 MiB).
 // Other partial higher-window images are written normally but are not falsely
 // reported as verification failures.
 //
@@ -208,7 +234,24 @@ static constexpr uint32_t MULTI_TEMPLATE_BASE = 0x0004A880u;
 static constexpr size_t MULTI_TEMPLATE_LEN = 0x7080;
 static constexpr size_t MULTI_HEADER_OFF = 0x475E;
 static constexpr size_t MULTI_ENTRY_OFF = 0x476E;
-static constexpr size_t MULTI_CAPTURED_ENTRY_SLOTS = 3;
+// The repeated 28-byte catalog-slot region ends at loader offset 0x548E.
+// 4_4_4_4_8MB.pcap and 4_4_4_4_8_8MB.pcap prove entries 1..6 use this same
+// structure. The base template contains empty sentinel entries beyond those
+// used by the capture, so the writer may populate additional slots safely as
+// long as it never crosses into the next loader data structure.
+static constexpr size_t MULTI_CATALOG_END_OFF = 0x548E;
+static constexpr size_t MULTI_CATALOG_MAX_ENTRIES =
+    (MULTI_CATALOG_END_OFF - MULTI_ENTRY_OFF) / 28;
+static_assert(MULTI_ENTRY_OFF + MULTI_CATALOG_MAX_ENTRIES * 28
+              == MULTI_CATALOG_END_OFF,
+              "multi-ROM catalog region must contain whole 28-byte entries");
+static_assert(MULTI_CATALOG_MAX_ENTRIES == 120,
+              "unexpected multi-ROM catalog slot count");
+
+// kMultiTemplateB64 came from the original three-ROM capture, so its first
+// three catalog slots contain captured entries. Later slots are already empty
+// sentinels; additional ROMs overwrite those slots normally.
+static constexpr size_t MULTI_TEMPLATE_POPULATED_ENTRY_SLOTS = 3;
 
 // piano-bios.pcap proves that the original manager uses a slightly shorter
 // two-ROM form of the multi-ROM loader/menu image.
@@ -225,10 +268,12 @@ static constexpr size_t MULTI_CAPTURED_ENTRY_SLOTS = 3;
 static constexpr size_t MULTI_TWO_ROM_LEN = 0x6F80;
 static constexpr size_t MULTI_TWO_ROM_ERASED_TAIL_OFF = 0x6F26;
 
-// 8_8_8_8MiB.pcap proves the four-ROM form keeps the full 0x7080 loader but
-// zero-fills its final 26 bytes. The three-ROM capture leaves these bytes FF.
-static constexpr size_t MULTI_FOUR_ROM_ZERO_TAIL_OFF = 0x7066;
-static constexpr size_t MULTI_FOUR_ROM_ZERO_TAIL_LEN = 0x1A;
+// 8_8_8_8MiB.pcap, 4_4_4_4_8MB.pcap, and 4_4_4_4_8_8MB.pcap prove that
+// the four-, five-, and six-ROM forms keep the full 0x7080 loader and
+// zero-fill its final 26 bytes.
+// The three-ROM capture leaves these bytes FF.
+static constexpr size_t MULTI_FOUR_PLUS_ROM_ZERO_TAIL_OFF = 0x7066;
+static constexpr size_t MULTI_FOUR_PLUS_ROM_ZERO_TAIL_LEN = 0x1A;
 
 // Exact 28-byte loader gap recovered from a real cartridge programmed by
 // the original Windows software (absolute 0x1FFE4 for Piano+Bios_Dumper,
@@ -1572,6 +1617,53 @@ static bool flash_128mb_prepare_linear_verify(libusb_device_handle* h)
 // plus the four-write linear-read prefix before 0x91 verification. Keep this
 // sequence restricted to that tiny-tail geometry; a larger partial BANK2
 // multi-ROM image previously produced a boundary false negative.
+
+// 192-Mbit / exact-24-MiB post-program linear-read mapping from
+// 4_4_4_4_8MB.pcap.
+//
+// After the final block in physical window 2, original EZ3Manager selects
+// 0x00C0 before entering global linear-read mode:
+//   status, 55AA, 0200, 00C0, 0000, ~0.11-0.125 s, AA55,
+//   0000 x3, AA,55,06, status, then 55AA,0000,0000,0000.
+// Verification then reads 384 consecutive 64-KiB blocks from byte 0 through
+// byte 0x017FFFFF with ordinary linear 0x91 addresses.
+static bool flash_192mb_prepare_linear_verify(libusb_device_handle* h)
+{
+    std::cout << "\nPreparing 192-Mbit / 24-MiB linear read/verify mapping...\n";
+
+    if (!flash_status_sequence(h))
+        return false;
+
+    if (!tx92_2(h,0x55,0xAA,"VERIFY192 55AA")) return false;
+    if (!tx92_2(h,0x02,0x00,"VERIFY192 0200")) return false;
+    if (!tx92_2(h,0x00,0xC0,"VERIFY192 00C0")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY192 0000 A")) return false;
+
+    // USBPcap timestamps quantize the observed quiet interval to about
+    // 109 ms; use the same 125-ms settle already capture-proven throughout
+    // the writer's other flash-window transitions.
+    std::cout << "    VERIFY192 pre-AA55 settle: 125000 us\n";
+    std::this_thread::sleep_for(std::chrono::microseconds(125000));
+
+    if (!tx92_2(h,0xAA,0x55,"VERIFY192 AA55")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY192 0000 B")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY192 0000 C")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY192 0000 D")) return false;
+    if (!tx92_1(h,0x00,0xAA,"VERIFY192 selector0 AA")) return false;
+    if (!tx92_1(h,0x00,0x55,"VERIFY192 selector0 55")) return false;
+    if (!tx92_1(h,0x01,0x06,"VERIFY192 selector1 06")) return false;
+
+    if (!flash_status_sequence(h))
+        return false;
+
+    if (!tx92_2(h,0x55,0xAA,"VERIFY192READ 55AA")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY192READ 0000 A")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY192READ 0000 B")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY192READ 0000 C")) return false;
+
+    return true;
+}
+
 static bool flash_bank2_prepare_linear_verify(libusb_device_handle* h)
 {
     std::cout << "\nPreparing tiny BANK2-tail linear read/verify mapping "
@@ -2542,8 +2634,14 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms)
 
 static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms)
 {
-    if (roms.size() < 2 || roms.size() > MAX_ROMS)
-        throw std::runtime_error("multi image builder supports 2..4 ROMs");
+    if (roms.size() < 2)
+        throw std::runtime_error("multi image builder requires at least two ROMs");
+    if (roms.size() > MULTI_CATALOG_MAX_ENTRIES) {
+        std::ostringstream oss;
+        oss << "multi-ROM catalog has " << MULTI_CATALOG_MAX_ENTRIES
+            << " structural slots, but " << roms.size() << " ROMs were supplied";
+        throw std::runtime_error(oss.str());
+    }
 
     const std::vector<std::string> input_paths = [&]() {
         std::vector<std::string> v;
@@ -2696,7 +2794,7 @@ static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms)
     std::fill(
         t.begin() + static_cast<std::ptrdiff_t>(MULTI_ENTRY_OFF),
         t.begin() + static_cast<std::ptrdiff_t>(
-            MULTI_ENTRY_OFF + MULTI_CAPTURED_ENTRY_SLOTS * 28),
+            MULTI_ENTRY_OFF + MULTI_TEMPLATE_POPULATED_ENTRY_SLOTS * 28),
         0x00);
 
     for (size_t i = 0; i < roms.size(); ++i)
@@ -2719,13 +2817,14 @@ static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms)
             0xFF);
     }
 
-    if (roms.size() == 4) {
-        // Capture-exact four-ROM variant from 8_8_8_8MiB.pcap.
-        static_assert(MULTI_FOUR_ROM_ZERO_TAIL_OFF + MULTI_FOUR_ROM_ZERO_TAIL_LEN
+    if (roms.size() >= 4) {
+        // Capture-exact >=4-ROM tail from the independent four-, five-,
+        // and six-ROM captures.
+        static_assert(MULTI_FOUR_PLUS_ROM_ZERO_TAIL_OFF + MULTI_FOUR_PLUS_ROM_ZERO_TAIL_LEN
                       == MULTI_TEMPLATE_LEN,
-                      "four-ROM zero tail must end at the loader boundary");
+                      ">=4-ROM zero tail must end at the loader boundary");
         std::fill(
-            t.begin() + static_cast<std::ptrdiff_t>(MULTI_FOUR_ROM_ZERO_TAIL_OFF),
+            t.begin() + static_cast<std::ptrdiff_t>(MULTI_FOUR_PLUS_ROM_ZERO_TAIL_OFF),
             t.begin() + static_cast<std::ptrdiff_t>(MULTI_TEMPLATE_LEN),
             0x00);
     }
@@ -2761,8 +2860,9 @@ static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms)
                   << std::hex << loader_copy_len
                   << " bytes; image end 0x" << image.size()
                   << std::dec << '\n';
-    } else if (roms.size() == 4) {
-        std::cout << "Four-ROM capture-exact loader extent: 0x" << std::hex
+    } else if (roms.size() >= 4) {
+        std::cout << roms.size()
+                  << "-ROM capture-exact loader extent: 0x" << std::hex
                   << loader_copy_len << "; image end 0x" << image.size()
                   << std::dec << '\n';
     } else {
@@ -2810,20 +2910,22 @@ static void print_layout(const std::vector<RomInfo>& roms,
 static void usage(const char* argv0)
 {
     std::cerr
-        << "ezfadvanceIII manager-primed ROM writer 0.5.10 (" << host_platform_name() << ")\n\n"
+        << "ezfadvanceIII manager-primed ROM writer 0.5.12 (" << host_platform_name() << ")\n\n"
         << "Dry run / inspect layout only:\n"
-        << "  " << argv0 << " rom1.gba [rom2.gba] [rom3.gba] [rom4.gba]\n\n"
+        << "  " << argv0 << " rom1.gba [rom2.gba ...]\n\n"
         << "Build in memory + erase/program/verify:\n"
         << "  " << argv0 << " --yes-really-write "
-           "rom1.gba [rom2.gba] [rom3.gba] [rom4.gba]\n\n"
+           "rom1.gba [rom2.gba ...]\n\n"
         << "Build in memory + erase/program without read-back verify:\n"
         << "  " << argv0 << " --yes-really-write --skip-verify "
-           "rom1.gba [rom2.gba] [rom3.gba] [rom4.gba]\n\n"
+           "rom1.gba [rom2.gba ...]\n\n"
         << "Optional capture-metadata overrides:\n"
-        << "  --type1=2   --type2=7   --type3=9   --type4=2\n"
-        << "  --map1=6    --map2=3    --map3=3    --map4=3\n\n"
+        << "  --type1=2   --type6=3   --type10=4\n"
+        << "  --map1=6    --map6=6    --map10=3\n\n"
         << "Notes:\n"
-        << "  * This version supports 1..4 ROMs. Four-ROM support is capture-proven.\n"
+        << "  * No small fixed ROM-count limit is imposed; six ROMs are capture-proven.\n"
+        << "  * The loader contains 120 structural catalog slots; this is a safety bound, not a claim that 120-ROM menu operation is proven.\n"
+        << "  * Total input ROM file size must not exceed 32 MiB / 256 Mbit.\n"
         << "  * No intermediate .bin image is written to disk.\n"
         << "  * FLASH/FLASH512/FLASH1M/EEPROM signatures emit a conservative warning.\n"
         << "    Each warning requires an explicit y/yes response to continue.\n"
@@ -2839,7 +2941,7 @@ static void usage(const char* argv0)
         << "  * Smaller ROMs may reuse trailing FF padding of earlier ROMs.\n"
         << "  * The multi-ROM loader is embedded in a suitable FF run when possible.\n"
         << "  * Physical/catalog ROM #1 is patched to branch to the EZF loader/menu.\n"
-        << "  * Uncaptured partial-window readback geometries are reported as verify-skipped.\n"
+        << "  * Exact 24-MiB readback is capture-proven; other uncaptured partial-window geometries are verify-skipped.\n"
         << "  * --skip-verify skips all post-write ROM read-back comparison.\n"
         << "    A short status/reset cleanup is still sent after programming.\n"
         << "  * Without --yes-really-write, no USB device is touched and nothing is written.\n";
@@ -2850,8 +2952,8 @@ int main(int argc, char** argv)
     try {
         bool do_write = false;
         bool skip_verify = false;
-        std::array<std::optional<uint8_t>, MAX_ROMS> type_override;
-        std::array<std::optional<uint8_t>, MAX_ROMS> mapping_override;
+        std::array<std::optional<uint8_t>, MULTI_CATALOG_MAX_ENTRIES> type_override;
+        std::array<std::optional<uint8_t>, MULTI_CATALOG_MAX_ENTRIES> mapping_override;
         std::vector<std::string> rom_paths;
 
         for (int i = 1; i < argc; ++i) {
@@ -2862,41 +2964,47 @@ int main(int argc, char** argv)
             } else if (a == "--skip-verify") {
                 skip_verify = true;
             } else if (a.rfind("--type", 0) == 0) {
-                // --type1=7
-                if (a.size() < 9 || a[7] != '=') {
+                // --type1=7, --type10=3, ...
+                const size_t eq = a.find('=');
+                if (eq == std::string::npos || eq <= 6 || eq + 1 >= a.size()) {
                     usage(argv[0]);
                     return 1;
                 }
-                const int slot = a[6] - '1';
-                if (slot < 0 || slot >= static_cast<int>(MAX_ROMS)) {
-                    std::cerr << "Bad type override slot: " << a << '\n';
+                const size_t one_based = static_cast<size_t>(
+                    std::stoul(a.substr(6, eq - 6)));
+                if (one_based == 0 || one_based > MULTI_CATALOG_MAX_ENTRIES) {
+                    std::cerr << "Bad type override slot: " << a
+                              << " (valid structural catalog slots are 1.."
+                              << MULTI_CATALOG_MAX_ENTRIES << ")\n";
                     return 1;
                 }
-                const int value = std::stoi(a.substr(8));
+                const int value = std::stoi(a.substr(eq + 1));
                 if (value < 0 || value > 255) {
                     std::cerr << "Bad type override value: " << a << '\n';
                     return 1;
                 }
-                type_override[static_cast<size_t>(slot)] =
-                    static_cast<uint8_t>(value);
+                type_override[one_based - 1] = static_cast<uint8_t>(value);
             } else if (a.rfind("--map", 0) == 0) {
-                // --map1=6
-                if (a.size() < 8 || a[6] != '=') {
+                // --map1=6, --map10=3, ...
+                const size_t eq = a.find('=');
+                if (eq == std::string::npos || eq <= 5 || eq + 1 >= a.size()) {
                     usage(argv[0]);
                     return 1;
                 }
-                const int slot = a[5] - '1';
-                if (slot < 0 || slot >= static_cast<int>(MAX_ROMS)) {
-                    std::cerr << "Bad mapping override slot: " << a << '\n';
+                const size_t one_based = static_cast<size_t>(
+                    std::stoul(a.substr(5, eq - 5)));
+                if (one_based == 0 || one_based > MULTI_CATALOG_MAX_ENTRIES) {
+                    std::cerr << "Bad mapping override slot: " << a
+                              << " (valid structural catalog slots are 1.."
+                              << MULTI_CATALOG_MAX_ENTRIES << ")\n";
                     return 1;
                 }
-                const int value = std::stoi(a.substr(7));
+                const int value = std::stoi(a.substr(eq + 1));
                 if (value < 0 || value > 255) {
                     std::cerr << "Bad mapping override value: " << a << '\n';
                     return 1;
                 }
-                mapping_override[static_cast<size_t>(slot)] =
-                    static_cast<uint8_t>(value);
+                mapping_override[one_based - 1] = static_cast<uint8_t>(value);
             } else if (!a.empty() && a[0] == '-') {
                 std::cerr << "Unknown option: " << a << '\n';
                 usage(argv[0]);
@@ -2906,8 +3014,14 @@ int main(int argc, char** argv)
             }
         }
 
-        if (rom_paths.empty() || rom_paths.size() > MAX_ROMS) {
+        if (rom_paths.empty()) {
             usage(argv[0]);
+            return 1;
+        }
+        if (rom_paths.size() > MULTI_CATALOG_MAX_ENTRIES) {
+            std::cerr << "Too many ROMs for the embedded catalog structure: "
+                      << rom_paths.size() << " supplied, "
+                      << MULTI_CATALOG_MAX_ENTRIES << " slots available.\n";
             return 1;
         }
 
@@ -2929,6 +3043,21 @@ int main(int argc, char** argv)
                 return 1;
 
             roms.push_back(std::move(r));
+        }
+
+        uint64_t total_rom_file_bytes = 0;
+        for (const auto& r : roms)
+            total_rom_file_bytes += static_cast<uint64_t>(r.data.size());
+
+        std::cout << "Total input ROM file bytes: " << total_rom_file_bytes
+                  << " (0x" << std::hex << total_rom_file_bytes << std::dec
+                  << "), cartridge capacity " << MAX_CARD_IMAGE
+                  << " bytes / 256 Mbit\n";
+
+        if (total_rom_file_bytes > MAX_CARD_IMAGE) {
+            std::cerr << "Total input ROM file size exceeds the 256-Mbit / "
+                         "32-MiB cartridge capacity.\n";
+            return 1;
         }
 
         std::vector<uint8_t> image =
@@ -3087,6 +3216,10 @@ int main(int argc, char** argv)
             // on the simple capture-linear path.
             if (image.size() == MAX_CARD_IMAGE) {
                 ok = flash_256mb_prepare_linear_verify(h);
+                if (ok) ok = verify_image_linear(h, image);
+                full_verify_completed = ok;
+            } else if (image.size() == CARD_192MBIT_SIZE) {
+                ok = flash_192mb_prepare_linear_verify(h);
                 if (ok) ok = verify_image_linear(h, image);
                 full_verify_completed = ok;
             } else if (image.size() == CARD_HALF_SIZE) {

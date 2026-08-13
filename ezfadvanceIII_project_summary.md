@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current writer version covered by this summary: **0.5.10**.
+Current writer version covered by this summary: **0.5.12**.
 
 ---
 
@@ -119,11 +119,12 @@ Capture-supported full readback verification exists for:
 ```text
 <= 8 MiB
 exact 16 MiB
+exact 24 MiB
 exact 32 MiB
 Fire-Emblem-style tiny tail immediately above 16 MiB
 ```
 
-Arbitrary partial images in the 16–32 MiB region are programmed normally, but full verification is skipped unless a capture-proven read mapping exists.
+Arbitrary other partial images in the 16–32 MiB region are programmed normally, but full verification is skipped unless a capture-proven read mapping exists.
 
 This avoids false failures caused by invented window-selection rules.
 
@@ -188,7 +189,7 @@ The expected relocation counts are checked so template corruption or incorrect r
 
 ## Multi-ROM loader variants
 
-The serialized loader form changes with ROM count.
+The underlying multi-ROM template remains the same across every captured count from 2 through 8 entries. It is the same `0x7080` loader with 125 relocation sites; only small serialization details vary by count.
 
 ### Two ROMs
 
@@ -200,31 +201,29 @@ The tail remains erased and the unused third catalog slot uses a specific sentin
 
 ### Three ROMs
 
-Uses the full:
+Uses the full `0x7080`; the final 26 bytes remain `FF`.
 
-```text
-0x7080
-```
+### Four or more ROMs
 
-The final 26 bytes remain `FF`.
-
-### Four ROMs
-
-Uses the full `0x7080` loader, but:
+Independent 4-, 5-, 6-, 7-, and 8-ROM captures use the full `0x7080` loader and:
 
 ```text
 offsets 0x7066..0x707F = 00
 ```
 
-Four active entries are capture- and hardware-proven.
+No new loader blob is needed. The same `kMultiTemplateB64`, 125 relocations, and 28-byte catalog-entry format continue to match the captures.
 
-Current limit:
+The repeated catalog region from `0x476E` to `0x548E` contains **120 structural slots**. This is a safety bound, not a proven 120-ROM menu limit.
+
+Current 0.5.12 policy therefore has **no small fixed ROM-count limit**. It requires:
 
 ```text
-MAX_ROMS = 4
+total input ROM bytes <= 32 MiB / 256 Mbit
+packed image + loader <= 32 MiB
+entry count <= 120 structural catalog slots
 ```
 
-The loader appears to contain more unused catalog-like slots, but support above four remains intentionally disabled until a higher-count PCAP is captured.
+Original EZ3Manager captures currently prove up to **8 active entries**.
 
 ---
 
@@ -639,17 +638,13 @@ fixed both games and led to the generic size-class plus signature-associated map
 
 ## Current open questions
 
-### More than four ROMs
+### Higher menu counts
 
-The loader appears capable of containing more catalog entries, but only 1–4 entries are currently capture/hardware supported.
+Original-manager captures now prove 1 through 8 active catalog entries. The loader contains 120 structural 28-byte slots, but menu/runtime behavior above 8 entries remains unproven.
 
-A five-ROM PCAP is required before increasing the limit.
+### Other partial 16–32 MiB readback geometries
 
-### Partial 16–32 MiB readback
-
-Programming across all four flash windows is understood, but arbitrary partial higher-window verification mapping is not.
-
-A 24-MiB original-manager capture would be especially useful.
+Exact 16-, 24-, and 32-MiB verification mappings are capture-proven, plus the tiny Fire-Emblem-style tail immediately above 16 MiB. Other arbitrary partial higher-window extents remain deliberately unproven.
 
 ### FLASH1M
 
@@ -686,10 +681,10 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 
 ## Current native platform scope
 
-Version 0.5.10 keeps the writer on one C++17/libusb Unix-like codebase:
+Version 0.5.12 keeps the writer on one C++17/libusb Unix-like codebase:
 
 ```text
-macOS       target; 0.5.10 compilation verified on Apple Silicon/Homebrew
+macOS       target; 0.5.12 compilation verified on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -698,23 +693,47 @@ DragonFly   target; validation pending
 Windows     no native mainline support; use a Linux VM with USB passthrough
 ```
 
-The portability release changes build/platform handling only; it does not change loader, packing, catalog, erase, program, or verification rules.
+The portability foundation remains the same; 0.5.11/0.5.12 add new capture-derived image/catalog/verification behavior without changing the platform policy.
 
 ## Current project status
 
-At version **0.5.10**, the project has a mostly structural model of original EZ3Manager behavior:
+At version **0.5.12**, the project has a mostly structural model of original EZ3Manager behavior:
 
 - tested cartridge geometry is four 8-MiB windows / 32 MiB total;
-- 1–4 ROM menu images are supported;
+- there is no small fixed ROM-count limit; 1–8 active entries are capture-proven and the loader exposes 120 structural catalog slots as a safety bound;
+- total input ROM bytes may be up to and including 32 MiB / 256 Mbit, provided packing and loader placement still fit;
 - ROM ordering is stable largest-first;
-- placement is size-class based and reuses erased padding;
-- single and multi loaders are capture-derived and relocatable;
+- placement is size-class based and reuses erased padding/internal `FF` runs;
+- single and multi loaders are capture-derived and relocatable; the same `0x7080` multi-loader with 125 relocations matches captured 2–8 ROM configurations;
 - catalog `type` is ROM-size based;
 - catalog `map` uses capture-derived metadata associations (`3`, `5`, `6`) and is not treated as a definitive runtime save-mode field;
-- exact 8-, 16-, and 32-MiB verification paths are known;
+- exact 8-, 16-, 24-, and 32-MiB verification paths are known;
 - unsafe verification guesses have been removed;
 - paired FFTA evidence proves that non-SRAM save-library signatures may survive SRAM patching while runtime save code changes; the writer therefore keeps EZ3 metadata classification separate from runtime save-code analysis;
 - native scope is macOS/Linux/BSD through libusb; Windows users should use a Linux VM with USB passthrough;
 - multiple mixed-size and full-card layouts have been proven on original GBA hardware.
 
 The remaining work is primarily **expanding evidence coverage**, not redesigning the core architecture.
+
+## New multi-ROM evidence in 0.5.11 / 0.5.12
+
+Recent original-manager PCAPs extend the proven menu/count model without requiring a new loader:
+
+```text
+5 ROMs: 8 + 4 + 4 + 4 + 4 MiB = 24 MiB
+6 ROMs: 8 + 8 + 4 + 4 + 4 + 4 MiB = 32 MiB
+7 ROMs: 8 + 4 + 4 + 4 + 4 + 4 + 4 MiB = 32 MiB
+8 ROMs: 8 x 4 MiB = 32 MiB
+```
+
+Across these captures:
+
+- catalog count fields encode 5, 6, 7, and 8 normally;
+- the existing multi-loader template remains exact with 125 relocations;
+- the `>=4` final-26-byte zero tail is consistent;
+- the next unused slot is the normal sentinel;
+- 24 MiB uses three erase/program windows and has a newly proven exact linear verify path;
+- 32 MiB uses four erase/program windows and the existing full-card linear verify path;
+- full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
+
+The 0.5.12 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

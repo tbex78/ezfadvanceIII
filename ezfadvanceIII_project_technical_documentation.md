@@ -1,9 +1,9 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.5.10`  
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.5.12`  
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge  
-**Host implementation:** C++17 + libusb; native project scope is macOS, Linux, and BSD. Current 0.5.10 compilation is verified on macOS / Apple Silicon; Linux/BSD validation remains pending.
+**Host implementation:** C++17 + libusb; native project scope is macOS, Linux, and BSD. Current 0.5.12 compilation is verified on macOS / Apple Silicon; Linux/BSD validation remains pending.
 
 ---
 
@@ -113,11 +113,11 @@ Project unit convention:
 The important constants in the current writer are:
 
 ```text
-PROGRAM_BLOCK      = 0x00010000  = 64 KiB
-FLASH_WINDOW_SIZE  = 0x00800000  = 8 MiB
-CARD_HALF_SIZE     = 0x01000000  = 16 MiB
-MAX_CARD_IMAGE     = 0x02000000  = 32 MiB
-MAX_ROMS           = 4
+PROGRAM_BLOCK       = 0x00010000  = 64 KiB
+FLASH_WINDOW_SIZE   = 0x00800000  = 8 MiB
+CARD_HALF_SIZE      = 0x01000000  = 16 MiB
+CARD_192MBIT_SIZE   = 0x01800000  = 24 MiB
+MAX_CARD_IMAGE      = 0x02000000  = 32 MiB
 ```
 
 The 32-MiB cartridge is exposed to the programming protocol as **four 8-MiB physical program/erase windows**.
@@ -397,6 +397,7 @@ Current full linear verification is used for:
 ```text
 image <= 8 MiB
 image == 16 MiB
+image == 24 MiB
 image == 32 MiB
 ```
 
@@ -408,22 +409,42 @@ The original manager does not simply leave BANK1 selected and begin reads. It en
 
 This is intentionally different from BANK1 program selection, which uses `0x0040`.
 
-### 11.3 Exact 32-MiB verify transition
+### 11.3 Exact 24-MiB verify transition
 
-A separate capture-derived transition is used after programming BANK3. It prepares a full 256-Mbit linear read mapping, after which the writer verifies all 512 x 64-KiB blocks.
+`4_4_4_4_8MB.pcap` proves the 192-Mbit / 24-MiB transition. After the final block in physical window 2, EZ3Manager performs:
 
-### 11.4 Partial higher-window images
+```text
+status
+55AA
+0200
+00C0
+0000
+quiet interval (~0.11-0.125 s)
+AA55
+0000
+0000
+0000
+AA
+55
+06
+status
+55AA
+0000
+0000
+0000
+```
 
-For an image such as a generic 24-MiB layout, programming is supported because the program-window geometry is known. However, the exact original-manager readback mapping for that partial geometry is not yet known.
+It then issues 384 consecutive 64-KiB linear `0x91` reads covering byte `0x0000000` through `0x017FFFFF`. All captured verify payloads matched the corresponding programmed payloads.
 
-The writer therefore:
+### 11.4 Exact 32-MiB verify transition
 
-1. finishes programming;
-2. returns the flash/bridge to a normal status state;
-3. reports that full readback verification was skipped;
-4. does **not** fabricate a false verification failure.
+A separate capture-derived transition is used after programming BANK3. It prepares a full 256-Mbit linear read mapping, after which the writer verifies all 512 x 64-KiB blocks. The independent 6-, 7-, and 8-ROM full-card captures reproduce this same sequence.
 
-### 11.5 `--skip-verify`
+### 11.5 Other partial higher-window images
+
+Programming remains supported across all four physical windows, but arbitrary partial extents above 16 MiB are not assumed to share the exact-24-MiB or exact-32-MiB read mapping. If a geometry is not capture-proven, the writer finishes programming, performs status/reset cleanup, and reports that full readback verification was skipped rather than inventing a false mapping.
+
+### 11.6 `--skip-verify`
 
 When explicitly requested:
 
@@ -532,7 +553,7 @@ Unexpected counts are treated as a build error because they would imply either t
 
 ## 16. Multi-ROM loader variants
 
-The original manager changes the serialized loader form based on ROM count.
+The original manager changes a small part of the serialized loader form based on ROM count, but the underlying multi-ROM loader template remains the same. Captures with 2, 3, 4, 5, 6, 7, and 8 active entries all use the same `0x7080` loader architecture and the same 125 relocation sites.
 
 ### 16.1 Two-ROM form
 
@@ -548,8 +569,8 @@ The region from `0x6F26` to `0x6F7F` is left erased (`FF`).
 The unused third catalog slot is encoded with a specific sentinel:
 
 ```text
-byte 0      = 00
-bytes 1..15 = ASCII spaces
+byte 0       = 00
+bytes 1..15  = ASCII spaces
 bytes 16..27 = 00
 ```
 
@@ -563,30 +584,36 @@ Uses the full:
 
 The final 26 bytes remain `FF` in the captured three-ROM form.
 
-### 16.3 Four-ROM form
+### 16.3 Four or more ROMs
 
-The 4 x 8-MiB capture proves four active catalog entries.
-
-It also exposes a small but real four-ROM loader variant:
+Independent 4-, 5-, 6-, 7-, and 8-ROM captures prove the same full `0x7080` loader and the same tail variant:
 
 ```text
 loader offsets 0x7066..0x707F = 00
 length = 0x1A = 26 bytes
 ```
 
-Otherwise the loader is the same capture-derived `0x7080` template.
+The existing `kMultiTemplateB64` remains byte-for-byte valid after normal relocation and catalog patching. No new loader blob is required as entry count increases through the currently captured range.
 
-### 16.4 More than four entries
+### 16.4 Catalog capacity versus proven menu count
 
-The captured loader contains many unused 28-byte slot-like structures, suggesting the original menu architecture may have been designed for substantially more entries.
-
-However, the project currently caps support at:
+The repeated 28-byte catalog-slot region runs from loader offset `0x476E` to `0x548E`, which structurally contains:
 
 ```text
-MAX_ROMS = 4
+120 catalog slots
 ```
 
-because four is the highest entry count that has been both captured and exercised on hardware in this project.
+This is a **binary-structure safety bound**, not a claim that a 120-ROM menu has been proven on hardware.
+
+The writer therefore no longer imposes a small `MAX_ROMS` behavioral limit. Instead it checks:
+
+```text
+total input ROM bytes <= 32 MiB / 256 Mbit
+packed image + loader <= 32 MiB
+number of entries <= 120 structural catalog slots
+```
+
+USB captures now prove the original manager serializes at least **8 active catalog entries** using the same format.
 
 ---
 
@@ -1552,7 +1579,33 @@ Changes include:
 - native Windows builds are intentionally out of scope; Windows users should use a Linux VM with USB passthrough;
 - save-warning wording explicitly describes the marker as an embedded save-library signature and notes that stale FLASH/EEPROM signatures may survive SRAM patching.
 
-The 0.5.10 source has been compiled successfully on macOS / Apple Silicon with Homebrew libusb. Linux and BSD compile/hardware validation remain pending.
+The 0.5.10 source was compiled successfully on macOS / Apple Silicon with Homebrew libusb. Linux and BSD compile/hardware validation remain pending.
+
+### 36.11 0.5.11
+
+Added evidence from `4_4_4_4_8MB.pcap`:
+
+- five active catalog entries;
+- same existing `0x7080` multi-loader and 125 relocations;
+- final 26 bytes zero for the five-ROM form, generalizing the four-ROM tail behavior;
+- exact 24-MiB / 192-Mbit programming geometry;
+- capture-proven exact 24-MiB linear verification transition using `0x00C0` before linear `0x91` reads.
+
+The release also added `flash_192mb_prepare_linear_verify()`.
+
+### 36.12 0.5.12
+
+Removed the artificial small fixed ROM-count limit and replaced it with structural/capacity validation. Subsequent 6-, 7-, and 8-ROM captures validate this direction.
+
+Current rules:
+
+- total input ROM file bytes may be **up to and including 32 MiB / 256 Mbit**; equality is required for proven full-card 6-, 7-, and 8-ROM cases;
+- the packed image plus loader must still fit the physical 32-MiB card;
+- the embedded multi-loader exposes 120 whole 28-byte catalog slots between offsets `0x476E` and `0x548E`; this is enforced only as a structural safety bound;
+- multi-digit override syntax is supported, for example `--type10=...` and `--map10=...`;
+- six, seven, and eight active entries are capture-proven without changing the loader blob, relocation algorithm, catalog encoding, or full-32-MiB verify sequence.
+
+The 8-ROM capture also proves that a full 32 MiB of ROM files can coexist with the loader when EZ3Manager places the loader inside an existing erased/internal `FF` run.
 
 ---
 
@@ -1563,7 +1616,7 @@ The current source targets C++17 and libusb on Unix-like systems.
 Native project scope:
 
 ```text
-macOS       supported target; 0.5.10 compilation verified
+macOS       supported target; 0.5.12 compilation verified
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -1576,7 +1629,7 @@ Typical Apple Silicon/Homebrew build command:
 
 ```bash
 c++ -std=c++17 -O2 \
-  ezfadvanceIII_multirom_writer_0.5.10.cpp \
+  ezfadvanceIII_multirom_writer_0.5.12.cpp \
   -I/opt/homebrew/opt/libusb/include \
   -L/opt/homebrew/opt/libusb/lib \
   -lusb-1.0 \
@@ -1587,7 +1640,7 @@ On systems where libusb publishes a `pkg-config` file, the intended portable for
 
 ```bash
 c++ -std=c++17 -O2 \
-  ezfadvanceIII_multirom_writer_0.5.10.cpp \
+  ezfadvanceIII_multirom_writer_0.5.12.cpp \
   $(pkg-config --cflags --libs libusb-1.0) \
   -o ezfadvanceIII_multirom_writer
 ```
@@ -1790,14 +1843,66 @@ The single loader template relocated to `0xD49020` matched all 1,632 loader byte
 
 Across the captured ROM payload, outside the expected first-entry branch patch and loader insertion, no EEPROM-specific patch was observed. This agrees with the user's clarification that save-format patching in the original Windows workflow is performed manually with a separate tool, not by EZ3Manager itself.
 
-### 39.7 Exact block-count sanity table
+### 39.7 Five-ROM 24-MiB fixture (`4_4_4_4_8MB.pcap`)
+
+After stable descending-size ordering:
+
+```text
+#1 8 MiB @ 0x0000000
+#2 4 MiB @ 0x0800000
+#3 4 MiB @ 0x0C00000
+#4 4 MiB @ 0x1000000
+#5 4 MiB @ 0x1400000
+Loader @ 0x2CC420
+Image end = 0x1800000 = 24 MiB
+```
+
+The loader has count fields `5 / 5`, uses the unchanged multi-loader template with exactly 125 relocations, and uses the same final-26-byte zero tail as the four-ROM form.
+
+This capture additionally proves exact 24-MiB verification. After window-2 programming, EZ3Manager performs the `0x00C0` mapping transition and then 384 linear 64-KiB `0x91` reads. All captured program and verify payloads matched.
+
+### 39.8 Six-ROM full-card fixture (`4_4_4_4_8_8MB.pcap`)
+
+```text
+8 + 8 + 4 + 4 + 4 + 4 MiB = 32 MiB
+ROM starts = 0x0000000, 0x0800000, 0x1000000, 0x1400000,
+             0x1800000, 0x1C00000
+Loader @ 0x5C2360
+Catalog count = 6 / 6
+```
+
+The reconstructed loader matched the existing template logic byte-for-byte: same `0x7080` extent, 125 relocations, normal 28-byte entries, and the `>=4` zero-tail form. Full-card operation is 540 erases, 512 program blocks, and 512 linear verify reads.
+
+### 39.9 Seven-ROM full-card fixture (`4_4_4_4_4_4_8MB.pcap`)
+
+```text
+8 + 4 + 4 + 4 + 4 + 4 + 4 MiB = 32 MiB
+Catalog count = 7 / 7
+Loader @ 0x5C2360
+```
+
+The full captured `0x7080` loader reconstructed with **0 mismatches** using the existing template, known 28-byte gap restoration, 125 relocations, seven catalog entries, and the `>=4` zero tail. Slot 8 is the normal empty sentinel.
+
+### 39.10 Eight-ROM full-card fixture (`4_4_4_4_4_4_4_4MB.pcap`)
+
+```text
+8 x 4 MiB = 32 MiB
+ROM starts = 0x0000000, 0x0400000, 0x0800000, 0x0C00000,
+             0x1000000, 0x1400000, 0x1800000, 0x1C00000
+Catalog count = 8 / 8
+Loader @ 0x9E9C30
+```
+
+This capture is particularly important because all ROM files already total the complete 32-MiB cartridge capacity. EZ3Manager still succeeds by embedding the loader inside an internal erased `FF` run. Slot 9 is the normal empty sentinel. All observable loader bytes match the current template construction; the only unobservable portion is the USBPcap snaplen gap for this placement. Full-card verification again uses 512 linear 64-KiB reads.
+
+### 39.11 Exact block-count sanity table
 
 | Image extent | 64-KiB blocks | Typical captured use |
 |---:|---:|---|
 | 8 MiB | 128 | MegaManZ+Piano, F-Zero+Mario Kart |
 | 16 MiB | 256 | 8+4+4, ordinary full 16-MiB image |
-| 24 MiB | 384 | program geometry supported; generic verify mapping still open |
-| 32 MiB | 512 | 16+8+8, 8+8+8+8, full-card image |
+| 24 MiB | 384 | exact 24-MiB program + linear verify capture-proven |
+| 32 MiB | 512 | 16+8+8, 4/5/6/7/8-entry full-card layouts, full-card image |
 
 The relation is simply:
 
@@ -1811,31 +1916,31 @@ for exact block-aligned extents.
 
 ## 40. Open questions
 
-### 39.1 More than four ROMs
+### 40.1 Higher menu counts
 
-The loader appears to contain many unused entry slots, but only 1-4 entries are currently capture/hardware supported.
+The binary loader has 120 structural 28-byte catalog slots, and captures now prove 1 through 8 active entries. The writer no longer imposes a small fixed count limit, but **menu/runtime behavior above 8 entries remains unproven**.
 
-A five-ROM PCAP is required before increasing `MAX_ROMS`.
+Future captures with 9+ ROMs are useful for extending the proven range and checking whether any UI/runtime limit appears before the 120-slot structural boundary.
 
-### 39.2 Partial 16-32 MiB readback mapping
+### 40.2 Other partial 16-32 MiB readback geometries
 
-Programming is known across all four windows, but the original-manager verify state for arbitrary partial higher-window images is still unknown.
+Exact 24-MiB verification is now capture-proven, along with exact 16 MiB and exact 32 MiB. The Fire-Emblem-style tiny tail immediately above 16 MiB also has a dedicated capture-derived path.
 
-A 24-MiB original-manager capture is especially valuable.
+Other arbitrary partial higher-window extents remain deliberately unproven and should not be generalized without captures.
 
-### 39.3 FLASH1M
+### 40.3 FLASH1M
 
 The writer maps `FLASH1M_V...` to 6, consistent with the FLASH family, but a dedicated original-manager capture and save test would strengthen this assumption.
 
-### 39.4 EEPROM universality
+### 40.4 EEPROM universality
 
 `EEPROM_V124 -> map 5` is capture-proven. It is plausible that all `EEPROM_Vxxx` revisions and both EEPROM capacities use map 5, but that remains a family-level inference until more captures are collected.
 
-### 39.5 Save-bank behavior in multi-ROM mode
+### 40.5 Save-bank behavior in multi-ROM mode
 
 ROM catalog mapping is understood much better than multi-ROM save selection. The exact way the original manager associates multiple save regions with menu entries remains a separate research area.
 
-### 39.6 Cartridge density probing
+### 40.6 Cartridge density probing
 
 Four probe windows imply the tested 32-MiB geometry, but the project does not yet contain a formal density-identification algorithm for arbitrary EZ3 cartridge variants.
 
@@ -1902,20 +2007,21 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At `0.5.10`, the project has moved from title-specific experimentation to a mostly structural model:
+At `0.5.12`, the project has moved from title-specific experimentation to a mostly structural model:
 
 - cartridge geometry is understood as four 8-MiB program/erase windows;
-- 1-4 ROM menu images are supported;
+- the writer has no small fixed ROM-count limit; 1-8 active entries are capture-proven, while the loader provides 120 structural catalog slots as a safety bound;
+- total input ROM bytes may be up to and including the full 32-MiB / 256-Mbit capacity, provided packing and loader placement still fit;
 - ROM ordering is stable largest-first;
-- ROM placement is size-class based and can reuse erased padding;
+- ROM placement is size-class based and can reuse erased padding/internal `FF` runs, including full-card ROM totals where the loader is embedded in an internal erased region;
 - single and multi loader templates are capture-derived and relocatable;
+- the multi loader remains the same `0x7080` template with 125 relocations through captured 2-8 ROM configurations;
 - catalog type is ROM-size based;
 - catalog map uses capture-derived metadata associations (`3`, `5`, `6` in current evidence) and is not treated as a definitive runtime save-mode field;
-- exact 8-, 16-, and 32-MiB verification paths are known;
-- unsafe partial-window verification guesses have been removed;
-- non-SRAM save-library signatures are visible to the user; paired FFTA evidence now proves that a manual SRAM patch can redirect runtime save code while leaving `FLASH512_V130` and EZ3 `map 6` unchanged;
+- exact 8-, 16-, 24-, and 32-MiB verification paths are known, plus the dedicated tiny-tail-above-16-MiB path;
+- unsafe arbitrary partial-window verification guesses remain removed;
+- non-SRAM save-library signatures are visible to the user; paired FFTA evidence proves that a manual SRAM patch can redirect runtime save code while leaving `FLASH512_V130` and EZ3 `map 6` unchanged;
 - native code scope is macOS/Linux/BSD via libusb; native Windows is intentionally out of scope and Windows users should use a Linux VM with USB passthrough;
 - multiple mixed-size configurations have been verified on original GBA hardware.
 
-The remaining work is concentrated in **expanding evidence coverage**, not redesigning the core architecture.
-
+The remaining work is concentrated in **expanding evidence coverage**, especially higher menu counts, save-bank behavior, additional save-library families, and Linux/BSD hardware validation.
