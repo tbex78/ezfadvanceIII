@@ -12,7 +12,24 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current writer version covered by this summary: **0.5.12**.
+Current shared project/toolset version covered by this summary: **0.6.0**.
+
+All mainline utilities carry this same version:
+
+```text
+ezfadvanceIII_multirom_writer
+ezfadvanceIII_card_reader
+ezfadvanceIII_save_reader
+ezfadvanceIII_wipe_card
+```
+
+Beginning with 0.6.0, a code change to **any one** of these utilities bumps the shared version for **all four**, even when some utilities have no functional change in that release.
+
+---
+
+## Shared versioning policy
+
+From **0.6.0** onward, the project uses one version across writer, card reader, save reader, and wipe utility. If code changes in at least one program, the next release number applies to all four programs. This keeps logs, documentation, binaries, and support discussions aligned to one toolset release.
 
 ---
 
@@ -114,17 +131,30 @@ As a result, current verification behavior is deliberately conservative.
 
 ## Verification policy
 
-Capture-supported full readback verification exists for:
+Capture-supported readback now includes:
 
 ```text
-<= 8 MiB
+partial first window (<8 MiB):
+    FFFF / 04 / 00 / 00
+    then linear 0x91 reads
+exact 8 MiB:
+    separate 0x0040 transition
 exact 16 MiB
 exact 24 MiB
 exact 32 MiB
 Fire-Emblem-style tiny tail immediately above 16 MiB
 ```
 
-Arbitrary other partial images in the 16–32 MiB region are programmed normally, but full verification is skipped unless a capture-proven read mapping exists.
+The sub-8-MiB rule is supported by a single 1-MiB capture, a two-1-MiB / ~2-MiB image capture, and a single 4-MiB capture. Real hardware then validated 1-MiB, ~2-MiB, 4-MiB, ~5-MiB, and ~6-MiB layouts.
+
+For partial first-window images:
+
+```text
+program extent -> 0x100-byte alignment
+verify extent  -> 0x10000-byte / 64-KiB alignment
+```
+
+Arbitrary other partial images in the higher 16–32 MiB region are programmed normally, but full verification is skipped unless a capture-proven read mapping exists.
 
 This avoids false failures caused by invented window-selection rules.
 
@@ -215,7 +245,7 @@ No new loader blob is needed. The same `kMultiTemplateB64`, 125 relocations, and
 
 The repeated catalog region from `0x476E` to `0x548E` contains **120 structural slots**. This is a safety bound, not a proven 120-ROM menu limit.
 
-Current 0.5.12 policy therefore has **no small fixed ROM-count limit**. It requires:
+Current 0.6.0 policy therefore has **no small fixed ROM-count limit**. It requires:
 
 ```text
 total input ROM bytes <= 32 MiB / 256 Mbit
@@ -294,9 +324,12 @@ Catalog `map` is separate from ROM size. Current evidence links it to metadata c
 
 ```text
 SRAM / SRAM_F / ordinary non-FLASH metadata -> map 3
-EEPROM_V metadata                           -> map 5
+Classic NES EEPROM_V124                     -> map 4
+Tales of Phantasia EEPROM_V124              -> map 5
 FLASH-family metadata                       -> map 6
 ```
+
+The same `EEPROM_V124` marker therefore occurs with both map 4 and map 5. The current writer does not guess between them; EEPROM ROMs require an explicit per-ROM `--mapN=4` or `--mapN=5` until a generic discriminator is recovered.
 
 Capture examples:
 
@@ -311,7 +344,9 @@ Mario Kart         FLASH_V124     -> map 6
 Advance Wars 2     FLASH_V126     -> map 6
 FFTA                FLASH512_V130  -> map 6
 
-Tales of Phantasia EEPROM_V124     -> map 5
+Classic NES Super Mario EEPROM_V124 -> map 4
+Classic NES Castlevania EEPROM_V124  -> map 4
+Tales of Phantasia EEPROM_V124       -> map 5
 ```
 
 ### Critical FFTA paired-control result
@@ -339,11 +374,11 @@ map 6                           != proof of active FLASH saving
 SRAM patch state                != a reason to change this ROM to map 3
 ```
 
-The current signature-associated map classifier should therefore remain metadata-faithful rather than attempting runtime save-code detection.
+For metadata families with a generic captured rule, classification should remain metadata-faithful rather than attempting runtime save-code detection. EEPROM remains explicit because its map-4/map-5 discriminator is not yet known.
 
 `FLASH1M_V... -> map 6` remains a generic metadata-based implementation rule that still deserves dedicated capture validation.
 
-`EEPROM_V124 -> map 5` is directly capture-proven with unpatched Tales of Phantasia; universality across other EEPROM revisions, capacities, and separately SRAM-patched EEPROM ROMs remains open.
+`EEPROM_V124` is directly capture-proven with **map 4** in Classic NES Super Mario/Castlevania and **map 5** in Tales of Phantasia. The open problem is the generic capacity/configuration discriminator, not the marker revision.
 
 ---
 
@@ -529,7 +564,15 @@ This is capture + hardware proven.
 | 8 MiB + 8 MiB | historical/partial | yes |
 | 16 MiB + 8 MiB + 8 MiB | yes | yes |
 | 8 MiB + 8 MiB + 8 MiB + 8 MiB | yes | yes |
+| single 1 MiB Classic NES Super Mario, map 4 | yes | yes |
+| single 1 MiB Classic NES Castlevania, map 4 | yes | yes |
+| 1 MiB + 1 MiB Classic NES, map 4 + 4 | yes | yes |
+| single 4 MiB F-Zero | yes | yes |
+| 4 MiB + 1 MiB, map 3 + 4 | derived from captured rules | yes |
+| 4 MiB + 1 MiB + 1 MiB, map 3 + 4 + 4 | derived from captured rules | yes |
 | single 8 MiB Advance Wars | yes | yes |
+| 6 ROMs / 24 MiB | yes | yes |
+| 6 ROMs / 32 MiB | yes | yes |
 | single 16 MiB FFTA | yes | yes |
 | single 16 MiB Fire Emblem | yes | yes |
 | single 32 MiB Kingdom Hearts | yes | yes |
@@ -568,6 +611,18 @@ verify when supported
 status/reset cleanup
 ```
 
+### Progress display / verbose diagnostics
+
+Default destructive writes show live in-place progress bars for erase, program, and verification, including percentage, elapsed time, throughput where meaningful, and ETA.
+
+Use:
+
+```bash
+--verbose
+```
+
+to restore detailed per-sector/per-block diagnostics and individual transfer timing.
+
 ### Write without readback
 
 ```bash
@@ -579,11 +634,11 @@ ezfadvanceIII_multirom_writer \
 
 ### Manual catalog overrides
 
-Supported for protocol experiments:
+Supported for protocol experiments; multi-digit slot numbers are accepted. EEPROM ROMs currently require an explicit map 4 or map 5 override:
 
 ```text
---type1=N ... --type4=N
---map1=N  ... --map4=N
+--typeN=VALUE
+--mapN=VALUE
 ```
 
 ---
@@ -650,9 +705,9 @@ Exact 16-, 24-, and 32-MiB verification mappings are capture-proven, plus the ti
 
 `FLASH1M_V... -> map 6` is implemented generically but needs dedicated capture/save-cycle validation.
 
-### EEPROM family coverage
+### EEPROM map-4 / map-5 discriminator
 
-`EEPROM_V124 -> map 5` is proven. Other EEPROM library versions and both EEPROM capacities still need additional evidence.
+`EEPROM_V124` is proven with both map 4 and map 5. The missing rule is the generic ROM-level property that makes EZ3Manager choose one or the other. Until that is recovered, EEPROM map selection remains explicit.
 
 ### Multi-ROM save-bank behavior
 
@@ -681,10 +736,10 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 
 ## Current native platform scope
 
-Version 0.5.12 keeps the writer on one C++17/libusb Unix-like codebase:
+Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; 0.5.12 compilation verified on Apple Silicon/Homebrew
+macOS       target; current 0.6.0 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -693,12 +748,13 @@ DragonFly   target; validation pending
 Windows     no native mainline support; use a Linux VM with USB passthrough
 ```
 
-The portability foundation remains the same; 0.5.11/0.5.12 add new capture-derived image/catalog/verification behavior without changing the platform policy.
+The portability foundation remains the same. The 0.6.0 version synchronization changes release/version policy, not the Unix-like platform scope.
 
 ## Current project status
 
-At version **0.5.12**, the project has a mostly structural model of original EZ3Manager behavior:
+At shared version **0.6.0**, the project has a mostly structural model of original EZ3Manager behavior:
 
+- every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - tested cartridge geometry is four 8-MiB windows / 32 MiB total;
 - there is no small fixed ROM-count limit; 1–8 active entries are capture-proven and the loader exposes 120 structural catalog slots as a safety bound;
 - total input ROM bytes may be up to and including 32 MiB / 256 Mbit, provided packing and loader placement still fit;
@@ -706,16 +762,17 @@ At version **0.5.12**, the project has a mostly structural model of original EZ3
 - placement is size-class based and reuses erased padding/internal `FF` runs;
 - single and multi loaders are capture-derived and relocatable; the same `0x7080` multi-loader with 125 relocations matches captured 2–8 ROM configurations;
 - catalog `type` is ROM-size based;
-- catalog `map` uses capture-derived metadata associations (`3`, `5`, `6`) and is not treated as a definitive runtime save-mode field;
-- exact 8-, 16-, 24-, and 32-MiB verification paths are known;
-- unsafe verification guesses have been removed;
-- paired FFTA evidence proves that non-SRAM save-library signatures may survive SRAM patching while runtime save code changes; the writer therefore keeps EZ3 metadata classification separate from runtime save-code analysis;
+- catalog `map` uses capture-derived values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` occurs with both;
+- partial first-window verification is capture- and hardware-proven in the tested small layouts; exact 8-, 16-, 24-, and 32-MiB paths are also known;
+- partial first-window programming rounds to `0x100` and verification to `0x10000`;
+- default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;
+- paired FFTA evidence proves that non-SRAM save-library signatures may survive SRAM patching while runtime save code changes;
 - native scope is macOS/Linux/BSD through libusb; Windows users should use a Linux VM with USB passthrough;
-- multiple mixed-size and full-card layouts have been proven on original GBA hardware.
+- real hardware now validates map-4 single/multi cases, mixed map-3/map-4 menus, 4-MiB single-ROM verification, and 6-ROM 24-/32-MiB images.
 
-The remaining work is primarily **expanding evidence coverage**, not redesigning the core architecture.
+The remaining work is primarily **expanding evidence coverage**, especially the EEPROM map-4/map-5 discriminator, 9+ menu counts, save-bank behavior, and Linux/BSD hardware validation.
 
-## New multi-ROM evidence in 0.5.11 / 0.5.12
+## Multi-ROM evidence carried into 0.6.0
 
 Recent original-manager PCAPs extend the proven menu/count model without requiring a new loader:
 
@@ -736,4 +793,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The 0.5.12 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.6.0 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

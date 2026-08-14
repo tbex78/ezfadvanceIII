@@ -28,7 +28,7 @@
 #include <thread>
 #include <vector>
 
-// EZF Advance III card reader 0.5.10, read-only inspector.
+// EZF Advance III card reader 0.5.13, read-only inspector.
 //
 // Ported from the historical card-reader v1 implementation. The USB/card
 // read/probe behavior is intentionally unchanged. This program never sends
@@ -52,10 +52,22 @@
 //   single ROM: loader-relative header 0x4E8, entry 0x4F8
 //   multi ROM : loader-relative header 0x475E, entries 0x476E (28 bytes each)
 //
-// IMPORTANT: this diagnostic utility preserves the original conservative
-// reader limitation: 1..3 ROMs in the first 16 MiB, using only the
-// capture-proven 16-MiB linear-read mapping. It has not been expanded to the
-// writer's newer four-ROM / full-32-MiB knowledge.
+// 0.5.13 improves blank-card diagnostics only. If the first four card bytes
+// are FF FF FF FF, the reader now explicitly reports that the cartridge
+// appears empty/erased and that no EZ3 loader/catalog is present at byte 0.
+// USB probing, mapping, and read behavior are unchanged.
+//
+// 0.5.12 aligns the diagnostic reader with the writer's current catalog/layout
+// knowledge and the newer 5-, 6-, 7-, and 8-ROM captures:
+//   * 1..8 active catalog entries are capture-proven; the loader contains 120
+//     structurally available 28-byte catalog slots, used here only as a safe
+//     parser bound rather than a claim that 120-ROM menu operation is proven;
+//   * full 32-MiB / 256-Mbit card geometry;
+//   * exact 16-MiB, 24-MiB, and 32-MiB linear read mappings;
+//   * the 32-MiB sequence is corrected to the exact 256-Mbit transition used by
+//     the current writer and independently reconfirmed by the 6/7/8-ROM captures.
+// The utility remains strictly read-only: no erase commands and no ROM
+// programming are performed.
 
 static constexpr uint16_t VID = 0x0E6A;
 static constexpr uint16_t PID = 0x5088;
@@ -64,7 +76,7 @@ static constexpr unsigned char EP_IN  = 0x81;
 static constexpr int INTERFACE_NUMBER = 0;
 static constexpr unsigned USB_TIMEOUT_MS = 15000;
 static constexpr unsigned COMMAND_DATA_SETTLE_US = 750;
-static constexpr const char* TOOL_VERSION = "0.5.10";
+static constexpr const char* TOOL_VERSION = "0.5.13";
 
 static constexpr const char* host_platform_name()
 {
@@ -86,7 +98,9 @@ static constexpr const char* host_platform_name()
 }
 
 static constexpr uint32_t FLASH_WINDOW_SIZE = 0x00800000u; // 8 MiB
-static constexpr uint32_t CAPTURE_LINEAR_LIMIT  = 0x01000000u; // 16 MiB
+static constexpr uint32_t LINEAR16_LIMIT     = 0x01000000u; // 16 MiB
+static constexpr uint32_t LINEAR24_LIMIT     = 0x01800000u; // 24 MiB / 192 Mbit
+static constexpr uint32_t CARD_IMAGE_LIMIT   = 0x02000000u; // 32 MiB / 256 Mbit
 
 static constexpr size_t SINGLE_HEADER_OFF = 0x4E8;
 static constexpr size_t SINGLE_HEADER_COUNT2_OFF = 0x4F6;
@@ -95,8 +109,18 @@ static constexpr size_t SINGLE_ENTRY_OFF = 0x4F8;
 static constexpr size_t MULTI_HEADER_OFF = 0x475E;
 static constexpr size_t MULTI_ENTRY_OFF = 0x476E;
 static constexpr size_t CATALOG_ENTRY_SIZE = 28;
-static constexpr size_t MAX_CAPTURED_ROMS = 3;
+static constexpr size_t MULTI_CATALOG_END_OFF = 0x548E;
+static constexpr size_t MULTI_CATALOG_MAX_ENTRIES =
+    (MULTI_CATALOG_END_OFF - MULTI_ENTRY_OFF) / CATALOG_ENTRY_SIZE;
+static constexpr size_t CAPTURE_PROVEN_MAX_ROMS = 8;
 static constexpr size_t LOADER_READ_SIZE = 0x7080;
+
+static_assert(MULTI_ENTRY_OFF +
+              MULTI_CATALOG_MAX_ENTRIES * CATALOG_ENTRY_SIZE ==
+              MULTI_CATALOG_END_OFF,
+              "multi-ROM catalog region must contain whole 28-byte entries");
+static_assert(MULTI_CATALOG_MAX_ENTRIES == 120,
+              "unexpected multi-ROM catalog structural slot count");
 
 static uint16_t read_le16(const uint8_t* p)
 {
@@ -479,6 +503,67 @@ static bool prepare_linear_16m_read(libusb_device_handle* h)
     return true;
 }
 
+
+// Exact 24-MiB / 192-Mbit linear read mapping from 4_4_4_4_8MB.pcap.
+// This is the same transition used by the writer for exact-24-MiB readback:
+// status, 55AA,0200,00C0,0000,125 ms, AA55,0000x3,AA,55,06,
+// status, then 55AA,0000,0000,0000.
+static bool prepare_linear_24m_read(libusb_device_handle* h)
+{
+    std::cout << "Loader/ROM lies in the 16..24-MiB range; selecting proven "
+                 "24-MiB linear read mapping...\n";
+
+    if (!flash_status_sequence(h)) return false;
+    if (!tx92_2(h,0x55,0xAA,"readmap24 55AA")) return false;
+    if (!tx92_2(h,0x02,0x00,"readmap24 0200")) return false;
+    if (!tx92_2(h,0x00,0xC0,"readmap24 00C0")) return false;
+    if (!tx92_2(h,0x00,0x00,"readmap24 0000 A")) return false;
+    std::this_thread::sleep_for(std::chrono::microseconds(125000));
+    if (!tx92_2(h,0xAA,0x55,"readmap24 AA55")) return false;
+    if (!tx92_2(h,0x00,0x00,"readmap24 0000 B")) return false;
+    if (!tx92_2(h,0x00,0x00,"readmap24 0000 C")) return false;
+    if (!tx92_2(h,0x00,0x00,"readmap24 0000 D")) return false;
+    if (!tx92_1(h,0x00,0xAA,"readmap24 selector0 AA")) return false;
+    if (!tx92_1(h,0x00,0x55,"readmap24 selector0 55")) return false;
+    if (!tx92_1(h,0x01,0x06,"readmap24 selector1 06")) return false;
+    if (!flash_status_sequence(h)) return false;
+    if (!tx92_2(h,0x55,0xAA,"read24 prefix 55AA")) return false;
+    if (!tx92_2(h,0x00,0x00,"read24 prefix 0000 A")) return false;
+    if (!tx92_2(h,0x00,0x00,"read24 prefix 0000 B")) return false;
+    if (!tx92_2(h,0x00,0x00,"read24 prefix 0000 C")) return false;
+    return true;
+}
+
+
+// Capture-derived 32-MiB / 256-Mbit linear read mapping. This is the exact
+// full-card transition from 256MBits-rom.pcap, also reconfirmed by the
+// 6-, 7-, and 8-ROM full-card captures.
+static bool prepare_linear_32m_read(libusb_device_handle* h)
+{
+    std::cout << "Loader/ROM lies in the 24..32-MiB range; selecting proven "
+                 "32-MiB linear read mapping...\n";
+
+    if (!flash_status_sequence(h)) return false;
+    if (!tx92_2(h,0x55,0xAA,"readmap32 55AA")) return false;
+    if (!tx92_2(h,0x00,0x00,"readmap32 0000 A")) return false;
+    if (!tx92_2(h,0x00,0x00,"readmap32 0000 B")) return false;
+    if (!tx92_2(h,0x02,0x00,"readmap32 0200")) return false;
+    std::this_thread::sleep_for(std::chrono::microseconds(125000));
+    if (!tx92_2(h,0xAA,0x55,"readmap32 AA55")) return false;
+    if (!tx92_2(h,0x00,0x00,"readmap32 0000 C")) return false;
+    if (!tx92_2(h,0x00,0x00,"readmap32 0000 D")) return false;
+    if (!tx92_2(h,0x00,0x00,"readmap32 0000 E")) return false;
+    if (!tx92_1(h,0x00,0xAA,"readmap32 selector0 AA")) return false;
+    if (!tx92_1(h,0x00,0x55,"readmap32 selector0 55")) return false;
+    if (!tx92_1(h,0x01,0x06,"readmap32 selector1 06")) return false;
+    if (!flash_status_sequence(h)) return false;
+    if (!tx92_2(h,0x55,0xAA,"read32 prefix 55AA")) return false;
+    if (!tx92_2(h,0x00,0x00,"read32 prefix 0000 A")) return false;
+    if (!tx92_2(h,0x00,0x00,"read32 prefix 0000 B")) return false;
+    if (!tx92_2(h,0x00,0x00,"read32 prefix 0000 C")) return false;
+    return true;
+}
+
 static std::optional<uint32_t> arm_branch_target(uint32_t ins)
 {
     if ((ins & 0xFF000000u) != 0xEA000000u)
@@ -548,6 +633,24 @@ struct CatalogEntry {
     uint32_t target_or_start = 0;
 };
 
+enum class ReadMappingMode {
+    Lower8MiB,
+    Linear16MiB,
+    Linear24MiB,
+    Linear32MiB
+};
+
+static const char* mapping_mode_name(ReadMappingMode mode)
+{
+    switch (mode) {
+        case ReadMappingMode::Lower8MiB:   return "lower 8-MiB";
+        case ReadMappingMode::Linear16MiB: return "16-MiB linear";
+        case ReadMappingMode::Linear24MiB: return "24-MiB linear";
+        case ReadMappingMode::Linear32MiB: return "32-MiB linear";
+    }
+    return "unknown";
+}
+
 static CatalogEntry parse_catalog_entry(const std::vector<uint8_t>& loader,
                                         size_t off,
                                         bool first)
@@ -569,7 +672,7 @@ static CatalogEntry parse_catalog_entry(const std::vector<uint8_t>& loader,
 static bool plausible_entry(const CatalogEntry& e, bool first)
 {
     if (e.name.empty()) return false;
-    if (e.start >= CAPTURE_LINEAR_LIMIT) return false;
+    if (e.start >= CARD_IMAGE_LIMIT) return false;
     if (!first && (e.start & 0xFFFFu) != 0) return false;
     return true;
 }
@@ -596,8 +699,8 @@ static void print_rom(size_t index,
                   << std::hex << span << std::dec << ")\n";
     }
 
-    std::cout << "  EZ type      : " << static_cast<unsigned>(e.type) << "\n"
-              << "  Mapping flag : " << static_cast<unsigned>(e.mapping) << "\n";
+    std::cout << "  Catalog type : " << static_cast<unsigned>(e.type) << " (size class)\n"
+              << "  Catalog map  : " << static_cast<unsigned>(e.mapping) << "\n";
 
     if (index == 1)
         std::cout << "  Orig. entry  : " << hex32(e.target_or_start) << "\n";
@@ -621,26 +724,48 @@ static int inspect_card(libusb_device_handle* h)
     const uint32_t first_word = read_le32(first.data());
     const auto loader_target = arm_branch_target(first_word);
     if (!loader_target) {
-        std::cerr << "Card byte 0 is not an ARM unconditional branch.\n"
-                  << "This does not look like a recognized capture-derived EZ3 single/multi-ROM image.\n";
+        const bool first_word_erased =
+            std::all_of(first.begin(), first.end(),
+                        [](uint8_t b) { return b == 0xFF; });
+
+        if (first_word_erased) {
+            std::cout
+                << "Card appears empty / erased.\n"
+                << "The first four card bytes are FF FF FF FF, which is the "
+                   "erased flash state.\n"
+                << "No EZ3 loader branch or ROM catalog is present at card "
+                   "byte 0.\n"
+                << "There is no programmed EZ3 ROM image to inspect.\n";
+        } else {
+            std::cerr
+                << "Card byte 0 is not an ARM unconditional branch.\n"
+                << "The card is not blank at byte 0, but it does not look like "
+                   "a recognized capture-derived EZ3 single/multi-ROM image.\n";
+        }
         return 3;
     }
 
     const uint32_t loader_start = *loader_target;
-    if (loader_start < 0xC0 || loader_start >= CAPTURE_LINEAR_LIMIT) {
+    if (loader_start < 0xC0 || loader_start >= CARD_IMAGE_LIMIT) {
         std::cerr << "Patched branch points to " << hex32(loader_start)
-                  << ", outside the currently understood first-16-MiB layout.\n";
+                  << ", outside the currently understood 32-MiB / 256-Mbit layout.\n";
         return 3;
     }
 
-    bool linear16 = false;
-    if (loader_start >= FLASH_WINDOW_SIZE) {
+    ReadMappingMode mapping_mode = ReadMappingMode::Lower8MiB;
+    if (loader_start >= LINEAR24_LIMIT) {
+        if (!prepare_linear_32m_read(h)) return 2;
+        mapping_mode = ReadMappingMode::Linear32MiB;
+    } else if (loader_start >= LINEAR16_LIMIT) {
+        if (!prepare_linear_24m_read(h)) return 2;
+        mapping_mode = ReadMappingMode::Linear24MiB;
+    } else if (loader_start >= FLASH_WINDOW_SIZE) {
         if (!prepare_linear_16m_read(h)) return 2;
-        linear16 = true;
+        mapping_mode = ReadMappingMode::Linear16MiB;
     }
 
     const size_t loader_read_len = std::min<size_t>(
-        LOADER_READ_SIZE, static_cast<size_t>(CAPTURE_LINEAR_LIMIT - loader_start));
+        LOADER_READ_SIZE, static_cast<size_t>(CARD_IMAGE_LIMIT - loader_start));
     std::vector<uint8_t> loader;
     if (!read_card(h,loader_start,loader,loader_read_len)) return 2;
 
@@ -661,20 +786,24 @@ static int inspect_card(libusb_device_handle* h)
         }
     }
 
-    if (loader.size() >= MULTI_ENTRY_OFF + MAX_CAPTURED_ROMS*CATALOG_ENTRY_SIZE) {
+    if (loader.size() >= MULTI_HEADER_OFF + 16) {
         const uint16_t a = read_le16(loader.data()+MULTI_HEADER_OFF);
         const uint16_t b = read_le16(loader.data()+MULTI_HEADER_OFF+14);
-        if (a >= 2 && a <= MAX_CAPTURED_ROMS && a == b) {
-            bool all_ok = true;
-            for (size_t i=0;i<a;++i) {
-                const CatalogEntry e = parse_catalog_entry(
-                    loader,MULTI_ENTRY_OFF+i*CATALOG_ENTRY_SIZE,i==0);
-                if (!plausible_entry(e,i==0)) all_ok = false;
-            }
-            if (all_ok) {
-                is_single = false;
-                rom_count = a;
-                entry_off = MULTI_ENTRY_OFF;
+        if (a >= 2 && a <= MULTI_CATALOG_MAX_ENTRIES && a == b) {
+            const size_t required =
+                MULTI_ENTRY_OFF + static_cast<size_t>(a) * CATALOG_ENTRY_SIZE;
+            if (required <= loader.size()) {
+                bool all_ok = true;
+                for (size_t i=0;i<a;++i) {
+                    const CatalogEntry e = parse_catalog_entry(
+                        loader,MULTI_ENTRY_OFF+i*CATALOG_ENTRY_SIZE,i==0);
+                    if (!plausible_entry(e,i==0)) all_ok = false;
+                }
+                if (all_ok) {
+                    is_single = false;
+                    rom_count = a;
+                    entry_off = MULTI_ENTRY_OFF;
+                }
             }
         }
     }
@@ -690,16 +819,26 @@ static int inspect_card(libusb_device_handle* h)
         entries.push_back(parse_catalog_entry(
             loader,entry_off+i*CATALOG_ENTRY_SIZE,i==0));
 
-    // A multi-ROM loader above 8 MiB already selected linear mode.  For a
-    // recognized layout with any later ROM above 8 MiB, select it here too.
-    if (!linear16) {
-        for (const auto& e : entries) {
-            if (e.start >= FLASH_WINDOW_SIZE) {
-                if (!prepare_linear_16m_read(h)) return 2;
-                linear16 = true;
-                break;
-            }
-        }
+    // If any cataloged ROM header lies beyond the currently selected read
+    // window, upgrade to the smallest capture-proven linear mapping that covers
+    // that address. The 24-MiB mapping is now independently capture-proven.
+    uint32_t highest_start = 0;
+    for (const auto& e : entries)
+        highest_start = std::max(highest_start, e.start);
+
+    if (highest_start >= LINEAR24_LIMIT &&
+        mapping_mode != ReadMappingMode::Linear32MiB) {
+        if (!prepare_linear_32m_read(h)) return 2;
+        mapping_mode = ReadMappingMode::Linear32MiB;
+    } else if (highest_start >= LINEAR16_LIMIT &&
+               mapping_mode != ReadMappingMode::Linear24MiB &&
+               mapping_mode != ReadMappingMode::Linear32MiB) {
+        if (!prepare_linear_24m_read(h)) return 2;
+        mapping_mode = ReadMappingMode::Linear24MiB;
+    } else if (highest_start >= FLASH_WINDOW_SIZE &&
+               mapping_mode == ReadMappingMode::Lower8MiB) {
+        if (!prepare_linear_16m_read(h)) return 2;
+        mapping_mode = ReadMappingMode::Linear16MiB;
     }
 
     std::cout << "\n========================================\n"
@@ -708,7 +847,19 @@ static int inspect_card(libusb_device_handle* h)
               << "Layout       : " << (is_single ? "single ROM" : "multi ROM") << "\n"
               << "ROM count    : " << rom_count << "\n"
               << "Loader/menu  : " << hex32(loader_start) << "\n"
-              << "Read mapping : " << (linear16 ? "16-MiB linear" : "lower 8-MiB") << "\n";
+              << "Read mapping : " << mapping_mode_name(mapping_mode) << "\n";
+
+    if (!is_single) {
+        if (rom_count <= CAPTURE_PROVEN_MAX_ROMS) {
+            std::cout << "Catalog proof : count " << rom_count
+                      << " is within the capture-proven 2.."
+                      << CAPTURE_PROVEN_MAX_ROMS << " active-entry range\n";
+        } else {
+            std::cout << "Catalog proof : count " << rom_count
+                      << " is structurally parseable but exceeds the currently "
+                         "capture-proven 8-entry range\n";
+        }
+    }
 
     for (size_t i=0;i<entries.size();++i) {
         std::optional<uint32_t> span_end;

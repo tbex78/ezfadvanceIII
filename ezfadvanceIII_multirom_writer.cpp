@@ -62,7 +62,171 @@ static constexpr const char* host_platform_name()
 #endif
 }
 
-// ezfadvanceIII multi-ROM writer 0.5.12 for macOS, Linux and BSD.
+
+static std::string progress_duration(double seconds)
+{
+    if (seconds < 0.0) seconds = 0.0;
+    const uint64_t total_seconds = static_cast<uint64_t>(seconds + 0.5);
+    const uint64_t hours = total_seconds / 3600;
+    const uint64_t minutes = (total_seconds % 3600) / 60;
+    const uint64_t secs = total_seconds % 60;
+
+    std::ostringstream oss;
+    if (hours != 0) {
+        oss << hours << ':' << std::setw(2) << std::setfill('0') << minutes
+            << ':' << std::setw(2) << secs;
+    } else {
+        oss << minutes << ':' << std::setw(2) << std::setfill('0') << secs;
+    }
+    return oss.str();
+}
+
+class ProgressBar
+{
+public:
+    ProgressBar(std::string label, uint64_t total, bool byte_units, bool enabled)
+        : label_(std::move(label)),
+          total_(total),
+          byte_units_(byte_units),
+          enabled_(enabled),
+          started_(std::chrono::steady_clock::now())
+    {
+    }
+
+    ~ProgressBar()
+    {
+        if (enabled_ && drew_ && !finished_)
+            std::cout << '\n';
+    }
+
+    void update(uint64_t completed)
+    {
+        if (!enabled_) return;
+        if (completed > total_) completed = total_;
+
+        const auto now = std::chrono::steady_clock::now();
+        const double elapsed =
+            std::chrono::duration<double>(now - started_).count();
+        const double ratio =
+            total_ != 0 ? static_cast<double>(completed) /
+                          static_cast<double>(total_) : 1.0;
+
+        static constexpr size_t BAR_WIDTH = 32;
+        size_t filled = static_cast<size_t>(ratio * BAR_WIDTH);
+        if (filled > BAR_WIDTH) filled = BAR_WIDTH;
+
+        std::ostringstream oss;
+        oss << label_ << " [";
+        for (size_t i = 0; i < BAR_WIDTH; ++i)
+            oss << (i < filled ? '=' : (i == filled && completed < total_ ? '>' : ' '));
+        oss << "] " << std::fixed << std::setprecision(1)
+            << (ratio * 100.0) << "%  ";
+
+        if (byte_units_) {
+            const double done_mib =
+                static_cast<double>(completed) / (1024.0 * 1024.0);
+            const double total_mib =
+                static_cast<double>(total_) / (1024.0 * 1024.0);
+            oss << std::setprecision(2) << done_mib << '/'
+                << total_mib << " MiB";
+        } else {
+            oss << completed << '/' << total_;
+        }
+
+        if (elapsed > 0.0 && completed != 0) {
+            const double rate = static_cast<double>(completed) / elapsed;
+            oss << "  ";
+            if (byte_units_) {
+                oss << std::setprecision(1) << (rate / 1024.0) << " KiB/s";
+            } else {
+                oss << std::setprecision(1) << rate << "/s";
+            }
+
+            const double remaining =
+                rate > 0.0 ? static_cast<double>(total_ - completed) / rate : 0.0;
+            oss << "  elapsed " << progress_duration(elapsed)
+                << "  ETA " << progress_duration(remaining);
+        }
+
+        const std::string line = oss.str();
+        std::cout << '\r' << line;
+        if (last_width_ > line.size())
+            std::cout << std::string(last_width_ - line.size(), ' ');
+        std::cout << std::flush;
+        last_width_ = line.size();
+        drew_ = true;
+
+        if (completed >= total_) {
+            std::cout << '\n';
+            finished_ = true;
+        }
+    }
+
+private:
+    std::string label_;
+    uint64_t total_;
+    bool byte_units_;
+    bool enabled_;
+    bool drew_ = false;
+    bool finished_ = false;
+    size_t last_width_ = 0;
+    std::chrono::steady_clock::time_point started_;
+};
+
+// ezfadvanceIII multi-ROM writer 0.5.17 for macOS, Linux and BSD.
+//
+// 0.5.17 incorporates the new sub-8-MiB captures:
+//   * 2MB.pcap is a single 1-MiB ROM image;
+//   * 2_2MB.pcap is two 1-MiB ROMs / 2 MiB of ROM data total.
+// Together with 4MB.pcap they prove that partial first-window verification
+// uses only the normal flash status/read-state sequence (FFFF,04,00,00)
+// followed by ordinary linear 0x91 reads. No 0x0020/0x0040 selector is sent
+// for these partial (<8-MiB) geometries.
+// The capture-observed delays before the first read vary in 15.625-ms USBPcap
+// timestamp quanta, so no fixed 50-ms application delay is imposed.
+// The new captures also prove two extent rules used by original EZ3Manager:
+//   * program extent is rounded up to a 0x100-byte boundary;
+//   * sub-8-MiB verification extent is rounded up to a full 0x10000-byte block
+//     and bytes beyond the programmed image are expected to remain 0xFF.
+// Finally, EEPROM_V124 is now known to map to both catalog map 4 and map 5 in
+// different captures. Until a generic EEPROM-capacity discriminator is found,
+// EEPROM ROMs require an explicit --mapN=4 or --mapN=5 override.
+//
+// 0.5.16 adds exact 4-MiB / 32-Mbit post-program verification from 4MB.pcap.
+// The original EZ3Manager sequence after the final program block is:
+//   FFFF, 04, 00, 00
+// followed by a capture-observed 46.875-ms quiet interval, then ordinary
+// linear 0x91 reads from word address 0x000000 through 0x1F8000.
+// USBPcap timestamps are quantized at 15.625 ms, so the implementation uses
+// a 50-ms settle before the first read. The capture contains 64 program blocks
+// and 64 verification reads, and all captured payload bytes match.
+//
+// 0.5.15 narrows lower-window verification to what is actually captured.
+// Exact 8 MiB / 64 Mbit uses the proven 0x0040 linear-read transition.
+// Smaller/other partial first-window images are still erased and programmed
+// normally, but full post-write read-back verification is conservatively
+// skipped because no exact single-4-MiB (or other partial-first-window)
+// EZ3Manager verification capture is currently available. This avoids turning
+// an unproven read mapping into a false WRITE/VERIFY failure.
+//
+// 0.5.14 fixes the <=8-MiB post-program verification transition.
+// The previous branch sent only flash_status_sequence() before linear 0x91 reads.
+// Two independent original-EZ3Manager captures (4MiB-4MiB.pcap and the
+// 8-MiB FLASH_V121_FLASH512K.pcap) show the required 64-Mbit transition:
+//   status, 55AA, 0200, 0040, 0000, ~125 ms, AA55, 0000 x3,
+//   AA,55,06, status, then 55AA,0000,0000,0000.
+// This also addresses the observed 4-MiB single-ROM verification failure where
+// byte 0 read back as 0x80 instead of the programmed ARM branch byte.
+//
+// 0.5.13 changes console reporting only; USB protocol/image behavior is unchanged:
+//   * default destructive writes use live in-place progress bars for erase,
+//     program, and read-back verification;
+//   * --verbose restores per-operation diagnostics such as
+//       program card byte 0x00110000 local byte 0x110000 length 0x10000
+//       single data request: 1.129 s, 56.7 KiB/s
+//     plus per-sector erase and per-block verification lines;
+//   * progress bars report percentage, completed amount, average throughput,
+//     elapsed time, and ETA.
 //
 // 0.5.12 removes the artificial five-ROM input limit. The writer now validates
 // capacity rather than imposing a small fixed ROM count:
@@ -709,7 +873,7 @@ struct RomInfo {
     uint32_t original_entry_target = 0;
     uint8_t entry_type = 9;   // capture-derived catalog type byte
     bool entry_type_overridden = false;
-    uint8_t mapping_flag = 3; // low catalog mapping/config byte; captures use 3 or 6
+    uint8_t mapping_flag = 3; // low catalog mapping/config byte; captures use 3,4,5,6
     bool mapping_flag_overridden = false;
 };
 
@@ -1564,6 +1728,65 @@ static bool flash_status_sequence(libusb_device_handle* h)
 
 
 // ---------------------------------------------------------------------------
+// Partial first-window (<8-MiB) post-program linear-read preparation.
+//
+// 2MB.pcap (single 1-MiB ROM), 2_2MB.pcap (two 1-MiB ROMs / ~2-MiB image),
+// and 4MB.pcap all show the same transition after programming:
+//   FFFF, 04, 00, 00
+// followed directly by ordinary linear 0x91 reads.
+//
+// The USBPcap timestamps show different short gaps before the first 0x91 read,
+// quantized in 15.625-ms increments. There is therefore no evidence for a
+// required fixed application sleep here, and no 0x0020/0x0040 selector is sent.
+static bool flash_partial_bank0_prepare_linear_verify(libusb_device_handle* h)
+{
+    std::cout << "\nPreparing capture-proven partial first-window linear "
+                 "read/verify state...\n";
+    return flash_status_sequence(h);
+}
+
+
+// ---------------------------------------------------------------------------
+// 64-Mbit / lower-8-MiB post-program linear-read mapping.
+//
+// Both 4MiB-4MiB.pcap and FLASH_V121_FLASH512K.pcap show this exact transition
+// for an exact 8-MiB / 64-Mbit programmed image. The important selector is
+// 0x0040. Partial first-window images use the separate status-only path above.
+static bool flash_64mb_prepare_linear_verify(libusb_device_handle* h)
+{
+    std::cout << "\nPreparing lower-8-MiB / 64-Mbit linear read/verify mapping...\n";
+
+    if (!flash_status_sequence(h))
+        return false;
+
+    if (!tx92_2(h,0x55,0xAA,"VERIFY64 55AA")) return false;
+    if (!tx92_2(h,0x02,0x00,"VERIFY64 0200")) return false;
+    if (!tx92_2(h,0x00,0x40,"VERIFY64 0040")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY64 0000 A")) return false;
+
+    std::this_thread::sleep_for(std::chrono::microseconds(125000));
+
+    if (!tx92_2(h,0xAA,0x55,"VERIFY64 AA55")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY64 0000 B")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY64 0000 C")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY64 0000 D")) return false;
+    if (!tx92_1(h,0x00,0xAA,"VERIFY64 selector0 AA")) return false;
+    if (!tx92_1(h,0x00,0x55,"VERIFY64 selector0 55")) return false;
+    if (!tx92_1(h,0x01,0x06,"VERIFY64 selector1 06")) return false;
+
+    if (!flash_status_sequence(h))
+        return false;
+
+    if (!tx92_2(h,0x55,0xAA,"VERIFY64READ 55AA")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY64READ 0000 A")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY64READ 0000 B")) return false;
+    if (!tx92_2(h,0x00,0x00,"VERIFY64READ 0000 C")) return false;
+
+    return true;
+}
+
+
+// ---------------------------------------------------------------------------
 // 128-Mbit post-program linear-read mapping.
 //
 // writerom128Mb.pcap shows that verification does NOT begin directly after
@@ -1706,7 +1929,8 @@ static bool flash_256mb_prepare_linear_verify(libusb_device_handle* h)
 static bool erase_sector(libusb_device_handle* h,
                          uint32_t word_address,
                          size_t index,
-                         size_t total)
+                         size_t total,
+                         bool verbose)
 {
     std::vector<uint8_t> cmd = {
         0x5A,0xA5,0x96,0x00,
@@ -1736,11 +1960,13 @@ static bool erase_sector(libusb_device_handle* h,
         return false;
     }
 
-    std::cout << "  erase " << (index + 1) << "/" << total
-              << " @ word 0x" << std::hex << std::setw(6)
-              << std::setfill('0') << word_address
-              << " (byte 0x" << std::setw(6) << (word_address * 2u)
-              << ")" << std::dec << '\n';
+    if (verbose) {
+        std::cout << "  erase " << (index + 1) << "/" << total
+                  << " @ word 0x" << std::hex << std::setw(6)
+                  << std::setfill('0') << word_address
+                  << " (byte 0x" << std::setw(6) << (word_address * 2u)
+                  << ")" << std::dec << '\n';
+    }
     return true;
 }
 
@@ -1797,16 +2023,19 @@ static std::vector<uint32_t> full_128mb_bank1_erase_addresses()
 }
 
 static bool erase_image_capture_faithful(libusb_device_handle* h,
-                                         size_t programmed_size)
+                                         size_t programmed_size,
+                                         bool verbose)
 {
     if (programmed_size <= FLASH_WINDOW_SIZE) {
         const auto addresses = selective_bank0_erase_addresses(programmed_size);
         std::cout << "\n========================================\n"
                   << "SELECTIVE SECTOR ERASE\n"
                   << "========================================\n";
+        ProgressBar progress("Erase", addresses.size(), false, !verbose);
         for (size_t i = 0; i < addresses.size(); ++i) {
-            if (!erase_sector(h, addresses[i], i, addresses.size()))
+            if (!erase_sector(h, addresses[i], i, addresses.size(), verbose))
                 return false;
+            progress.update(i + 1);
         }
         return true;
     }
@@ -1839,27 +2068,34 @@ static bool erase_image_capture_faithful(libusb_device_handle* h,
     std::cout << "\n========================================\n"
               << "MULTI-WINDOW ERASE (capture-derived)\n"
               << "========================================\n";
-    for (const auto& g : groups)
-        std::cout << "window " << g.first << ": " << g.second.size()
-                  << " erase commands\n";
+    if (verbose) {
+        for (const auto& g : groups)
+            std::cout << "window " << g.first << ": " << g.second.size()
+                      << " erase commands\n";
+    }
 
+    ProgressBar progress("Erase", total, false, !verbose);
     size_t index = 0;
     for (size_t gi = 0; gi < groups.size(); ++gi) {
         const unsigned window = groups[gi].first;
         if (gi != 0) {
             if (!flash_status_sequence(h)) return false;
-            std::cout << "switching erase window to " << window
-                      << " (card byte 0x" << std::hex
-                      << (static_cast<size_t>(window) * FLASH_WINDOW_SIZE)
-                      << std::dec << ")...\n";
+            if (verbose) {
+                std::cout << "switching erase window to " << window
+                          << " (card byte 0x" << std::hex
+                          << (static_cast<size_t>(window) * FLASH_WINDOW_SIZE)
+                          << std::dec << ")...\n";
+            }
             bool ok = false;
-            if (window == 1) ok = flash_bank1_setup(h, 125000, true);
-            else if (window == 2) ok = flash_bank2_setup(h, 125000, true);
-            else if (window == 3) ok = flash_bank3_setup(h, 125000, true);
+            if (window == 1) ok = flash_bank1_setup(h, 125000, verbose);
+            else if (window == 2) ok = flash_bank2_setup(h, 125000, verbose);
+            else if (window == 3) ok = flash_bank3_setup(h, 125000, verbose);
             if (!ok) return false;
         }
         for (uint32_t a : groups[gi].second) {
-            if (!erase_sector(h, a, index++, total)) return false;
+            if (!erase_sector(h, a, index, total, verbose)) return false;
+            ++index;
+            progress.update(index);
         }
     }
     return true;
@@ -1947,12 +2183,15 @@ static bool program_transaction_single(libusb_device_handle* h,
 }
 
 static bool program_image(libusb_device_handle* h,
-                          const std::vector<uint8_t>& image)
+                          const std::vector<uint8_t>& image,
+                          bool verbose)
 {
     std::cout << "\n========================================\n"
               << "PROGRAMMING IMAGE (MANAGER-PRIMED STATE)\n"
               << "========================================\n"
               << "One 0x92 transaction + one BULK OUT per Windows-sized block\n";
+
+    ProgressBar progress("Program", image.size(), true, !verbose);
 
     for (size_t off = 0; off < image.size(); ) {
         if (off != 0 && (off % FLASH_WINDOW_SIZE) == 0) {
@@ -1962,27 +2201,33 @@ static bool program_image(libusb_device_handle* h,
                 return false;
             }
             if (!flash_status_sequence(h)) return false;
-            std::cout << "\nSwitching program window to " << window
-                      << " (card byte 0x" << std::hex << off << std::dec << ")...\n";
+            if (verbose) {
+                std::cout << "\nSwitching program window to " << window
+                          << " (card byte 0x" << std::hex << off << std::dec
+                          << ")...\n";
+            }
             bool ok = false;
-            if (window == 1) ok = flash_bank1_setup(h, 125000, true);
-            else if (window == 2) ok = flash_bank2_setup(h, 125000, true);
-            else if (window == 3) ok = flash_bank3_setup(h, 125000, true);
+            if (window == 1) ok = flash_bank1_setup(h, 125000, verbose);
+            else if (window == 2) ok = flash_bank2_setup(h, 125000, verbose);
+            else if (window == 3) ok = flash_bank3_setup(h, 125000, verbose);
             if (!ok) return false;
         }
 
         const size_t n = std::min(PROGRAM_BLOCK, image.size() - off);
         const size_t local_off = off % FLASH_WINDOW_SIZE;
-        std::cout << "program card byte 0x" << std::hex << std::setw(8)
-                  << std::setfill('0') << off
-                  << " local byte 0x" << std::setw(6) << local_off
-                  << " length 0x" << n << std::dec << '\n';
+        if (verbose) {
+            std::cout << "program card byte 0x" << std::hex << std::setw(8)
+                      << std::setfill('0') << off
+                      << " local byte 0x" << std::setw(6) << local_off
+                      << " length 0x" << n << std::dec << '\n';
+        }
 
         if (!program_transaction_single(
                 h, static_cast<uint32_t>(local_off),
-                image.data() + off, n, true))
+                image.data() + off, n, verbose))
             return false;
         off += n;
+        progress.update(off);
     }
     return true;
 }
@@ -1990,6 +2235,18 @@ static bool program_image(libusb_device_handle* h,
 static size_t verification_extent(const std::vector<uint8_t>& image)
 {
     size_t verify_size = image.size();
+
+    // 2MB.pcap and 2_2MB.pcap prove that a partial first-window image is read
+    // back through the end of the containing 64-KiB block. Bytes beyond the
+    // programmed image extent are expected to remain erased (0xFF).
+    if (image.size() < FLASH_WINDOW_SIZE) {
+        verify_size =
+            (image.size() + PROGRAM_BLOCK - 1) & ~(PROGRAM_BLOCK - 1);
+        if (verify_size != image.size()) {
+            std::cout << "Partial BANK0 verify extent rounded to 64-KiB block: 0x"
+                      << std::hex << verify_size << std::dec << " bytes\n";
+        }
+    }
 
     // Preserve the capture-derived behavior used for a short tail immediately
     // beyond the 16-MiB boundary: verify the rest of that 64-KiB block as FF.
@@ -2024,19 +2281,19 @@ static bool compare_verify_block(const std::vector<uint8_t>& image,
     return true;
 }
 
-// Capture-proven global-linear verification. Keep this for geometries for which
-// the original Windows manager behavior is already known to work:
-//   * <=8 MiB,
-//   * exact 16 MiB,
-//   * exact 32 MiB.
+// Capture-proven global-linear verification. Current evidence covers partial
+// first-window images (~1 MiB, ~2 MiB, exact 4 MiB), exact 8 MiB, exact 16 MiB,
+// exact 24 MiB, exact 32 MiB, and the captured tiny BANK2-tail case.
 static bool verify_image_linear(libusb_device_handle* h,
-                                const std::vector<uint8_t>& image)
+                                const std::vector<uint8_t>& image,
+                                bool verbose)
 {
     std::cout << "\n========================================\n"
               << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
               << "========================================\n";
 
     const size_t verify_size = verification_extent(image);
+    ProgressBar progress("Verify", verify_size, true, !verbose);
 
     for (size_t off = 0; off < verify_size; ) {
         const size_t n = std::min(PROGRAM_BLOCK, verify_size - off);
@@ -2050,10 +2307,13 @@ static bool verify_image_linear(libusb_device_handle* h,
         if (!compare_verify_block(image, off, got))
             return false;
 
-        std::cout << "verified card byte 0x" << std::hex << std::setw(8)
-                  << std::setfill('0') << off << " length 0x" << n
-                  << std::dec << '\n';
+        if (verbose) {
+            std::cout << "verified card byte 0x" << std::hex << std::setw(8)
+                      << std::setfill('0') << off << " length 0x" << n
+                      << std::dec << '\n';
+        }
         off += n;
+        progress.update(off);
     }
     return true;
 }
@@ -2245,7 +2505,10 @@ static bool has_flash_save_library(const std::vector<uint8_t>& rom)
 
 // The low byte of catalog entry bytes 20..23 is independent from ROM size.
 // Captured SRAM/non-FLASH cases use 3; captured FLASH save-library cases use 6.
-// TOF-EEPROM.pcap proves EEPROM_V124 uses the distinct mapping/config value 5.
+// EEPROM is now known to have at least two distinct values:
+//   * Classic NES / EEPROM_V124 captures -> map 4
+//   * Tales of Phantasia / EEPROM_V124   -> map 5
+// Therefore EEPROM_Vnnn alone is not a generic discriminator.
 static bool has_eeprom_save_library(const std::vector<uint8_t>& rom)
 {
     return contains_bytes(rom, "EEPROM_V");
@@ -2253,10 +2516,10 @@ static bool has_eeprom_save_library(const std::vector<uint8_t>& rom)
 
 static uint8_t detect_mapping_flag(const std::vector<uint8_t>& rom)
 {
-    // TOF-EEPROM.pcap: Tales of Phantasia / EEPROM_V124 -> map 5.
-    // Existing FLASH captures -> map 6; SRAM/non-FLASH captures -> map 3.
-    if (has_eeprom_save_library(rom)) return 5;
-    if (has_flash_save_library(rom))  return 6;
+    // EEPROM is intentionally excluded: callers must require an explicit
+    // --mapN override until a generic capacity/configuration discriminator is
+    // recovered from captures or ROM structure.
+    if (has_flash_save_library(rom)) return 6;
     return 3;
 }
 
@@ -2448,8 +2711,19 @@ static bool load_rom(RomInfo& r)
     if (r.name.empty()) r.name = derive_name(r.path);
     if (!r.entry_type_overridden)
         r.entry_type = detect_entry_type(r.data);
-    if (!r.mapping_flag_overridden)
+
+    if (!r.mapping_flag_overridden) {
+        if (has_eeprom_save_library(r.data)) {
+            std::cerr
+                << "EEPROM catalog mapping is ambiguous for: " << r.path << '\n'
+                << "Current captures prove EEPROM_V124 can use map 4 or map 5.\n"
+                << "Specify the capture-appropriate value explicitly with "
+                   "--mapN=4 or --mapN=5 for this ROM slot.\n"
+                << "No USB write was attempted.\n";
+            return false;
+        }
         r.mapping_flag = detect_mapping_flag(r.data);
+    }
 
     return true;
 }
@@ -2910,7 +3184,7 @@ static void print_layout(const std::vector<RomInfo>& roms,
 static void usage(const char* argv0)
 {
     std::cerr
-        << "ezfadvanceIII manager-primed ROM writer 0.5.12 (" << host_platform_name() << ")\n\n"
+        << "ezfadvanceIII manager-primed ROM writer 0.5.17 (" << host_platform_name() << ")\n\n"
         << "Dry run / inspect layout only:\n"
         << "  " << argv0 << " rom1.gba [rom2.gba ...]\n\n"
         << "Build in memory + erase/program/verify:\n"
@@ -2919,11 +3193,14 @@ static void usage(const char* argv0)
         << "Build in memory + erase/program without read-back verify:\n"
         << "  " << argv0 << " --yes-really-write --skip-verify "
            "rom1.gba [rom2.gba ...]\n\n"
+        << "Output options:\n"
+        << "  --verbose   Show per-sector/per-block erase, program, timing, and verify diagnostics.\n"
+        << "              Without it, erase/program/verify use live progress bars.\n\n"
         << "Optional capture-metadata overrides:\n"
         << "  --type1=2   --type6=3   --type10=4\n"
         << "  --map1=6    --map6=6    --map10=3\n\n"
         << "Notes:\n"
-        << "  * No small fixed ROM-count limit is imposed; six ROMs are capture-proven.\n"
+        << "  * No small fixed ROM-count limit is imposed; 1..8 active entries are capture-proven.\n"
         << "  * The loader contains 120 structural catalog slots; this is a safety bound, not a claim that 120-ROM menu operation is proven.\n"
         << "  * Total input ROM file size must not exceed 32 MiB / 256 Mbit.\n"
         << "  * No intermediate .bin image is written to disk.\n"
@@ -2931,17 +3208,18 @@ static void usage(const char* argv0)
         << "    Each warning requires an explicit y/yes response to continue.\n"
         << "    This writer never patches save routines automatically.\n"
         << "    If SRAM conversion is desired, patch the ROM manually with a separate tool first.\n"
-        << "  * EEPROM_V ROMs use capture-derived mapping flag 5 (Tales / EEPROM_V124).\n"
+        << "  * EEPROM_V alone does not determine map 4 vs 5; use --mapN explicitly for EEPROM ROMs.\n"
         << "  * The constructed in-memory image must fit in the 32 MiB / 256-Mbit cartridge.\n"
         << "  * Full-size single ROMs may place the loader inside trailing/internal FF space.\n"
         << "  * Catalog type is derived from ROM size class (32 MiB=0 ... 64 KiB=9).\n"
-        << "  * Embedded EEPROM metadata maps to 5; FLASH-family metadata to 6; SRAM/other to 3.\n"
+        << "  * FLASH-family metadata maps to 6; SRAM/other to 3; EEPROM requires explicit map 4/5.\n"
         << "  * Multi-ROM input is stable-sorted by descending file size, matching captures.\n"
         << "  * Equal-size ROMs keep their original relative order.\n"
         << "  * Smaller ROMs may reuse trailing FF padding of earlier ROMs.\n"
         << "  * The multi-ROM loader is embedded in a suitable FF run when possible.\n"
         << "  * Physical/catalog ROM #1 is patched to branch to the EZF loader/menu.\n"
-        << "  * Exact 24-MiB readback is capture-proven; other uncaptured partial-window geometries are verify-skipped.\n"
+        << "  * Partial first-window and exact 8/16/24/32-MiB readback paths are capture-proven.\n"
+        << "    Other uncaptured higher-window partial geometries are verify-skipped.\n"
         << "  * --skip-verify skips all post-write ROM read-back comparison.\n"
         << "    A short status/reset cleanup is still sent after programming.\n"
         << "  * Without --yes-really-write, no USB device is touched and nothing is written.\n";
@@ -2952,6 +3230,7 @@ int main(int argc, char** argv)
     try {
         bool do_write = false;
         bool skip_verify = false;
+        bool verbose = false;
         std::array<std::optional<uint8_t>, MULTI_CATALOG_MAX_ENTRIES> type_override;
         std::array<std::optional<uint8_t>, MULTI_CATALOG_MAX_ENTRIES> mapping_override;
         std::vector<std::string> rom_paths;
@@ -2963,6 +3242,8 @@ int main(int argc, char** argv)
                 do_write = true;
             } else if (a == "--skip-verify") {
                 skip_verify = true;
+            } else if (a == "--verbose") {
+                verbose = true;
             } else if (a.rfind("--type", 0) == 0) {
                 // --type1=7, --type10=3, ...
                 const size_t eq = a.find('=');
@@ -3073,9 +3354,26 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        // Windows writes a full 64 KiB minimum block for a small single-ROM image.
+        // Original EZ3Manager uses a minimum 64-KiB program extent, and the
+        // new 1-MiB / two-1-MiB captures prove that a non-block-aligned image
+        // end is rounded upward to a 0x100-byte boundary before programming.
+        const uint64_t minimum_programmed =
+            std::max<uint64_t>(PROGRAM_BLOCK,
+                               static_cast<uint64_t>(image.size()));
+        const uint64_t programmed_u64 =
+            align_up_u64(minimum_programmed, 0x100u);
+
+        if (programmed_u64 > MAX_CARD_IMAGE) {
+            std::cerr
+                << "0x100-aligned programmed extent 0x" << std::hex
+                << programmed_u64
+                << " exceeds the 256-Mbit cartridge capacity 0x"
+                << MAX_CARD_IMAGE << std::dec << ".\n";
+            return 1;
+        }
+
         const size_t programmed_size =
-            std::max(PROGRAM_BLOCK, image.size());
+            static_cast<size_t>(programmed_u64);
         image.resize(programmed_size, 0xFF);
 
         print_layout(roms, image, programmed_size);
@@ -3172,14 +3470,14 @@ int main(int argc, char** argv)
         // Reproduce the captured writer setup once, on a fresh bridge/cart
         // session, before doing any erase/program operation.
         if (ok)
-            ok = captured_global_write_setup(h, false, 0, true);
+            ok = captured_global_write_setup(h, false, 0, verbose);
 
         // Capture-faithful BANK0 unlock for erase.
         if (ok)
             ok = flash_bank0_setup(h, 125000, false);
 
         if (ok)
-            ok = erase_image_capture_faithful(h, image.size());
+            ok = erase_image_capture_faithful(h, image.size(), verbose);
 
         // For <=8 MiB this closes bank0 erasing.  For >8 MiB the helper has
         // already switched to bank1 and erased it, so this closes bank1.
@@ -3190,10 +3488,10 @@ int main(int argc, char** argv)
         // repeatable Windows-capture 125-ms quiet interval immediately before
         // AA55, then send the real image in the original single-request form.
         if (ok)
-            ok = flash_bank0_setup(h, 125000, true);
+            ok = flash_bank0_setup(h, 125000, verbose);
 
         if (ok)
-            ok = program_image(h, image);
+            ok = program_image(h, image, verbose);
 
         bool full_verify_completed = false;
         bool full_verify_skipped = false;
@@ -3216,26 +3514,36 @@ int main(int argc, char** argv)
             // on the simple capture-linear path.
             if (image.size() == MAX_CARD_IMAGE) {
                 ok = flash_256mb_prepare_linear_verify(h);
-                if (ok) ok = verify_image_linear(h, image);
+                if (ok) ok = verify_image_linear(h, image, verbose);
                 full_verify_completed = ok;
             } else if (image.size() == CARD_192MBIT_SIZE) {
                 ok = flash_192mb_prepare_linear_verify(h);
-                if (ok) ok = verify_image_linear(h, image);
+                if (ok) ok = verify_image_linear(h, image, verbose);
                 full_verify_completed = ok;
             } else if (image.size() == CARD_HALF_SIZE) {
                 ok = flash_128mb_prepare_linear_verify(h);
-                if (ok) ok = verify_image_linear(h, image);
+                if (ok) ok = verify_image_linear(h, image, verbose);
                 full_verify_completed = ok;
-            } else if (image.size() <= FLASH_WINDOW_SIZE) {
-                ok = flash_status_sequence(h);
-                if (ok) ok = verify_image_linear(h, image);
+            } else if (image.size() == FLASH_WINDOW_SIZE) {
+                // Exact 8 MiB is independently capture-proven by both the
+                // single-ROM Advance Wars capture and 4MiB-4MiB.pcap.
+                ok = flash_64mb_prepare_linear_verify(h);
+                if (ok) ok = verify_image_linear(h, image, verbose);
+                full_verify_completed = ok;
+            } else if (image.size() < FLASH_WINDOW_SIZE) {
+                // 2MB.pcap, 2_2MB.pcap, and 4MB.pcap prove the generic partial
+                // first-window path: status cleanup only, then ordinary linear
+                // 0x91 reads. verification_extent() rounds the final read to a
+                // full 64-KiB block and expects erased 0xFF beyond image.size().
+                ok = flash_partial_bank0_prepare_linear_verify(h);
+                if (ok) ok = verify_image_linear(h, image, verbose);
                 full_verify_completed = ok;
             } else if (image.size() > CARD_HALF_SIZE &&
                        image.size() <= CARD_HALF_SIZE + PROGRAM_BLOCK) {
                 // fireemblem.pcap proves this tiny BANK2-tail transition and
                 // verifies one complete 64-KiB block beyond 16 MiB.
                 ok = flash_bank2_prepare_linear_verify(h);
-                if (ok) ok = verify_image_linear(h, image);
+                if (ok) ok = verify_image_linear(h, image, verbose);
                 full_verify_completed = ok;
             } else {
                 // 0.5.1 proved that reusing program-window selection for local
