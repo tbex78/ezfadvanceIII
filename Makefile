@@ -1,5 +1,8 @@
 # EZF Advance III toolset Makefile
-VERSION ?= 0.6.2
+# By default, build the unversioned source filenames.
+# To build a versioned source set instead, use for example:
+#   make VERSION=0.6.2
+VERSION ?=
 
 CXX ?= c++
 CXXFLAGS ?= -std=c++17 -O2
@@ -12,10 +15,17 @@ CPPFLAGS ?=
 LDFLAGS ?=
 LDLIBS ?=
 
+ifeq ($(strip $(VERSION)),)
+WRITER_SRC := ezfadvanceIII_multirom_writer.cpp
+CARD_READER_SRC := ezfadvanceIII_card_reader.cpp
+SAVE_READER_SRC := ezfadvanceIII_save_reader.cpp
+WIPE_SRC := ezfadvanceIII_wipe_card.cpp
+else
 WRITER_SRC := ezfadvanceIII_multirom_writer_$(VERSION).cpp
 CARD_READER_SRC := ezfadvanceIII_card_reader_$(VERSION).cpp
 SAVE_READER_SRC := ezfadvanceIII_save_reader_$(VERSION).cpp
 WIPE_SRC := ezfadvanceIII_wipe_card_$(VERSION).cpp
+endif
 
 WRITER := ezfadvanceIII_multirom_writer
 CARD_READER := ezfadvanceIII_card_reader
