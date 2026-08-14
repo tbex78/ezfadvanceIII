@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.6.0**.
+Current shared project/toolset version covered by this summary: **0.6.2**.
 
 All mainline utilities carry this same version:
 
@@ -24,6 +24,8 @@ ezfadvanceIII_wipe_card
 ```
 
 Beginning with 0.6.0, a code change to **any one** of these utilities bumps the shared version for **all four**, even when some utilities have no functional change in that release.
+
+Beginning with **0.6.2**, runtime banners do not contain a hard-coded project version. Release identity is carried by filenames, source comments, tags/releases, packaged artifacts, and documentation. The GBA header's `ROM version` field is unrelated and remains part of ROM inspection output.
 
 ---
 
@@ -157,6 +159,22 @@ verify extent  -> 0x10000-byte / 64-KiB alignment
 Arbitrary other partial images in the higher 16–32 MiB region are programmed normally, but full verification is skipped unless a capture-proven read mapping exists.
 
 This avoids false failures caused by invented window-selection rules.
+
+Current boundary:
+
+```text
+< 8 MiB                 verify
+= 8 MiB                 verify
+8–16 MiB partial        skip
+= 16 MiB                verify
+captured tiny >16 MiB   verify
+16–24 MiB partial       skip
+= 24 MiB                verify
+24–32 MiB partial       skip
+= 32 MiB                verify
+```
+
+The ~14-MiB and ~22-MiB mixed-map hardware tests work for programming/menu/launch, but full read-back remains intentionally skipped because the original-manager read mapping for those partial higher-window geometries has not been captured.
 
 The user can explicitly disable post-write readback with:
 
@@ -570,6 +588,8 @@ This is capture + hardware proven.
 | single 4 MiB F-Zero | yes | yes |
 | 4 MiB + 1 MiB, map 3 + 4 | derived from captured rules | yes |
 | 4 MiB + 1 MiB + 1 MiB, map 3 + 4 + 4 | derived from captured rules | yes |
+| ~14 MiB: Advance Wars + F-Zero + two Classic NES, maps 6 + 3 + 4 + 4 | partial verify unproven | yes |
+| ~22 MiB: Tales + F-Zero + two Classic NES, maps 5 + 3 + 4 + 4 | partial verify unproven | yes |
 | single 8 MiB Advance Wars | yes | yes |
 | 6 ROMs / 24 MiB | yes | yes |
 | 6 ROMs / 32 MiB | yes | yes |
@@ -739,7 +759,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.6.0 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.6.2 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -750,11 +770,21 @@ Windows     no native mainline support; use a Linux VM with USB passthrough
 
 The portability foundation remains the same. The 0.6.0 version synchronization changes release/version policy, not the Unix-like platform scope.
 
+---
+
+## 0.6.1 / 0.6.2 release changes
+
+**0.6.1** clarified the evidence-backed verification boundary. It did not enable speculative higher-window read mappings: partial 8–16, 16–24, and 24–32 MiB images continue to skip full verification unless a capture-proven path exists.
+
+**0.6.2** removed hard-coded project-version text from all four runtime banners. Writer, card reader, save reader, and wipe utility still share the synchronized project version, but the executable output no longer duplicates it internally. No protocol behavior changed in card reader, save reader, or wipe utility.
+
+
 ## Current project status
 
-At shared version **0.6.0**, the project has a mostly structural model of original EZ3Manager behavior:
+At shared version **0.6.2**, the project has a mostly structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
+- from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
 - tested cartridge geometry is four 8-MiB windows / 32 MiB total;
 - there is no small fixed ROM-count limit; 1–8 active entries are capture-proven and the loader exposes 120 structural catalog slots as a safety bound;
 - total input ROM bytes may be up to and including 32 MiB / 256 Mbit, provided packing and loader placement still fit;
@@ -793,4 +823,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.6.0 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.6.2 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

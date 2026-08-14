@@ -27,7 +27,6 @@ static constexpr unsigned char EP_OUT = 0x02;
 static constexpr unsigned char EP_IN  = 0x81;
 static constexpr int INTERFACE_NUMBER = 0;
 
-static constexpr const char* TOOL_VERSION = "0.5.10";
 
 static constexpr const char* host_platform_name()
 {
@@ -48,7 +47,9 @@ static constexpr const char* host_platform_name()
 #endif
 }
 
-// ezfadvanceIII wipe utility 0.5.10.
+// ezfadvanceIII wipe utility 0.6.2.
+// 0.6.2 removes hard-coded project-version text from runtime output.
+// Erase protocol/timing behavior remains unchanged from 0.5.10.
 //
 // Ported from the capture-derived wipe-card v3 utility.
 // The erase geometry, per-bank setup, 0x96 erase commands, status sequence,
@@ -466,8 +467,7 @@ int main(int argc, char** argv)
 {
     if (argc != 2 || std::string(argv[1]) != "--yes-really-wipe") {
         std::cerr
-            << "EZF Advance III card wipe utility " << TOOL_VERSION
-            << " (" << host_platform_name() << ")\n\n"
+            << "EZF Advance III card wipe utility (" << host_platform_name() << ")\n\n"
             << "WARNING: This operation is destructive and erases the cartridge flash.\n\n"
             << "RECOMMENDED BEFORE USE:\n"
             << "  Unplug the EZF Advance III USB device, then plug it back in before running\n"

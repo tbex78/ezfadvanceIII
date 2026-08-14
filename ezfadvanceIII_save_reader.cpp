@@ -30,7 +30,9 @@
 #include <utility>
 #include <vector>
 
-// EZF Advance III save reader 0.5.10, read-only dumper.
+// EZF Advance III save reader 0.6.2, read-only dumper.
+// 0.6.2 removes hard-coded project-version text from runtime output.
+// Save-read protocol behavior remains unchanged from 0.5.10.
 //
 // Ported from the historical save-reader v2 implementation. The USB/save
 // protocol and conservative safety behavior are intentionally unchanged.
@@ -72,7 +74,6 @@ static constexpr unsigned char EP_IN  = 0x81;
 static constexpr int INTERFACE_NUMBER = 0;
 static constexpr unsigned USB_TIMEOUT_MS = 15000;
 static constexpr unsigned COMMAND_DATA_SETTLE_US = 750;
-static constexpr const char* TOOL_VERSION = "0.5.10";
 
 static constexpr const char* host_platform_name()
 {
@@ -965,8 +966,7 @@ static void usage(const char* argv0)
               << "  " << argv0 << "\n"
               << "  " << argv0 << " --output file.sav\n"
               << "  " << argv0 << " --rom N [--output file.sav]\n\n"
-              << "Read-only EZF Advance III save dumper " << TOOL_VERSION
-              << " (" << host_platform_name() << ").\n"
+              << "Read-only EZF Advance III save dumper (" << host_platform_name() << ").\n"
               << "Capture-proven path: SRAM_V111 / Bios_Dumper = 32 KiB, "
                  "selector 0x0900.\n"
               << "On a multi-ROM card, the reader auto-selects only when exactly one "

@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.6.0`  
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.6.0`  
+**Current project/toolset version:** `0.6.2`  
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.6.2`  
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`  
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge  
-**Host implementation:** C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.6.0 baseline is derived from code already compiled on macOS / Apple Silicon; Linux/BSD validation remains pending.
+**Host implementation:** C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.6.2 baseline is derived from code already compiled on macOS / Apple Silicon; Linux/BSD validation remains pending.
 
 ---
 
@@ -39,6 +39,10 @@ ezfadvanceIII_wipe_card
 The version is bumped when the code of **at least one** of these programs changes. All four programs then carry the same new project version, even when some individual utilities have no functional code changes in that release.
 
 Therefore the version number identifies a synchronized EZF Advance III toolset release, not a per-file change counter.
+
+Beginning with **0.6.2**, the project version is **not hard-coded into runtime banners**. Version identity is carried by release/source filenames, source comments, packaged artifacts, tags, and documentation. Runtime banners identify the utility and host platform only. This avoids stale or duplicated version strings inside binaries.
+
+The GBA header field reported as `ROM version` is unrelated to the toolset release number and remains displayed where applicable.
 
 A central project rule is:
 
@@ -483,13 +487,31 @@ A separate capture-derived transition is used after programming BANK3. It prepar
 
 A real-hardware 6-ROM / 32-MiB test also completed write, full verification, menu selection, and all six launches successfully.
 
-### 11.6 Other partial higher-window images
+### 11.6 Current verification boundary
 
-Programming remains supported across all four physical windows, but arbitrary partial extents above 16 MiB are not assumed to share the exact-24-MiB or exact-32-MiB read mapping. Unsupported geometries are programmed normally and verification is skipped rather than guessed.
+The current evidence-backed policy is:
+
+```text
+0 < image < 8 MiB          full read-back verification
+image == 8 MiB             full read-back verification
+8 MiB < image < 16 MiB     verification skipped
+image == 16 MiB            full read-back verification
+captured tiny >16-MiB tail full read-back verification
+16 MiB < image < 24 MiB    verification skipped
+image == 24 MiB            full read-back verification
+24 MiB < image < 32 MiB    verification skipped
+image == 32 MiB            full read-back verification
+```
+
+The successful ~14-MiB and ~22-MiB hardware tests prove packing/programming/menu/launch behavior for those layouts, but they do not establish the original-manager linear-read selector for the corresponding partial higher-window geometry. The writer therefore continues to skip full verification there rather than extrapolate from the exact 16-/24-/32-MiB cases.
+
+### 11.7 Other partial higher-window images
+
+Programming remains supported across all four physical windows, but arbitrary partial extents in the unproven higher-window ranges are not assumed to share neighboring exact-size mappings. Unsupported geometries are programmed normally and verification is skipped rather than guessed.
 
 There is also a capture-specific Fire Emblem path for a very small loader tail immediately beyond 16 MiB.
 
-### 11.7 `--skip-verify`
+### 11.8 `--skip-verify`
 
 When explicitly requested:
 
@@ -1507,6 +1529,8 @@ The following combinations are important project milestones.
 | single 4 MiB F-Zero | yes | yes | status-only partial-first-window verify |
 | 4 MiB F-Zero + 1 MiB Super Mario | derived from captured rules | yes | map 3 + map 4 |
 | 4 MiB F-Zero + 1 MiB Super Mario + 1 MiB Castlevania | derived from captured rules | yes | map 3 + map 4 + map 4 |
+| 8 MiB Advance Wars + 4 MiB F-Zero + 1 MiB Super Mario + 1 MiB Castlevania | partial higher-window verify not capture-proven | yes | mixed map 6 + map 3 + map 4 + map 4; ~14 MiB |
+| 16 MiB Tales + 4 MiB F-Zero + 1 MiB Super Mario + 1 MiB Castlevania | partial higher-window verify not capture-proven | yes | mixed map 5 + map 3 + map 4 + map 4; ~22 MiB |
 | single 8 MiB Advance Wars | yes | yes | exact-8-MiB `0x0040` transition |
 | 6 ROMs / 24 MiB | yes | yes | write + verify + menu + all launches |
 | 6 ROMs / 32 MiB | yes | yes | full-card write + verify + menu + all launches |
@@ -1771,6 +1795,42 @@ From this release onward, any code change to at least one mainline program bumps
 
 The writer's 0.6.0 behavior adopts the stable 0.5.17 baseline. The other utilities are version-synchronized without implying a protocol change in every utility.
 
+
+### 36.19 0.6.1
+
+The writer's capture-backed verification policy was made explicit in code and user-facing diagnostics:
+
+```text
+< 8 MiB                 verify
+exact 8 MiB             verify
+exact 16 MiB            verify
+captured tiny >16 MiB   verify
+exact 24 MiB            verify
+exact 32 MiB            verify
+other partial higher-window geometries -> skip
+```
+
+No new experimental selector was introduced. In particular, successful ~14-MiB and ~22-MiB hardware writes did not justify guessing the linear-read mapping for those partial higher-window extents.
+
+The card reader, save reader, and wipe utility received only the synchronized project-version update; their protocol behavior remained unchanged.
+
+### 36.20 0.6.2
+
+Hard-coded project-version text was removed from runtime banners in all four utilities.
+
+Runtime output now identifies the utility and host platform, for example:
+
+```text
+ezfadvanceIII manager-primed ROM writer (macOS)
+Read-only EZF Advance III card inspector (Linux).
+Read-only EZF Advance III save dumper (FreeBSD).
+EZF Advance III card wipe utility (macOS)
+```
+
+The shared release version remains represented by filenames, source comments, tags/releases, packaged artifacts, and documentation. The GBA header's `ROM version` field is not a tool version and remains unaffected.
+
+No USB protocol, erase timing, save-read behavior, or card-read behavior was changed by this cleanup.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -1780,7 +1840,7 @@ The current source targets C++17 and libusb on Unix-like systems.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.6.0 baseline derives from code compiled on Apple Silicon
+macOS       supported target; current 0.6.2 baseline derives from code compiled on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -1793,7 +1853,7 @@ Typical Apple Silicon/Homebrew build command:
 
 ```bash
 c++ -std=c++17 -O2 \
-  ezfadvanceIII_multirom_writer_0.6.0.cpp \
+  ezfadvanceIII_multirom_writer_0.6.2.cpp \
   -I/opt/homebrew/opt/libusb/include \
   -L/opt/homebrew/opt/libusb/lib \
   -lusb-1.0 \
@@ -1804,7 +1864,7 @@ On systems where libusb publishes a `pkg-config` file, the intended portable for
 
 ```bash
 c++ -std=c++17 -O2 \
-  ezfadvanceIII_multirom_writer_0.6.0.cpp \
+  ezfadvanceIII_multirom_writer_0.6.2.cpp \
   $(pkg-config --cflags --libs libusb-1.0) \
   -o ezfadvanceIII_multirom_writer
 ```
@@ -2180,9 +2240,10 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.6.0**, the project has a mostly structural model:
+At shared toolset version **0.6.2**, the project has a mostly structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
+- runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;
 - cartridge geometry is four 8-MiB program/erase windows;
 - 1-8 active catalog entries are capture-proven; 120 structural slots remain a safety bound rather than a proven menu limit;
 - total ROM bytes may reach the full 32-MiB / 256-Mbit capacity when packing and loader placement fit;

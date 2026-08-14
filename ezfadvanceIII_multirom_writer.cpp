@@ -173,7 +173,19 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.5.17 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.6.2 for macOS, Linux and BSD.
+//
+// 0.6.2 removes hard-coded project-version text from runtime banners.
+// synchronization. Verification behavior remains evidence-bounded:
+//   * every constructed image below 8 MiB uses the capture-proven status-only
+//     partial-BANK0 preparation followed by full linear 0x91 verification;
+//   * exact 8, 16, 24 and 32 MiB retain their capture-proven transitions;
+//   * the Fire Emblem-style tiny tail immediately above 16 MiB retains its
+//     dedicated capture-proven path;
+//   * other partial higher-window geometries remain verification-skipped until
+//     an original-EZ3Manager capture proves their linear-read mapping.
+// The skip diagnostic and usage notes now state these boundaries explicitly.
+// No new higher-window selector is guessed in this release.
 //
 // 0.5.17 incorporates the new sub-8-MiB captures:
 //   * 2MB.pcap is a single 1-MiB ROM image;
@@ -3184,7 +3196,7 @@ static void print_layout(const std::vector<RomInfo>& roms,
 static void usage(const char* argv0)
 {
     std::cerr
-        << "ezfadvanceIII manager-primed ROM writer 0.5.17 (" << host_platform_name() << ")\n\n"
+        << "ezfadvanceIII manager-primed ROM writer (" << host_platform_name() << ")\n\n"
         << "Dry run / inspect layout only:\n"
         << "  " << argv0 << " rom1.gba [rom2.gba ...]\n\n"
         << "Build in memory + erase/program/verify:\n"
@@ -3218,8 +3230,9 @@ static void usage(const char* argv0)
         << "  * Smaller ROMs may reuse trailing FF padding of earlier ROMs.\n"
         << "  * The multi-ROM loader is embedded in a suitable FF run when possible.\n"
         << "  * Physical/catalog ROM #1 is patched to branch to the EZF loader/menu.\n"
-        << "  * Partial first-window and exact 8/16/24/32-MiB readback paths are capture-proven.\n"
-        << "    Other uncaptured higher-window partial geometries are verify-skipped.\n"
+        << "  * Every constructed image below 8 MiB is fully read-back verified.\n"
+        << "  * Exact 8/16/24/32-MiB readback paths are capture-proven.\n"
+        << "  * Other partial higher-window geometries remain verify-skipped until captured.\n"
         << "  * --skip-verify skips all post-write ROM read-back comparison.\n"
         << "    A short status/reset cleanup is still sent after programming.\n"
         << "  * Without --yes-really-write, no USB device is touched and nothing is written.\n";
@@ -3554,9 +3567,13 @@ int main(int argc, char** argv)
                 if (ok) {
                     full_verify_skipped = true;
                     std::cout
-                        << "\nFull read-back verification skipped: this partial "
-                           "higher-window geometry has no capture-proven linear "
-                           "read mapping yet.\n"
+                        << "\nFull read-back verification skipped: image extent 0x"
+                        << std::hex << image.size() << std::dec
+                        << " is a partial higher-window geometry with no "
+                           "capture-proven linear read mapping yet.\n"
+                        << "Capture-proven full verification currently covers "
+                           "all images below 8 MiB, exact 8/16/24/32 MiB, and "
+                           "the dedicated tiny-tail-above-16-MiB case.\n"
                         << "Programming completed; no experimental verification "
                            "window selection was sent.\n";
                 }

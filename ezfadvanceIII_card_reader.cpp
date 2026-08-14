@@ -28,7 +28,9 @@
 #include <thread>
 #include <vector>
 
-// EZF Advance III card reader 0.5.13, read-only inspector.
+// EZF Advance III card reader 0.6.2, read-only inspector.
+// 0.6.2 removes hard-coded project-version text from runtime output.
+// Card-read protocol behavior remains unchanged from 0.5.13.
 //
 // Ported from the historical card-reader v1 implementation. The USB/card
 // read/probe behavior is intentionally unchanged. This program never sends
@@ -76,7 +78,6 @@ static constexpr unsigned char EP_IN  = 0x81;
 static constexpr int INTERFACE_NUMBER = 0;
 static constexpr unsigned USB_TIMEOUT_MS = 15000;
 static constexpr unsigned COMMAND_DATA_SETTLE_US = 750;
-static constexpr const char* TOOL_VERSION = "0.5.13";
 
 static constexpr const char* host_platform_name()
 {
@@ -876,8 +877,7 @@ static int inspect_card(libusb_device_handle* h)
 static void usage(const char* argv0)
 {
     std::cout << "Usage: " << argv0 << "\n\n"
-              << "Read-only EZF Advance III card inspector " << TOOL_VERSION
-              << " (" << host_platform_name() << ").\n"
+              << "Read-only EZF Advance III card inspector (" << host_platform_name() << ").\n"
               << "Connect the EZF Advance III with the GBA card inserted, then run with no arguments.\n";
 }
 
