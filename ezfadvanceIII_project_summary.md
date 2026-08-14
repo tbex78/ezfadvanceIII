@@ -349,6 +349,15 @@ FLASH-family metadata                       -> map 6
 
 The same `EEPROM_V124` marker therefore occurs with both map 4 and map 5. The current writer does not guess between them; EEPROM ROMs require an explicit per-ROM `--mapN=4` or `--mapN=5` until a generic discriminator is recovered.
 
+Controlled hardware A/B tests show that the distinction is functionally significant. Both Classic NES titles work with map 4. When either one is forced to map 5, programming and full read-back verification still succeed, but the game displays the same runtime error screen:
+
+```text
+GAME PACK ERROR
+TURN THE POWER OFF.
+```
+
+The screen has a black background, a centered white rectangular border, `GAME PACK ERROR` centered in red, and `TURN THE POWER OFF.` centered below it. This proves that byte-perfect flash verification does not validate runtime map correctness.
+
 Capture examples:
 
 ```text
@@ -584,6 +593,8 @@ This is capture + hardware proven.
 | 8 MiB + 8 MiB + 8 MiB + 8 MiB | yes | yes |
 | single 1 MiB Classic NES Super Mario, map 4 | yes | yes |
 | single 1 MiB Classic NES Castlevania, map 4 | yes | yes |
+| single 1 MiB Classic NES Super Mario, forced map 5 | full verify succeeds | runtime `GAME PACK ERROR` |
+| single 1 MiB Classic NES Castlevania, forced map 5 | full verify succeeds | identical runtime `GAME PACK ERROR` |
 | 1 MiB + 1 MiB Classic NES, map 4 + 4 | yes | yes |
 | single 4 MiB F-Zero | yes | yes |
 | 4 MiB + 1 MiB, map 3 + 4 | derived from captured rules | yes |
@@ -727,7 +738,11 @@ Exact 16-, 24-, and 32-MiB verification mappings are capture-proven, plus the ti
 
 ### EEPROM map-4 / map-5 discriminator
 
-`EEPROM_V124` is proven with both map 4 and map 5. The missing rule is the generic ROM-level property that makes EZ3Manager choose one or the other. Until that is recovered, EEPROM map selection remains explicit.
+`EEPROM_V124` is proven with both map 4 and map 5. The missing rule is the generic ROM-level property that makes EZ3Manager choose one or the other.
+
+The Classic NES A/B tests prove map 4 and map 5 are not interchangeable: map 4 works, while map 5 still writes and fully verifies but is rejected at runtime with the same `GAME PACK ERROR / TURN THE POWER OFF.` screen in both tested titles.
+
+Until the discriminator is recovered, EEPROM map selection remains explicit.
 
 ### Multi-ROM save-bank behavior
 
@@ -793,6 +808,7 @@ At shared version **0.6.2**, the project has a mostly structural model of origin
 - single and multi loaders are capture-derived and relocatable; the same `0x7080` multi-loader with 125 relocations matches captured 2–8 ROM configurations;
 - catalog `type` is ROM-size based;
 - catalog `map` uses capture-derived values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` occurs with both;
+- hardware A/B testing proves map correctness is independent of flash verification: both Classic NES map-5 images fully verify but fail at runtime with an identical Game Pak error screen, whereas map 4 works;
 - partial first-window verification is capture- and hardware-proven in the tested small layouts; exact 8-, 16-, 24-, and 32-MiB paths are also known;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;

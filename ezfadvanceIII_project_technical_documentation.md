@@ -864,7 +864,58 @@ catalog type    = 5
 mapping flag    = 4
 ```
 
-Both titles were hardware-tested successfully with explicit `--mapN=4`. A two-ROM `map 4 + map 4` image also wrote, verified, displayed the menu, and launched both titles successfully.
+Both titles were hardware-tested successfully with explicit `--mapN=4`. A two-ROM `map 4 + map 4` image also wrote, fully verified, displayed the menu, and launched both titles successfully.
+
+Controlled A/B hardware tests now show that map 4 is not merely the value used by EZ3Manager; it is functionally required for these two ROMs:
+
+```text
+Classic NES Series - Super Mario Bros.
+
+map 4:
+  write                         PASS
+  full read-back verification  PASS
+  launch/runtime               PASS
+
+map 5:
+  write                         PASS
+  full read-back verification  PASS
+  launch reaches game code     PASS
+  runtime                      FAIL
+```
+
+The map-5 failure screen is:
+
+```text
+black background
+centered white rectangular border
+
+GAME PACK ERROR
+TURN THE POWER OFF.
+```
+
+`GAME PACK ERROR` is displayed centered in red. `TURN THE POWER OFF.` is centered below it inside the same white rectangle.
+
+The same controlled test was repeated with `Classic NES Series - Castlevania`. It produces the **same error message with the same presentation** when forced to map 5, while map 4 works normally:
+
+```text
+Classic NES Series - Castlevania
+
+map 4:
+  write                         PASS
+  full read-back verification  PASS
+  launch/runtime               PASS
+
+map 5:
+  write                         PASS
+  full read-back verification  PASS
+  launch reaches game code     PASS
+  runtime                      FAIL
+  identical GAME PACK ERROR / TURN THE POWER OFF. screen
+```
+
+This is strong hardware evidence that full USB/flash verification does **not** validate catalog-map correctness. A wrong map can produce a byte-perfect programmed image that is rejected later by the running game.
+
+It also shows that map 4 and map 5 are not interchangeable EEPROM metadata values. They affect the runtime cartridge configuration seen by the game.
 
 Mixed hardware-proven configurations include:
 
@@ -1525,6 +1576,8 @@ The following combinations are important project milestones.
 | 8 MiB + 8 MiB + 8 MiB + 8 MiB | yes | yes | four-ROM loader/catalog proven |
 | single 1 MiB Classic NES Super Mario | yes | yes | `EEPROM_V124`, explicit map 4 |
 | single 1 MiB Classic NES Castlevania | yes | yes | `EEPROM_V124`, explicit map 4 |
+| single 1 MiB Classic NES Super Mario, forced map 5 | generated image fully verifies | runtime failure | exact `GAME PACK ERROR / TURN THE POWER OFF.` screen |
+| single 1 MiB Classic NES Castlevania, forced map 5 | generated image fully verifies | runtime failure | identical error screen; map 4 works |
 | 1 MiB + 1 MiB Classic NES | yes | yes | map 4 + map 4 |
 | single 4 MiB F-Zero | yes | yes | status-only partial-first-window verify |
 | 4 MiB F-Zero + 1 MiB Super Mario | derived from captured rules | yes | map 3 + map 4 |
@@ -1623,7 +1676,18 @@ ROM patching: none performed by writer or original manager
 
 The same `EEPROM_V124` marker occurs with both map 4 and map 5, so the marker revision is not a capacity/configuration discriminator.
 
-Map-4 launch behavior is hardware-proven in single-ROM, two-ROM, and mixed map-3/map-4 menus. Save/load persistence testing remains useful, especially for identifying the underlying EEPROM capacity behavior.
+Map-4 launch behavior is hardware-proven in single-ROM, two-ROM, and mixed map-3/map-4 menus.
+
+Forced map-5 A/B tests on both Classic NES titles are also hardware-proven to fail at runtime with the identical:
+
+```text
+GAME PACK ERROR
+TURN THE POWER OFF.
+```
+
+screen, despite successful write and full read-back verification. This separates flash-image integrity from runtime mapping correctness.
+
+Save/load persistence testing remains useful, especially for identifying the underlying EEPROM capacity/configuration behavior that distinguishes map 4 from map 5.
 
 ### 35.5 No recognized save marker
 
@@ -2167,6 +2231,8 @@ Tales of Phantasia                    -> map 5
 
 The open question is the generic ROM-level property—likely related to EEPROM capacity/configuration—that original EZ3Manager uses to choose between them.
 
+The Classic NES A/B tests prove the distinction is runtime-significant rather than cosmetic catalog metadata: both titles fully verify when forced to map 5, yet both reject that configuration with the identical `GAME PACK ERROR / TURN THE POWER OFF.` screen. Map 4 works normally.
+
 Until that discriminator is recovered, the writer requires explicit `--mapN=4` or `--mapN=5`.
 
 ### 40.5 Save-bank behavior in multi-ROM mode
@@ -2251,6 +2317,7 @@ At shared toolset version **0.6.2**, the project has a mostly structural model:
 - the same `0x7080` multi-loader with 125 relocations matches captured 2-8 ROM configurations;
 - catalog type is ROM-size based;
 - catalog map uses values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` alone does not distinguish them;
+- map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
 - partial first-window verification is capture- and hardware-proven for the tested small layouts; exact 8-, 16-, 24-, and 32-MiB paths are known, plus the tiny-tail-above-16-MiB path;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
