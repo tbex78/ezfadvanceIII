@@ -539,19 +539,210 @@ The current implementation constructs the entire image **in memory**. Since 0.5.
 
 ## 13. GBA entry branch patch
 
-The first physical/catalog ROM is special.
+The first physical/catalog ROM is special because cartridge execution begins at GBA ROM address `0x08000000`, which corresponds to card byte offset `0x00000000`.
 
-Its original first ARM instruction is decoded to recover its original branch target. The custom image replaces the first instruction with a branch to the relocated EZ3 loader/menu.
+Original EZ3Manager does not place the EZ3 loader at byte zero. Instead, it preserves the first ROM at the beginning of the cartridge and rewrites **only that ROM's first 32-bit ARM instruction** so execution branches into the relocated EZ3 loader/menu.
 
-Only physical/catalog ROM #1 is patched this way.
+The original first instruction is not discarded conceptually: its original branch destination is decoded before patching and stored in the first catalog entry so the loader can later transfer control back to the ROM's normal startup path.
 
-Later ROMs retain their original first instruction and the catalog stores their physical start address as their launch target metadata.
+### 13.1 Required original instruction form
 
-The GBA ROM CPU mapping base used when relocating loader literals is:
+The capture-supported ROMs begin with an ordinary unconditional ARM `B` instruction:
+
+```text
+EAxxxxxx
+```
+
+In little-endian ROM byte order, the four bytes appear with the immediate field first and `EA` last.
+
+For an ARM branch instruction at cartridge offset zero, ARM's PC value is eight bytes ahead of the current instruction. The branch destination can therefore be expressed in card-relative form as:
+
+```text
+target = 0x00000008 + sign_extend(imm24) * 4
+```
+
+where:
+
+```text
+instruction = 0xEA000000 | (imm24 & 0x00FFFFFF)
+```
+
+The writer deliberately requires this captured `EAxxxxxx` form. If the ROM does not begin with such an instruction, it refuses the ROM rather than inventing a different entry-point patching rule.
+
+The same calculation can be expressed using CPU-visible GBA ROM addresses:
+
+```text
+instruction address = 0x08000000
+ARM PC               = 0x08000008
+CPU target           = 0x08000000 + card_relative_target
+```
+
+The project normally keeps the branch calculation in card-relative offsets because the common `0x08000000` base cancels out.
+
+### 13.2 What is saved before ROM #1 is patched
+
+Before image construction, the writer decodes ROM #1's original branch target and records it as:
+
+```text
+original_entry_target
+```
+
+For the **first** catalog entry, bytes `24..27` contain this original branch destination.
+
+For later catalog entries, bytes `24..27` instead contain that ROM's physical byte start on the cartridge.
+
+Conceptually:
+
+```text
+catalog entry #1:
+    field +24 = original branch target of ROM #1
+
+catalog entry #2 and later:
+    field +24 = physical card byte start of that ROM
+```
+
+This asymmetry exists because ROM #1 has had its normal first instruction replaced by the loader branch and therefore needs its original startup destination preserved separately.
+
+### 13.3 Only the first physical/catalog ROM is patched
+
+Only the ROM occupying card byte `0x00000000` is modified.
+
+Later ROMs retain their original first four bytes exactly. They are reached through the EZ3 loader/menu using their catalog metadata instead of by changing their own reset instruction.
+
+This also means that **sorting happens before the branch patch is applied**. The writer stable-sorts ROMs largest-first, performs placement, determines which ROM is physical/catalog ROM #1, then patches byte zero of the completed image.
+
+The `--mapN` and other per-input metadata stay associated with their ROM object while it is reordered, but the ARM branch patch always belongs to whichever ROM ends up physically first.
+
+### 13.4 Detailed captured example — Classic NES Series: Super Mario Bros.
+
+The single-ROM capture provides a complete byte-level example.
+
+The ROM's original branch destination is:
+
+```text
+card-relative target = 0x000000CC
+CPU-visible target   = 0x080000CC
+```
+
+At cartridge offset zero, ARM evaluates the PC as:
+
+```text
+PC = 0x00000008
+```
+
+Therefore the original immediate is:
+
+```text
+imm24 = (0x000000CC - 0x00000008) / 4
+      = 0x000000C4 / 4
+      = 0x00000031
+```
+
+The original first instruction is consequently:
+
+```text
+ARM word        = 0xEA000031
+little-endian   = 31 00 00 EA
+```
+
+EZ3Manager places the single-ROM loader at:
+
+```text
+loader card offset = 0x00100010
+loader CPU address = 0x08100010
+```
+
+To redirect initial execution to that loader, the replacement branch immediate is:
+
+```text
+imm24 = (0x00100010 - 0x00000008) / 4
+      = 0x00100008 / 4
+      = 0x00040002
+```
+
+which produces:
+
+```text
+patched ARM word  = 0xEA040002
+patched ROM bytes = 02 00 04 EA
+```
+
+Those are exactly the first four programmed bytes observed in the capture:
+
+```text
+02 00 04 EA
+```
+
+The first catalog entry simultaneously preserves the original target:
+
+```text
+catalog +24..+27 = CC 00 00 00
+                   -> 0x000000CC
+```
+
+The startup chain is therefore:
+
+```text
+GBA reset / cartridge entry
+        |
+        v
+0x08000000
+patched instruction: B 0x08100010
+        |
+        v
+EZ3 single-ROM loader
+        |
+        | loader/menu performs its required setup
+        v
+original ROM startup target
+0x080000CC
+```
+
+The ROM's normal startup destination is therefore recoverable even though its original first instruction was overwritten on the flash image.
+
+### 13.5 Multi-ROM confirmation of the same rule
+
+The two-1-MiB capture shows the identical mechanism with the loader relocated farther into the image.
+
+For that layout:
+
+```text
+ROM #1 start = 0x00000000
+ROM #2 start = 0x00100000
+loader start = 0x00200010
+```
+
+ROM #1 is patched to branch to `0x00200010`:
+
+```text
+imm24 = (0x00200010 - 8) / 4
+      = 0x00080002
+
+ARM word       = 0xEA080002
+captured bytes = 02 00 08 EA
+```
+
+The capture contains exactly:
+
+```text
+02 00 08 EA
+```
+
+at card byte zero.
+
+ROM #2 is **not** patched. Its own original first instruction remains in place at card byte `0x00100000`, and its catalog entry identifies `0x00100000` as its physical start.
+
+This is why the project describes the rule as **first-ROM branch patching**, not general ROM entry-point patching.
+
+### 13.6 GBA ROM mapping base
+
+The GBA ROM CPU mapping base used by the loader and its relocated absolute literals is:
 
 ```text
 GBA_ROM_BASE = 0x08000000
 ```
+
+For branch encoding at byte zero, using card-relative targets and `PC = 8` is equivalent to using CPU addresses and `PC = 0x08000008`.
 
 ---
 
