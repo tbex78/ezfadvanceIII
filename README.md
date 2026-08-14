@@ -24,7 +24,7 @@ This project was started because the original software and drivers for the **EZF
 
 The purpose of this project is therefore to research, document, and develop an independent alternative that can help preserve continued use of existing EZF Advance III hardware on modern Unix-like systems, without requiring the original Windows XP environment. The project is focused on compatibility and interoperability with hardware that users already own; it is not intended to represent, replace, or imply official software, drivers, support, or endorsement from Nintendo or the EZ-Flash Team.
 
-I hope that someone with the necessary technical knowledge and interest will **fork this repository and continue the project further**. This repository is shared primarily as an experimental starting point and as a record of the work already done, in the hope that others may improve, correct, document, and extend it.
+We hope that someone with the necessary technical knowledge and interest will **fork this repository and continue the project further**. This repository is shared primarily as an experimental starting point and as a record of the work already done, in the hope that others may improve, correct, document, and extend it.
 
 This software and project are provided **“AS IS” and “AS AVAILABLE,” without warranty of any kind**, express or implied.
 
