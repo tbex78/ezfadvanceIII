@@ -29,6 +29,7 @@ CXXFLAGS = -std=c++17 -O2
 WARNFLAGS =
 
 CPPFLAGS =
+PROJECT_CPPFLAGS = -Iinclude
 LDFLAGS =
 LDLIBS =
 
@@ -38,6 +39,12 @@ SAVE_READER = ezfadvanceIII_save_reader
 WIPE = ezfadvanceIII_wipe_card
 
 PROGRAMS = $(WRITER) $(CARD_READER) $(SAVE_READER) $(WIPE)
+TRANSPORT_SOURCES = src/usb_device.cpp src/protocol.cpp
+WRITER_SOURCES = $(TRANSPORT_SOURCES) src/verification_policy.cpp src/writer_options.cpp
+CARD_READER_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/read_only_cartridge.cpp
+SAVE_READER_SOURCES = $(CARD_READER_SOURCES) src/save_memory_reader.cpp
+WIPE_SOURCES = $(TRANSPORT_SOURCES)
+ALL_SUPPORT_SOURCES = $(SAVE_READER_SOURCES) src/verification_policy.cpp src/writer_options.cpp
 
 # Source selection is performed by the POSIX shell in each recipe so this
 # Makefile does not depend on GNU/BSD make conditionals.
@@ -54,7 +61,7 @@ LIBUSB_CFLAGS = `if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists
 LIBUSB_LIBS = `if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists libusb-1.0 >/dev/null 2>&1; then pkg-config --libs libusb-1.0; elif [ -d /opt/homebrew/opt/libusb/lib ]; then printf '%s\n' '-L/opt/homebrew/opt/libusb/lib -lusb-1.0'; elif [ -d /usr/local/opt/libusb/lib ]; then printf '%s\n' '-L/usr/local/opt/libusb/lib -lusb-1.0'; elif [ -d /usr/local/lib ]; then printf '%s\n' '-L/usr/local/lib -lusb-1.0'; else printf '%s\n' '-lusb-1.0'; fi`
 
 ALL_CXXFLAGS = $(CXXFLAGS) $(WARNFLAGS)
-ALL_CPPFLAGS = $(CPPFLAGS) $(LIBUSB_CFLAGS)
+ALL_CPPFLAGS = $(PROJECT_CPPFLAGS) $(CPPFLAGS) $(LIBUSB_CFLAGS)
 ALL_LDLIBS = $(LIBUSB_LIBS) $(LDLIBS)
 
 all: $(PROGRAMS)
@@ -74,38 +81,47 @@ $(WRITER): FORCE
 	@base="$(WRITER_BASE)"; \
 	if [ -n "$(VERSION)" ]; then src="$${base}_$(VERSION).cpp"; else src="$${base}.cpp"; fi; \
 	if [ ! -f "$$src" ]; then echo "Missing source: $$src" >&2; exit 1; fi; \
-	echo "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) $$src $(LDFLAGS) $(ALL_LDLIBS) -o $@"; \
-	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) "$$src" $(LDFLAGS) $(ALL_LDLIBS) -o "$@"
+	echo "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) $$src $(WRITER_SOURCES) $(LDFLAGS) $(ALL_LDLIBS) -o $@"; \
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) "$$src" $(WRITER_SOURCES) $(LDFLAGS) $(ALL_LDLIBS) -o "$@"
 
 $(CARD_READER): FORCE
 	@base="$(CARD_READER_BASE)"; \
 	if [ -n "$(VERSION)" ]; then src="$${base}_$(VERSION).cpp"; else src="$${base}.cpp"; fi; \
 	if [ ! -f "$$src" ]; then echo "Missing source: $$src" >&2; exit 1; fi; \
-	echo "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) $$src $(LDFLAGS) $(ALL_LDLIBS) -o $@"; \
-	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) "$$src" $(LDFLAGS) $(ALL_LDLIBS) -o "$@"
+	echo "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) $$src $(CARD_READER_SOURCES) $(LDFLAGS) $(ALL_LDLIBS) -o $@"; \
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) "$$src" $(CARD_READER_SOURCES) $(LDFLAGS) $(ALL_LDLIBS) -o "$@"
 
 $(SAVE_READER): FORCE
 	@base="$(SAVE_READER_BASE)"; \
 	if [ -n "$(VERSION)" ]; then src="$${base}_$(VERSION).cpp"; else src="$${base}.cpp"; fi; \
 	if [ ! -f "$$src" ]; then echo "Missing source: $$src" >&2; exit 1; fi; \
-	echo "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) $$src $(LDFLAGS) $(ALL_LDLIBS) -o $@"; \
-	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) "$$src" $(LDFLAGS) $(ALL_LDLIBS) -o "$@"
+	echo "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) $$src $(SAVE_READER_SOURCES) $(LDFLAGS) $(ALL_LDLIBS) -o $@"; \
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) "$$src" $(SAVE_READER_SOURCES) $(LDFLAGS) $(ALL_LDLIBS) -o "$@"
 
 $(WIPE): FORCE
 	@base="$(WIPE_BASE)"; \
 	if [ -n "$(VERSION)" ]; then src="$${base}_$(VERSION).cpp"; else src="$${base}.cpp"; fi; \
 	if [ ! -f "$$src" ]; then echo "Missing source: $$src" >&2; exit 1; fi; \
-	echo "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) $$src $(LDFLAGS) $(ALL_LDLIBS) -o $@"; \
-	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) "$$src" $(LDFLAGS) $(ALL_LDLIBS) -o "$@"
+	echo "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) $$src $(WIPE_SOURCES) $(LDFLAGS) $(ALL_LDLIBS) -o $@"; \
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) "$$src" $(WIPE_SOURCES) $(LDFLAGS) $(ALL_LDLIBS) -o "$@"
 
 check:
 	@set -e; \
 	for base in "$(WRITER_BASE)" "$(CARD_READER_BASE)" "$(SAVE_READER_BASE)" "$(WIPE_BASE)"; do \
 		if [ -n "$(VERSION)" ]; then src="$${base}_$(VERSION).cpp"; else src="$${base}.cpp"; fi; \
 		if [ ! -f "$$src" ]; then echo "Missing source: $$src" >&2; exit 1; fi; \
-		echo "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) -fsyntax-only $$src"; \
-		$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) -fsyntax-only "$$src"; \
+		echo "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) -fsyntax-only $$src $(ALL_SUPPORT_SOURCES)"; \
+		$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) -fsyntax-only "$$src" $(ALL_SUPPORT_SOURCES); \
 	done
+
+test: check
+	mkdir -p build
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/cartridge_format_test.cpp src/cartridge_format.cpp -o build/cartridge_format_test
+	./build/cartridge_format_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/protocol_test.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/protocol_test
+	./build/protocol_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/verification_policy_test.cpp src/verification_policy.cpp -o build/verification_policy_test
+	./build/verification_policy_test
 
 print-config:
 	@echo "VERSION=$(VERSION)"
@@ -119,6 +135,6 @@ print-config:
 	done
 
 clean:
-	rm -f $(PROGRAMS)
+	rm -f $(PROGRAMS) build/cartridge_format_test build/protocol_test build/verification_policy_test
 
 FORCE:

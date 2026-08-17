@@ -21,12 +21,8 @@
 #include <string>
 #include <vector>
 
-static constexpr uint16_t VID = 0x0E6A;
-static constexpr uint16_t PID = 0x5088;
-static constexpr unsigned char EP_OUT = 0x02;
-static constexpr unsigned char EP_IN  = 0x81;
-static constexpr int INTERFACE_NUMBER = 0;
-
+#include "ezfadvance/usb_device.hpp"
+#include "ezfadvance/protocol.hpp"
 
 static constexpr const char* host_platform_name()
 {
@@ -76,25 +72,7 @@ static bool bulk_out(libusb_device_handle* h,
                      const std::vector<uint8_t>& data,
                      unsigned timeout_ms = 5000)
 {
-    int transferred = 0;
-    int rc = libusb_bulk_transfer(
-        h, EP_OUT,
-        const_cast<unsigned char*>(data.data()),
-        static_cast<int>(data.size()),
-        &transferred,
-        timeout_ms);
-
-    if (rc != 0) {
-        std::cerr << "BULK OUT failed: " << libusb_error_name(rc)
-                  << " (" << rc << "), transferred=" << transferred << '\n';
-        return false;
-    }
-    if (transferred != static_cast<int>(data.size())) {
-        std::cerr << "BULK OUT short transfer: " << transferred
-                  << "/" << data.size() << '\n';
-        return false;
-    }
-    return true;
+    return ezfadvance::BulkTransport(h).out(data, timeout_ms);
 }
 
 static bool bulk_in_max(libusb_device_handle* h,
@@ -102,19 +80,7 @@ static bool bulk_in_max(libusb_device_handle* h,
                         size_t max_len,
                         unsigned timeout_ms = 5000)
 {
-    data.assign(max_len, 0);
-    int transferred = 0;
-    int rc = libusb_bulk_transfer(
-        h, EP_IN, data.data(), static_cast<int>(data.size()),
-        &transferred, timeout_ms);
-
-    if (rc != 0) {
-        std::cerr << "BULK IN failed: " << libusb_error_name(rc)
-                  << " (" << rc << "), transferred=" << transferred << '\n';
-        return false;
-    }
-    data.resize(static_cast<size_t>(transferred));
-    return true;
+    return ezfadvance::BulkTransport(h).inMax(data, max_len, timeout_ms);
 }
 
 // Non-destructive cartridge/readiness preflight.  The writer and real-device
@@ -172,16 +138,14 @@ static std::vector<uint8_t> cmd92_2()
 {
     // delete.pcap:
     // 5A A5 92 02 00 00 00 00 02 00 00 00 00
-    return {0x5A,0xA5,0x92,0x02,0x00,0x00,0x00,0x00,
-            0x02,0x00,0x00,0x00,0x00};
+    return ezfadvance::Protocol::command92Two();
 }
 
 static std::vector<uint8_t> cmd92_1(uint8_t selector)
 {
     // selector=0 for AA/55/00 operations
     // selector=1 for 06/04 operations
-    return {0x5A,0xA5,0x92,0x01,selector,0x00,0x00,0x00,
-            0x01,0x00,0x00,0x00,0x00};
+    return ezfadvance::Protocol::command92One(selector);
 }
 
 static bool command_data_echo(libusb_device_handle* h,
@@ -190,28 +154,8 @@ static bool command_data_echo(libusb_device_handle* h,
                               const char* label,
                               unsigned timeout_ms = 5000)
 {
-    if (!bulk_out(h, command, timeout_ms)) {
-        std::cerr << label << ": command OUT failed\n";
-        return false;
-    }
-    if (!bulk_out(h, data, timeout_ms)) {
-        std::cerr << label << ": data OUT failed\n";
-        return false;
-    }
-
-    std::vector<uint8_t> response;
-    if (!bulk_in_max(h, response, 64, timeout_ms)) {
-        std::cerr << label << ": echo IN failed\n";
-        return false;
-    }
-    if (response != command) {
-        std::cerr << label << ": command echo mismatch\nExpected:\n";
-        print_hex(command.data(), command.size(), command.size());
-        std::cerr << "Received:\n";
-        print_hex(response.data(), response.size(), response.size());
-        return false;
-    }
-    return true;
+    return ezfadvance::Protocol(h).commandDataEcho(
+        command, data, label, {timeout_ms, 0, true});
 }
 
 static bool tx92_2(libusb_device_handle* h,
@@ -463,6 +407,34 @@ static bool verify_blank_like_capture(libusb_device_handle* h)
     return true;
 }
 
+class CardEraser final {
+public:
+    explicit CardEraser(libusb_device_handle* handle) noexcept
+        : handle_(handle)
+    {
+    }
+
+    bool execute()
+    {
+        // Safety gate: no destructive 0x96 erase command is sent until the
+        // cartridge has returned the proven 0x98 readiness byte.
+        bool ok = cartridge_ready_preflight(handle_);
+        for (unsigned bank = 0; bank < 4 && ok; ++bank)
+            ok = erase_bank(handle_, bank);
+
+        if (ok) {
+            std::cout << "\nRunning final cleanup sequence...\n";
+            ok = final_cleanup(handle_);
+        }
+        if (ok)
+            ok = verify_blank_like_capture(handle_);
+        return ok;
+    }
+
+private:
+    libusb_device_handle* handle_;
+};
+
 int main(int argc, char** argv)
 {
     if (argc != 2 || std::string(argv[1]) != "--yes-really-wipe") {
@@ -485,56 +457,27 @@ int main(int argc, char** argv)
         << "WARNING: ERASE REQUEST CONFIRMED.\n"
         << "This reproduces the destructive erase sequence observed in delete.pcap.\n";
 
-    libusb_context* ctx = nullptr;
-    libusb_device_handle* h = nullptr;
-
-    int rc = libusb_init(&ctx);
-    if (rc != 0) {
-        std::cerr << "libusb_init failed: " << libusb_error_name(rc) << '\n';
+    ezfadvance::UsbDevice device;
+    const auto open_result = device.open(std::cerr);
+    if (!open_result) {
+        if (open_result.status == ezfadvance::UsbOpenStatus::initialization_failed) {
+            std::cerr << "libusb_init failed: "
+                      << libusb_error_name(open_result.libusb_error) << '\n';
+        } else if (open_result.status == ezfadvance::UsbOpenStatus::device_not_found) {
+            std::cerr << "EZF Advance III USB device VID=0x0E6A PID=0x5088 not found.\n";
+        } else {
+            std::cerr << "Could not claim interface 0: "
+                      << libusb_error_name(open_result.libusb_error) << '\n';
+        }
         return 1;
     }
-
-    h = libusb_open_device_with_vid_pid(ctx, VID, PID);
-    if (!h) {
-        std::cerr << "EZF Advance III USB device VID=0x0E6A PID=0x5088 not found.\n";
-        libusb_exit(ctx);
-        return 1;
-    }
-
-#if defined(__linux__)
-    // Linux may bind a kernel driver to the interface. Ask libusb to
-    // detach/reattach it automatically. macOS/BSD do not use this path.
-    const int detach_rc = libusb_set_auto_detach_kernel_driver(h, 1);
-    if (detach_rc != 0) {
-        std::cerr << "Warning: libusb auto-detach setup failed: "
-                  << libusb_error_name(detach_rc)
-                  << " (continuing to interface claim)\n";
-    }
-#endif
-    rc = libusb_claim_interface(h, INTERFACE_NUMBER);
-    if (rc != 0) {
-        std::cerr << "Could not claim interface 0: " << libusb_error_name(rc) << '\n';
-        libusb_close(h);
-        libusb_exit(ctx);
-        return 1;
-    }
+    libusb_device_handle* h = device.handle();
 
     std::cout << "EZF Advance III opened on " << host_platform_name()
               << "; interface 0 claimed.\n";
 
-    // Safety gate: no destructive 0x96 erase command is sent until the
-    // cartridge has returned the proven 0x98 readiness byte.
-    bool ok = cartridge_ready_preflight(h);
-    for (unsigned bank = 0; bank < 4 && ok; ++bank)
-        ok = erase_bank(h, bank);
-
-    if (ok) {
-        std::cout << "\nRunning final cleanup sequence...\n";
-        ok = final_cleanup(h);
-    }
-
-    if (ok)
-        ok = verify_blank_like_capture(h);
+    CardEraser eraser(h);
+    const bool ok = eraser.execute();
 
     std::cout << "\n========================================\n";
     if (ok) {
@@ -544,10 +487,6 @@ int main(int argc, char** argv)
         std::cout << "CARD WIPE FAILED OR COULD NOT BE VERIFIED.\n";
     }
     std::cout << "========================================\n";
-
-    libusb_release_interface(h, INTERFACE_NUMBER);
-    libusb_close(h);
-    libusb_exit(ctx);
 
     return ok ? 0 : 2;
 }

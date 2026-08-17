@@ -8,6 +8,35 @@ and
 [Detailed documentation](ezfadvanceIII_project_technical_documentation.md) 
 to learn more
 
+## Build and test
+
+The command-line tools require a C++17 compiler and libusb 1.0:
+
+```sh
+make
+```
+
+Offline tests do not access an EZ-Flash device and do not erase or program a
+cartridge:
+
+```sh
+make test
+```
+
+The code is organized in layers:
+
+- `UsbDevice` owns the libusb context, device handle, and claimed interface.
+- `Transport` abstracts bulk transfers; `BulkTransport` is the libusb implementation.
+- `Protocol` implements shared EZ3 command/data/echo transactions.
+- `ReadOnlyCartridge` owns the capture-derived initialization and ROM-read state machine.
+- `GbaHeader`, `CatalogEntry`, and `CartridgeFormat` model cartridge metadata.
+- `SaveMemoryReader` owns capture-proven save-bank reads.
+- `CartridgeImageBuilder`, `CardWriter`, `CardInspector`, `SaveExtractor`, and `CardEraser` implement the four application workflows.
+
+Hardware tests are intentionally separate because writer and wipe operations
+are destructive. Always run a dry-run writer command first and review its
+layout before supplying `--yes-really-write`.
+
 ## Disclaimer
 
 ### Independent project / no affiliation or endorsement
@@ -41,4 +70,3 @@ To the maximum extent permitted by applicable law, the author(s), contributor(s)
 **You are solely responsible for understanding the risks, making appropriate backups where possible, verifying the software before use, and determining whether you are willing to accept the possibility of permanently damaging your EZF Avance III Device.**
 
 Do not use this software on any device that you are not prepared to potentially damage or lose. Use this project only if you fully understand and accept these risks.
-

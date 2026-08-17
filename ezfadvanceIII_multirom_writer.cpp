@@ -30,16 +30,14 @@
 #include <thread>
 #include <vector>
 
-static constexpr uint16_t VID = 0x0E6A;
-static constexpr uint16_t PID = 0x5088;
-static constexpr unsigned char EP_OUT = 0x02;
-static constexpr unsigned char EP_IN  = 0x81;
-static constexpr int INTERFACE_NUMBER = 0;
+#include "ezfadvance/usb_device.hpp"
+#include "ezfadvance/protocol.hpp"
+#include "ezfadvance/writer_options.hpp"
+#include "ezfadvance/verification_policy.hpp"
 
 static constexpr size_t PROGRAM_BLOCK = 0x10000; // 64 KiB
 static constexpr size_t FLASH_WINDOW_SIZE = 0x800000; // 8 MiB local program window
 static constexpr size_t CARD_HALF_SIZE = 0x1000000;   // 128 Mbit / 16 MiB boundary
-static constexpr size_t CARD_192MBIT_SIZE = 0x1800000; // 192 Mbit / 24 MiB boundary
 static constexpr size_t MAX_CARD_IMAGE = 0x2000000;   // 256 Mbit / 32 MiB card
 static constexpr unsigned USB_TIMEOUT_MS = 15000;
 
@@ -962,25 +960,7 @@ static bool bulk_out(libusb_device_handle* h,
                      size_t n,
                      unsigned timeout_ms = USB_TIMEOUT_MS)
 {
-    int transferred = 0;
-    const int rc = libusb_bulk_transfer(
-        h, EP_OUT,
-        const_cast<unsigned char*>(p),
-        static_cast<int>(n),
-        &transferred,
-        timeout_ms);
-
-    if (rc != 0) {
-        std::cerr << "BULK OUT failed: " << libusb_error_name(rc)
-                  << " (" << rc << "), transferred=" << transferred << '\n';
-        return false;
-    }
-    if (transferred != static_cast<int>(n)) {
-        std::cerr << "BULK OUT short transfer: " << transferred
-                  << "/" << n << '\n';
-        return false;
-    }
-    return true;
+    return ezfadvance::BulkTransport(h).out(p, n, timeout_ms);
 }
 
 static bool bulk_out(libusb_device_handle* h,
@@ -1043,30 +1023,7 @@ static bool bulk_in_exact(libusb_device_handle* h,
                           size_t wanted,
                           unsigned timeout_ms = USB_TIMEOUT_MS)
 {
-    data.assign(wanted, 0);
-    int transferred = 0;
-
-    const int rc = libusb_bulk_transfer(
-        h, EP_IN,
-        data.data(),
-        static_cast<int>(wanted),
-        &transferred,
-        timeout_ms);
-
-    if (rc != 0) {
-        std::cerr << "BULK IN failed: " << libusb_error_name(rc)
-                  << " (" << rc << "), transferred=" << transferred << '\n';
-        data.clear();
-        return false;
-    }
-
-    data.resize(static_cast<size_t>(transferred));
-    if (data.size() != wanted) {
-        std::cerr << "BULK IN short transfer: "
-                  << data.size() << "/" << wanted << '\n';
-        return false;
-    }
-    return true;
+    return ezfadvance::BulkTransport(h).inExact(data, wanted, timeout_ms);
 }
 
 static bool bulk_in_max(libusb_device_handle* h,
@@ -1074,37 +1031,17 @@ static bool bulk_in_max(libusb_device_handle* h,
                         size_t max_len,
                         unsigned timeout_ms = USB_TIMEOUT_MS)
 {
-    data.assign(max_len, 0);
-    int transferred = 0;
-
-    const int rc = libusb_bulk_transfer(
-        h, EP_IN,
-        data.data(),
-        static_cast<int>(max_len),
-        &transferred,
-        timeout_ms);
-
-    if (rc != 0) {
-        std::cerr << "BULK IN failed: " << libusb_error_name(rc)
-                  << " (" << rc << "), transferred=" << transferred << '\n';
-        data.clear();
-        return false;
-    }
-
-    data.resize(static_cast<size_t>(transferred));
-    return true;
+    return ezfadvance::BulkTransport(h).inMax(data, max_len, timeout_ms);
 }
 
 static std::vector<uint8_t> cmd92_2()
 {
-    return {0x5A,0xA5,0x92,0x02,0x00,0x00,0x00,0x00,
-            0x02,0x00,0x00,0x00,0x00};
+    return ezfadvance::Protocol::command92Two();
 }
 
 static std::vector<uint8_t> cmd92_1(uint8_t selector)
 {
-    return {0x5A,0xA5,0x92,0x01,selector,0x00,0x00,0x00,
-            0x01,0x00,0x00,0x00,0x00};
+    return ezfadvance::Protocol::command92One(selector);
 }
 
 static bool command_data_echo(libusb_device_handle* h,
@@ -1113,31 +1050,8 @@ static bool command_data_echo(libusb_device_handle* h,
                               const std::string& label,
                               unsigned timeout_ms = USB_TIMEOUT_MS)
 {
-    if (!bulk_out(h, command, timeout_ms)) {
-        std::cerr << label << ": command OUT failed\n";
-        return false;
-    }
-
-    legacy_command_data_settle();
-
-    if (!bulk_out(h, data, timeout_ms)) {
-        std::cerr << label << ": data OUT failed\n";
-        return false;
-    }
-
-    std::vector<uint8_t> response;
-    if (!bulk_in_max(h, response, 64, timeout_ms)) {
-        std::cerr << label << ": echo IN failed\n";
-        return false;
-    }
-    if (response != command) {
-        std::cerr << label << ": command echo mismatch\nExpected:\n";
-        print_hex(command.data(), command.size(), command.size());
-        std::cerr << "Received:\n";
-        if (!response.empty()) print_hex(response.data(), response.size(), response.size());
-        return false;
-    }
-    return true;
+    return ezfadvance::Protocol(h).commandDataEcho(
+        command, data, label, {timeout_ms, COMMAND_DATA_SETTLE_US, true});
 }
 
 static bool tx92_2(libusb_device_handle* h,
@@ -3193,6 +3107,102 @@ static void print_layout(const std::vector<RomInfo>& roms,
     print_hex(image.data(), std::min<size_t>(4, image.size()), 4);
 }
 
+struct BuiltCartridgeImage {
+    std::vector<uint8_t> bytes;
+    size_t programmed_size = 0;
+};
+
+class CartridgeImageBuilder final {
+public:
+    bool build(std::vector<RomInfo>& roms,
+               BuiltCartridgeImage& result,
+               std::string& error) const
+    {
+        result.bytes = roms.size() == 1
+            ? build_single_image(roms)
+            : build_multi_image(roms);
+
+        if (result.bytes.size() > MAX_CARD_IMAGE) {
+            std::ostringstream message;
+            message << "Constructed image is 0x" << std::hex
+                    << result.bytes.size()
+                    << " bytes, exceeding the 256-Mbit cartridge capacity 0x"
+                    << MAX_CARD_IMAGE << std::dec << ".";
+            error = message.str();
+            return false;
+        }
+
+        const uint64_t minimum_programmed = std::max<uint64_t>(
+            PROGRAM_BLOCK, static_cast<uint64_t>(result.bytes.size()));
+        const uint64_t programmed = align_up_u64(minimum_programmed, 0x100u);
+        if (programmed > MAX_CARD_IMAGE) {
+            std::ostringstream message;
+            message << "0x100-aligned programmed extent 0x" << std::hex
+                    << programmed
+                    << " exceeds the 256-Mbit cartridge capacity 0x"
+                    << MAX_CARD_IMAGE << std::dec << ".";
+            error = message.str();
+            return false;
+        }
+
+        result.programmed_size = static_cast<size_t>(programmed);
+        result.bytes.resize(result.programmed_size, 0xFF);
+        return true;
+    }
+};
+
+class CardWriter final {
+public:
+    CardWriter(libusb_device_handle* handle, bool verbose) noexcept
+        : handle_(handle), verbose_(verbose)
+    {
+    }
+
+    bool preflight() { return original_manager_initialize_and_check(handle_); }
+    bool initializeBridge() { return initialize_bridge(handle_); }
+    bool prepareGlobalWrite() {
+        return captured_global_write_setup(handle_, false, 0, verbose_);
+    }
+    bool selectWindowZeroForErase() {
+        return flash_bank0_setup(handle_, 125000, false);
+    }
+    bool erase(std::size_t image_size) {
+        return erase_image_capture_faithful(handle_, image_size, verbose_);
+    }
+    bool finalizeFlashState() { return flash_status_sequence(handle_); }
+    bool selectWindowZeroForProgram() {
+        return flash_bank0_setup(handle_, 125000, verbose_);
+    }
+    bool program(const std::vector<uint8_t>& image) {
+        return program_image(handle_, image, verbose_);
+    }
+    bool verify(const std::vector<uint8_t>& image) {
+        return verify_image_linear(handle_, image, verbose_);
+    }
+    bool preparePartialFirstWindowVerification() {
+        return flash_partial_bank0_prepare_linear_verify(handle_);
+    }
+    bool prepare8MiBVerification() {
+        return flash_64mb_prepare_linear_verify(handle_);
+    }
+    bool prepare16MiBVerification() {
+        return flash_128mb_prepare_linear_verify(handle_);
+    }
+    bool prepareTinyTailVerification() {
+        return flash_bank2_prepare_linear_verify(handle_);
+    }
+    bool prepare24MiBVerification() {
+        return flash_192mb_prepare_linear_verify(handle_);
+    }
+    bool prepare32MiBVerification() {
+        return flash_256mb_prepare_linear_verify(handle_);
+    }
+
+private:
+    libusb_device_handle* handle_;
+    bool verbose_;
+};
+
 static void usage(const char* argv0)
 {
     std::cerr
@@ -3241,72 +3251,19 @@ static void usage(const char* argv0)
 int main(int argc, char** argv)
 {
     try {
-        bool do_write = false;
-        bool skip_verify = false;
-        bool verbose = false;
-        std::array<std::optional<uint8_t>, MULTI_CATALOG_MAX_ENTRIES> type_override;
-        std::array<std::optional<uint8_t>, MULTI_CATALOG_MAX_ENTRIES> mapping_override;
-        std::vector<std::string> rom_paths;
-
-        for (int i = 1; i < argc; ++i) {
-            const std::string a = argv[i];
-
-            if (a == "--yes-really-write") {
-                do_write = true;
-            } else if (a == "--skip-verify") {
-                skip_verify = true;
-            } else if (a == "--verbose") {
-                verbose = true;
-            } else if (a.rfind("--type", 0) == 0) {
-                // --type1=7, --type10=3, ...
-                const size_t eq = a.find('=');
-                if (eq == std::string::npos || eq <= 6 || eq + 1 >= a.size()) {
-                    usage(argv[0]);
-                    return 1;
-                }
-                const size_t one_based = static_cast<size_t>(
-                    std::stoul(a.substr(6, eq - 6)));
-                if (one_based == 0 || one_based > MULTI_CATALOG_MAX_ENTRIES) {
-                    std::cerr << "Bad type override slot: " << a
-                              << " (valid structural catalog slots are 1.."
-                              << MULTI_CATALOG_MAX_ENTRIES << ")\n";
-                    return 1;
-                }
-                const int value = std::stoi(a.substr(eq + 1));
-                if (value < 0 || value > 255) {
-                    std::cerr << "Bad type override value: " << a << '\n';
-                    return 1;
-                }
-                type_override[one_based - 1] = static_cast<uint8_t>(value);
-            } else if (a.rfind("--map", 0) == 0) {
-                // --map1=6, --map10=3, ...
-                const size_t eq = a.find('=');
-                if (eq == std::string::npos || eq <= 5 || eq + 1 >= a.size()) {
-                    usage(argv[0]);
-                    return 1;
-                }
-                const size_t one_based = static_cast<size_t>(
-                    std::stoul(a.substr(5, eq - 5)));
-                if (one_based == 0 || one_based > MULTI_CATALOG_MAX_ENTRIES) {
-                    std::cerr << "Bad mapping override slot: " << a
-                              << " (valid structural catalog slots are 1.."
-                              << MULTI_CATALOG_MAX_ENTRIES << ")\n";
-                    return 1;
-                }
-                const int value = std::stoi(a.substr(eq + 1));
-                if (value < 0 || value > 255) {
-                    std::cerr << "Bad mapping override value: " << a << '\n';
-                    return 1;
-                }
-                mapping_override[one_based - 1] = static_cast<uint8_t>(value);
-            } else if (!a.empty() && a[0] == '-') {
-                std::cerr << "Unknown option: " << a << '\n';
-                usage(argv[0]);
-                return 1;
-            } else {
-                rom_paths.push_back(a);
-            }
+        ezfadvance::WriterOptions options;
+        const auto parse_result = ezfadvance::WriterOptions::parse(
+            argc, argv, options, std::cerr);
+        if (!parse_result.ok) {
+            if (parse_result.show_usage) usage(argv[0]);
+            return 1;
         }
+        const bool do_write = options.write;
+        const bool skip_verify = options.skip_verify;
+        const bool verbose = options.verbose;
+        const auto& type_override = options.type_overrides;
+        const auto& mapping_override = options.mapping_overrides;
+        const auto& rom_paths = options.rom_paths;
 
         if (rom_paths.empty()) {
             usage(argv[0]);
@@ -3354,40 +3311,15 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        std::vector<uint8_t> image =
-            (roms.size() == 1)
-            ? build_single_image(roms)
-            : build_multi_image(roms);
-
-        if (image.size() > MAX_CARD_IMAGE) {
-            std::cerr
-                << "Constructed image is 0x" << std::hex << image.size()
-                << " bytes, exceeding the 256-Mbit cartridge capacity 0x"
-                << MAX_CARD_IMAGE << std::dec << ".\n";
+        const CartridgeImageBuilder image_builder;
+        BuiltCartridgeImage built_image;
+        std::string image_build_error;
+        if (!image_builder.build(roms, built_image, image_build_error)) {
+            std::cerr << image_build_error << '\n';
             return 1;
         }
-
-        // Original EZ3Manager uses a minimum 64-KiB program extent, and the
-        // new 1-MiB / two-1-MiB captures prove that a non-block-aligned image
-        // end is rounded upward to a 0x100-byte boundary before programming.
-        const uint64_t minimum_programmed =
-            std::max<uint64_t>(PROGRAM_BLOCK,
-                               static_cast<uint64_t>(image.size()));
-        const uint64_t programmed_u64 =
-            align_up_u64(minimum_programmed, 0x100u);
-
-        if (programmed_u64 > MAX_CARD_IMAGE) {
-            std::cerr
-                << "0x100-aligned programmed extent 0x" << std::hex
-                << programmed_u64
-                << " exceeds the 256-Mbit cartridge capacity 0x"
-                << MAX_CARD_IMAGE << std::dec << ".\n";
-            return 1;
-        }
-
-        const size_t programmed_size =
-            static_cast<size_t>(programmed_u64);
-        image.resize(programmed_size, 0xFF);
+        std::vector<uint8_t>& image = built_image.bytes;
+        const size_t programmed_size = built_image.programmed_size;
 
         print_layout(roms, image, programmed_size);
 
@@ -3416,45 +3348,26 @@ int main(int argc, char** argv)
             << "This will erase sectors at the beginning of the cartridge "
                "and program the constructed image.\n";
 
-        libusb_context* ctx = nullptr;
-        libusb_device_handle* h = nullptr;
-
-        int rc = libusb_init(&ctx);
-        if (rc != 0) {
-            std::cerr << "libusb_init failed: "
-                      << libusb_error_name(rc) << '\n';
+        ezfadvance::UsbDevice device;
+        const auto open_result = device.open(std::cerr);
+        if (!open_result) {
+            if (open_result.status == ezfadvance::UsbOpenStatus::initialization_failed) {
+                std::cerr << "libusb_init failed: "
+                          << libusb_error_name(open_result.libusb_error) << '\n';
+            } else if (open_result.status == ezfadvance::UsbOpenStatus::device_not_found) {
+                std::cerr << "ezfadvanceIII VID=0x0E6A PID=0x5088 not found.\n";
+            } else {
+                std::cerr << "Could not claim interface 0: "
+                          << libusb_error_name(open_result.libusb_error) << '\n';
+            }
             return 1;
         }
-
-        h = libusb_open_device_with_vid_pid(ctx, VID, PID);
-        if (!h) {
-            std::cerr << "ezfadvanceIII VID=0x0E6A PID=0x5088 not found.\n";
-            libusb_exit(ctx);
-            return 1;
-        }
-
-#if defined(__linux__)
-        // On Linux the interface can be owned by a kernel driver. Ask libusb
-        // to detach/reattach it automatically. macOS/BSD do not use this path.
-        const int detach_rc = libusb_set_auto_detach_kernel_driver(h, 1);
-        if (detach_rc != 0) {
-            std::cerr << "Warning: libusb auto-detach setup failed: "
-                      << libusb_error_name(detach_rc)
-                      << " (continuing to interface claim)\n";
-        }
-#endif
-        rc = libusb_claim_interface(h, INTERFACE_NUMBER);
-        if (rc != 0) {
-            std::cerr << "Could not claim interface 0: "
-                      << libusb_error_name(rc) << '\n';
-            libusb_close(h);
-            libusb_exit(ctx);
-            return 1;
-        }
+        libusb_device_handle* h = device.handle();
+        CardWriter card_writer(h, verbose);
 
         std::cout << "ezfadvanceIII opened; interface 0 claimed.\n";
 
-        bool ok = original_manager_initialize_and_check(h);
+        bool ok = card_writer.preflight();
 
         if (!ok) {
             std::cerr
@@ -3464,14 +3377,11 @@ int main(int argc, char** argv)
                 << "Initialization/card check did not complete.\n"
                 << "No erase or program operation was attempted.\n";
 
-            libusb_release_interface(h, INTERFACE_NUMBER);
-            libusb_close(h);
-            libusb_exit(ctx);
             return 2;
         }
 
         std::cout << "\nSimulating close-manager -> launch-v19 transition...\n";
-        ok = initialize_bridge(h);
+        ok = card_writer.initializeBridge();
 
         std::cout << "\n========================================\n"
                   << "MANAGER-PRIMED FULL WRITE\n"
@@ -3483,28 +3393,28 @@ int main(int argc, char** argv)
         // Reproduce the captured writer setup once, on a fresh bridge/cart
         // session, before doing any erase/program operation.
         if (ok)
-            ok = captured_global_write_setup(h, false, 0, verbose);
+            ok = card_writer.prepareGlobalWrite();
 
         // Capture-faithful BANK0 unlock for erase.
         if (ok)
-            ok = flash_bank0_setup(h, 125000, false);
+            ok = card_writer.selectWindowZeroForErase();
 
         if (ok)
-            ok = erase_image_capture_faithful(h, image.size(), verbose);
+            ok = card_writer.erase(image.size());
 
         // For <=8 MiB this closes bank0 erasing.  For >8 MiB the helper has
         // already switched to bank1 and erased it, so this closes bank1.
         if (ok)
-            ok = flash_status_sequence(h);
+            ok = card_writer.finalizeFlashState();
 
         // This is the key v17 experiment: on a completely fresh run, use the
         // repeatable Windows-capture 125-ms quiet interval immediately before
         // AA55, then send the real image in the original single-request form.
         if (ok)
-            ok = flash_bank0_setup(h, 125000, verbose);
+            ok = card_writer.selectWindowZeroForProgram();
 
         if (ok)
-            ok = program_image(h, image, verbose);
+            ok = card_writer.program(image);
 
         bool full_verify_completed = false;
         bool full_verify_skipped = false;
@@ -3518,52 +3428,52 @@ int main(int argc, char** argv)
                 << "\n--skip-verify supplied: skipping post-write ROM read-back "
                    "verification.\n"
                 << "Sending non-readback flash status/reset cleanup only.\n";
-            ok = flash_status_sequence(h);
+            ok = card_writer.finalizeFlashState();
             verify_skipped_by_user = ok;
         } else if (ok) {
             // Use only verification mappings directly supported by captures.
             // Compact packing now turns the Piano+MegaManZ case into the
             // original manager's exact 8-MiB geometry, so it remains entirely
             // on the simple capture-linear path.
-            if (image.size() == MAX_CARD_IMAGE) {
-                ok = flash_256mb_prepare_linear_verify(h);
-                if (ok) ok = verify_image_linear(h, image, verbose);
+            const auto verify_after = [&](bool prepared) {
+                ok = prepared;
+                if (ok) ok = card_writer.verify(image);
                 full_verify_completed = ok;
-            } else if (image.size() == CARD_192MBIT_SIZE) {
-                ok = flash_192mb_prepare_linear_verify(h);
-                if (ok) ok = verify_image_linear(h, image, verbose);
-                full_verify_completed = ok;
-            } else if (image.size() == CARD_HALF_SIZE) {
-                ok = flash_128mb_prepare_linear_verify(h);
-                if (ok) ok = verify_image_linear(h, image, verbose);
-                full_verify_completed = ok;
-            } else if (image.size() == FLASH_WINDOW_SIZE) {
+            };
+            const ezfadvance::VerificationPolicy verification_policy;
+            switch (verification_policy.modeFor(image.size())) {
+            case ezfadvance::VerificationMode::exact_32_mib:
+                verify_after(card_writer.prepare32MiBVerification());
+                break;
+            case ezfadvance::VerificationMode::exact_24_mib:
+                verify_after(card_writer.prepare24MiBVerification());
+                break;
+            case ezfadvance::VerificationMode::exact_16_mib:
+                verify_after(card_writer.prepare16MiBVerification());
+                break;
+            case ezfadvance::VerificationMode::exact_8_mib:
                 // Exact 8 MiB is independently capture-proven by both the
                 // single-ROM Advance Wars capture and 4MiB-4MiB.pcap.
-                ok = flash_64mb_prepare_linear_verify(h);
-                if (ok) ok = verify_image_linear(h, image, verbose);
-                full_verify_completed = ok;
-            } else if (image.size() < FLASH_WINDOW_SIZE) {
+                verify_after(card_writer.prepare8MiBVerification());
+                break;
+            case ezfadvance::VerificationMode::partial_first_window:
                 // 2MB.pcap, 2_2MB.pcap, and 4MB.pcap prove the generic partial
                 // first-window path: status cleanup only, then ordinary linear
                 // 0x91 reads. verification_extent() rounds the final read to a
                 // full 64-KiB block and expects erased 0xFF beyond image.size().
-                ok = flash_partial_bank0_prepare_linear_verify(h);
-                if (ok) ok = verify_image_linear(h, image, verbose);
-                full_verify_completed = ok;
-            } else if (image.size() > CARD_HALF_SIZE &&
-                       image.size() <= CARD_HALF_SIZE + PROGRAM_BLOCK) {
+                verify_after(card_writer.preparePartialFirstWindowVerification());
+                break;
+            case ezfadvance::VerificationMode::tiny_tail_above_16_mib:
                 // fireemblem.pcap proves this tiny BANK2-tail transition and
                 // verifies one complete 64-KiB block beyond 16 MiB.
-                ok = flash_bank2_prepare_linear_verify(h);
-                if (ok) ok = verify_image_linear(h, image, verbose);
-                full_verify_completed = ok;
-            } else {
+                verify_after(card_writer.prepareTinyTailVerification());
+                break;
+            case ezfadvance::VerificationMode::unsupported_partial_higher_window:
                 // 0.5.1 proved that reusing program-window selection for local
                 // 0x91 verification is wrong. Do not turn an unproven mapping
                 // into a false WRITE/VERIFY failure. Return the flash to a
                 // normal status/read state and report the limitation clearly.
-                ok = flash_status_sequence(h);
+                ok = card_writer.finalizeFlashState();
                 if (ok) {
                     full_verify_skipped = true;
                     std::cout
@@ -3577,6 +3487,7 @@ int main(int argc, char** argv)
                         << "Programming completed; no experimental verification "
                            "window selection was sent.\n";
                 }
+                break;
             }
         }
 
@@ -3593,10 +3504,6 @@ int main(int argc, char** argv)
             std::cout << "WRITE SUCCEEDED.\n";
         }
         std::cout << "========================================\n";
-
-        libusb_release_interface(h, INTERFACE_NUMBER);
-        libusb_close(h);
-        libusb_exit(ctx);
 
         return ok ? 0 : 2;
     }

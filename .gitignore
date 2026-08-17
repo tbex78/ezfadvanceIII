@@ -1,0 +1,20 @@
+# Local reverse-engineering captures and artifacts
+pcap/
+archive/
+assets/
+build/
+experiments/
+misc/
+notes/
+
+# Makefile output binaries
+/ezfadvanceIII_multirom_writer
+/ezfadvanceIII_card_reader
+/ezfadvanceIII_save_reader
+/ezfadvanceIII_wipe_card
+
+# Platform metadata
+.DS_Store
+
+# Save dumps produced by the save reader
+*.sav

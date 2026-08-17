@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.6.2`  
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`  
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge  
-**Host implementation:** C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.6.2 baseline is derived from code already compiled on macOS / Apple Silicon; Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.6.2 protocol baseline and its refactored architecture have been compiled and hardware-tested on macOS / Apple Silicon; Linux/BSD validation remains pending.
 
 ---
 
@@ -43,6 +43,45 @@ Therefore the version number identifies a synchronized EZF Advance III toolset r
 Beginning with **0.6.2**, the project version is **not hard-coded into runtime banners**. Version identity is carried by release/source filenames, source comments, packaged artifacts, tags, and documentation. Runtime banners identify the utility and host platform only. This avoids stale or duplicated version strings inside binaries.
 
 The GBA header field reported as `ROM version` is unrelated to the toolset release number and remains displayed where applicable.
+
+### 1.2 Current software architecture
+
+The four executables retain their original top-level source filenames, but
+shared behavior is implemented as composable C++ objects under `include/` and
+`src/`:
+
+```text
+command-line entry points
+        |
+application services
+        |
+cartridge/image domain objects
+        |
+EZ3 protocol and read state machines
+        |
+abstract USB transport
+        |
+RAII libusb device/session ownership
+```
+
+The principal shared components are:
+
+- `UsbDevice`, which owns the libusb context, handle, and claimed interface;
+- `Transport` and `BulkTransport`, which isolate USB bulk transfers and permit recorded test transports;
+- `Protocol`, which implements shared `0x92` command/data/echo transactions;
+- `ReadOnlyCartridge`, which owns capture-derived initialization, probing, ROM reads, and proven linear read mappings;
+- `CartridgeFormat`, `GbaHeader`, and `CatalogEntry`, which model and validate binary cartridge metadata;
+- `SaveMemoryReader`, which owns capture-proven save-bank reads;
+- `VerificationPolicy`, which selects only capture-supported verification geometries;
+- `WriterOptions`, which separates command-line parsing from image and device operations.
+
+The application workflows are represented by `CartridgeImageBuilder`,
+`CardWriter`, `CardInspector`, `SaveExtractor`, and `CardEraser`. Composition is
+used instead of a shared executable base class because the four programs share
+dependencies and protocol primitives, not one common program behavior.
+
+The normative software contract, safety requirements, and acceptance tests are
+specified in [`SOFTWARE_SPECIFICATION.md`](SOFTWARE_SPECIFICATION.md).
 
 A central project rule is:
 
@@ -1634,9 +1673,11 @@ The project historically recommends a fresh USB unplug/replug before some wipe e
 
 ---
 
-## 29. Save reader/writer companion work
+## 29. Save-memory companion work
 
-The project also contains separate save-memory experiments/utilities.
+The mainline `ezfadvanceIII_save_reader` implements read-only save extraction.
+Historical save-write experiments remain research material and are not exposed
+by the maintained toolset.
 
 Capture-derived save access uses a different command mode from ROM reads/writes.
 
@@ -1650,7 +1691,10 @@ common read extent tested: 32 KiB
 
 A selector around `0x0900` was observed in save-related traffic.
 
-A Bios_Dumper save-reader test produced an exact 32-KiB hardware match.
+A Bios_Dumper save-reader test produced an exact 32-KiB hardware match. The
+object-oriented `SaveMemoryReader` refactor was subsequently tested against the
+same multi-ROM Castlevania + Bios_Dumper card, and repeated dumps were
+byte-identical.
 
 Multi-ROM save selection remains a separate area of reverse engineering and should not be conflated with the ROM catalog `map` byte.
 
@@ -2090,7 +2134,9 @@ No USB protocol, erase timing, save-read behavior, or card-read behavior was cha
 
 ## 37. Build environment and native platform scope
 
-The current source targets C++17 and libusb on Unix-like systems.
+The current source targets C++17 and libusb on Unix-like systems. The portable
+Makefile selects only the support modules required by each executable and
+prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 
 Native project scope:
 
@@ -2104,25 +2150,33 @@ DragonFly   supported target; validation pending
 Windows     no native mainline support; use a Linux VM with USB passthrough
 ```
 
-Typical Apple Silicon/Homebrew build command:
+Build all four programs:
 
 ```bash
-c++ -std=c++17 -O2 \
-  ezfadvanceIII_multirom_writer_0.6.2.cpp \
-  -I/opt/homebrew/opt/libusb/include \
-  -L/opt/homebrew/opt/libusb/lib \
-  -lusb-1.0 \
-  -o ezfadvanceIII_multirom_writer
+make
 ```
 
-On systems where libusb publishes a `pkg-config` file, the intended portable form is:
+Run syntax checks and offline regression tests:
 
 ```bash
-c++ -std=c++17 -O2 \
-  ezfadvanceIII_multirom_writer_0.6.2.cpp \
-  $(pkg-config --cflags --libs libusb-1.0) \
-  -o ezfadvanceIII_multirom_writer
+make check
+make test
 ```
+
+The offline tests do not initialize libusb or access a cartridge. They cover
+binary-format parsing, GBA checksums, catalog decoding, ARM branch decoding,
+`0x92` command construction, recorded transport ordering/timeouts, and every
+verification-policy boundary.
+
+Warnings-enabled development check:
+
+```bash
+make check WARNFLAGS="-Wall -Wextra -Wpedantic"
+```
+
+Callers may override `CPPFLAGS`, `CXXFLAGS`, `WARNFLAGS`, `LDFLAGS`, and
+`LDLIBS`. The Makefile keeps its internal `-Iinclude` path active when
+`CPPFLAGS` is overridden.
 
 The exact BSD linker/include flags may vary with the base system or package installation and should be documented only after each target is compiled successfully.
 
@@ -2135,6 +2189,12 @@ Warnings-enabled development builds are recommended while modifying protocol cod
 ## 38. Recommended test procedure after code changes
 
 ### 38.1 Before USB write
+
+First run the complete offline suite:
+
+```bash
+make test
+```
 
 Run dry mode first:
 
@@ -2164,6 +2224,11 @@ Record:
 - expected sorted order;
 - whether card was wiped first;
 - whether `--skip-verify` was used.
+
+Protocol bytes, command ordering, transfer sizes, delays, erase geometry, or
+read/write mapping changes require an explicit real-device checkpoint. Tests
+must stop at that boundary and record the hardware result before further
+protocol refactoring.
 
 ### 38.3 After programming
 
@@ -2514,5 +2579,13 @@ At shared toolset version **0.6.2**, the project has a mostly structural model:
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
 - native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;
 - hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, single 4-MiB verification, and 6-ROM 24-/32-MiB images.
+
+The current refactored source additionally provides RAII device ownership, an
+injectable USB transport, shared protocol and read-state objects, domain models
+for GBA/catalog data, explicit application services for all four utilities,
+offline unit tests, and per-executable build dependency boundaries. Real-device
+checkpoints completed during this refactor covered card inspection, byte-stable
+save extraction, full-card wipe/blank verification, and write/full read-back
+verification.
 
 Remaining work centers on 9+ menu counts, the EEPROM map-4/map-5 discriminator, save-bank behavior, additional save-library families, and Linux/BSD hardware validation.
