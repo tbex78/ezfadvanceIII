@@ -173,7 +173,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.5 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.6 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -1656,46 +1656,6 @@ static bool flash_status_sequence(libusb_device_handle* h)
 
 
 // ---------------------------------------------------------------------------
-// 64-Mbit / lower-8-MiB post-program linear-read mapping.
-//
-// Both 4MiB-4MiB.pcap and FLASH_V121_FLASH512K.pcap show this exact transition
-// for an exact 8-MiB / 64-Mbit programmed image. The important selector is
-// 0x0040. Partial first-window images use the separate status-only path above.
-static bool flash_64mb_prepare_linear_verify(libusb_device_handle* h)
-{
-    std::cout << "\nPreparing lower-8-MiB / 64-Mbit linear read/verify mapping...\n";
-
-    if (!flash_status_sequence(h))
-        return false;
-
-    if (!tx92_2(h,0x55,0xAA,"VERIFY64 55AA")) return false;
-    if (!tx92_2(h,0x02,0x00,"VERIFY64 0200")) return false;
-    if (!tx92_2(h,0x00,0x40,"VERIFY64 0040")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY64 0000 A")) return false;
-
-    std::this_thread::sleep_for(std::chrono::microseconds(125000));
-
-    if (!tx92_2(h,0xAA,0x55,"VERIFY64 AA55")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY64 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY64 0000 C")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY64 0000 D")) return false;
-    if (!tx92_1(h,0x00,0xAA,"VERIFY64 selector0 AA")) return false;
-    if (!tx92_1(h,0x00,0x55,"VERIFY64 selector0 55")) return false;
-    if (!tx92_1(h,0x01,0x06,"VERIFY64 selector1 06")) return false;
-
-    if (!flash_status_sequence(h))
-        return false;
-
-    if (!tx92_2(h,0x55,0xAA,"VERIFY64READ 55AA")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY64READ 0000 A")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY64READ 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY64READ 0000 C")) return false;
-
-    return true;
-}
-
-
-// ---------------------------------------------------------------------------
 // 128-Mbit post-program linear-read mapping.
 //
 // writerom128Mb.pcap shows that verification does NOT begin directly after
@@ -3112,7 +3072,7 @@ public:
 
 class CardWriter final {
 public:
-    CardWriter(libusb_device_handle* handle, bool verbose) noexcept
+    CardWriter(libusb_device_handle* handle, bool verbose)
         : handle_(handle), verbose_(verbose), transport_(handle),
           verification_(transport_)
     {
@@ -3167,8 +3127,24 @@ public:
                 }
             });
     }
-    bool prepare8MiBVerification() {
-        return flash_64mb_prepare_linear_verify(handle_);
+    bool verifyExact8MiB(const std::vector<uint8_t>& image) {
+        std::cout
+            << "\nPreparing lower-8-MiB / 64-Mbit linear read/verify mapping...\n"
+            << "\n========================================\n"
+            << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
+            << "========================================\n";
+        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        return verification_.verifyExact8MiB(
+            image,
+            [&](size_t offset, size_t length) {
+                if (verbose_) {
+                    std::cout << "verified card byte 0x" << std::hex
+                              << std::setw(8) << std::setfill('0') << offset
+                              << " length 0x" << length << std::dec << '\n';
+                } else {
+                    progress.update(offset + length);
+                }
+            });
     }
     bool prepare16MiBVerification() {
         return flash_128mb_prepare_linear_verify(handle_);
@@ -3441,7 +3417,8 @@ int main(int argc, char** argv)
             case ezfadvance::VerificationMode::exact_8_mib:
                 // Exact 8 MiB is independently capture-proven by both the
                 // single-ROM Advance Wars capture and 4MiB-4MiB.pcap.
-                verify_after(card_writer.prepare8MiBVerification());
+                ok = card_writer.verifyExact8MiB(image);
+                full_verify_completed = ok;
                 break;
             case ezfadvance::VerificationMode::partial_first_window:
                 // 2MB.pcap, 2_2MB.pcap, and 4MB.pcap prove the generic partial

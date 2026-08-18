@@ -244,9 +244,10 @@ USB traffic.
 
 Owns transport-injectable post-program verification operations without choosing
 the verification geometry. The partial first-window operation emits only the
-capture-proven status sequence and global-linear `0x91` reads. Exact-size and
-tiny-tail paths remain explicitly separate in the writer pending their own
-transcript fixtures.
+capture-proven status sequence and global-linear `0x91` reads. The exact 8-MiB
+operation preserves its explicit `0x0040` mapping transition and captured
+125-ms delay. Higher exact-size and tiny-tail paths remain explicitly separate
+in the writer pending their own transcript fixtures.
 
 #### `WriterOptions`
 

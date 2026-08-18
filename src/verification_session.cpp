@@ -4,6 +4,8 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <thread>
+#include <utility>
 
 namespace ezfadvance {
 namespace {
@@ -21,8 +23,18 @@ void writeLe32(std::vector<std::uint8_t>& bytes, std::size_t offset,
 
 } // namespace
 
-VerificationSession::VerificationSession(Transport& transport) noexcept
-    : transport_(transport), protocol_(transport)
+VerificationSession::VerificationSession(Transport& transport)
+    : VerificationSession(
+          transport,
+          [](std::chrono::microseconds duration) {
+              std::this_thread::sleep_for(duration);
+          })
+{
+}
+
+VerificationSession::VerificationSession(Transport& transport,
+                                         DelayCallback delay)
+    : transport_(transport), protocol_(transport), delay_(std::move(delay))
 {
 }
 
@@ -91,6 +103,49 @@ bool VerificationSession::verifyPartialFirstWindow(
     const std::size_t verify_size = partialFirstWindowExtent(image.size());
     if (!statusSequence()) return false;
 
+    return verifyLinear(image, verify_size, block_verified);
+}
+
+bool VerificationSession::verifyExact8MiB(
+    const std::vector<std::uint8_t>& image,
+    const BlockVerifiedCallback& block_verified) const
+{
+    if (image.size() != first_window_size)
+        throw std::invalid_argument(
+            "exact 8-MiB verification requires an 8-MiB image");
+
+    if (!statusSequence()) return false;
+
+    if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY64 55AA")) return false;
+    if (!protocol_.tx92Two(0x02, 0x00, "VERIFY64 0200")) return false;
+    if (!protocol_.tx92Two(0x00, 0x40, "VERIFY64 0040")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY64 0000 A")) return false;
+
+    delay_(std::chrono::microseconds(125000));
+
+    if (!protocol_.tx92Two(0xAA, 0x55, "VERIFY64 AA55")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY64 0000 B")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY64 0000 C")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY64 0000 D")) return false;
+    if (!protocol_.tx92One(0x00, 0xAA, "VERIFY64 selector0 AA")) return false;
+    if (!protocol_.tx92One(0x00, 0x55, "VERIFY64 selector0 55")) return false;
+    if (!protocol_.tx92One(0x01, 0x06, "VERIFY64 selector1 06")) return false;
+
+    if (!statusSequence()) return false;
+
+    if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY64READ 55AA")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY64READ 0000 A")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY64READ 0000 B")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY64READ 0000 C")) return false;
+
+    return verifyLinear(image, image.size(), block_verified);
+}
+
+bool VerificationSession::verifyLinear(
+    const std::vector<std::uint8_t>& image,
+    std::size_t verify_size,
+    const BlockVerifiedCallback& block_verified) const
+{
     for (std::size_t offset = 0; offset < verify_size; ) {
         const std::size_t length =
             std::min(block_size, verify_size - offset);

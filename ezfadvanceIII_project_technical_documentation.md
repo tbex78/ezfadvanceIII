@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.5`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.5`<br>
+**Current project/toolset version:** `0.7.6`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.6`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.5 toolset has been compiled, transcript-tested, and hardware-confirmed on macOS / Apple Silicon for the extracted partial first-window path. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.6 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window path is hardware-confirmed; hardware confirmation of the newly extracted exact 8-MiB path remains pending. Linux/BSD validation remains pending.
 
 ---
 
@@ -73,7 +73,7 @@ The principal shared components are:
 - `CartridgeFormat`, `GbaHeader`, and `CatalogEntry`, which model and validate binary cartridge metadata;
 - `SaveMemoryReader`, which owns capture-proven save-bank reads;
 - `VerificationPolicy`, which selects only capture-supported verification geometries;
-- `VerificationSession`, which owns the transport-injectable partial first-window verification transcript;
+- `VerificationSession`, which owns the transport-injectable partial first-window and exact 8-MiB verification transcripts;
 - `WriterOptions`, which separates command-line parsing from image and device operations.
 
 The application workflows are represented by `CartridgeImageBuilder`,
@@ -2186,6 +2186,16 @@ F-Zero image after a full card wipe. Programming completed, full read-back
 verification succeeded, and the cartridge booted successfully on a real Game
 Boy Advance.
 
+### 36.27 0.7.6 — exact 8-MiB verification transcript
+
+The exact 8-MiB verification operation now runs through `VerificationSession`
+without changing policy selection or any higher verification path. Its offline
+fixture preserves the captured status sequence, `55AA`, `0200`, `0040`, `0000`,
+the precisely positioned 125-ms delay, `AA55`, reset/select operations, the
+final read prefix, and all 128 global-linear 64-KiB `0x91` reads. Negative
+assertions prove that `0020`, `0080`, and `00C0` selectors are absent. Hardware
+confirmation of this extraction remains pending.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2197,7 +2207,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.5 baseline compiled, transcript-tested, and partial-path hardware-confirmed on Apple Silicon
+macOS       supported target; current 0.7.6 baseline compiled and transcript-tested on Apple Silicon; partial path hardware-confirmed, exact 8-MiB extraction confirmation pending
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2618,7 +2628,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.5**, the project has an object-oriented structural model:
+At shared toolset version **0.7.6**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;
