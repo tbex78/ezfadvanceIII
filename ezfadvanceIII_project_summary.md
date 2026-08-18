@@ -838,6 +838,10 @@ partial first-window (`<8 MiB`) post-program verification path behind
 the absence of exact-window mapping selectors and unlock transitions. Exact
 8/16/24/32-MiB and tiny-tail paths remain unchanged in the writer.
 
+The extracted path was subsequently hardware-confirmed with a single 4-MiB
+F-Zero image after a full card wipe: programming and full read-back verification
+succeeded, and the cartridge booted successfully on a real Game Boy Advance.
+
 
 ## Current project status
 

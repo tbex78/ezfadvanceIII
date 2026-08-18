@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.5`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.5 toolset has been compiled and transcript-tested on macOS / Apple Silicon; its inherited USB behavior derives from the hardware-tested baseline, while real-hardware confirmation of the partial-verification extraction remains pending. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.5 toolset has been compiled, transcript-tested, and hardware-confirmed on macOS / Apple Silicon for the extracted partial first-window path. Linux/BSD validation remains pending.
 
 ---
 
@@ -2181,6 +2181,11 @@ sizes and timeouts, and the absence of `0020`, `0040`, `0080`, `00C0`, `55AA`,
 and `AA55` mapping operations. Policy selection remains outside the session;
 exact-size and tiny-tail paths remain unchanged in the writer.
 
+Real hardware subsequently confirmed this extraction using a single 4-MiB
+F-Zero image after a full card wipe. Programming completed, full read-back
+verification succeeded, and the cartridge booted successfully on a real Game
+Boy Advance.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2192,7 +2197,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.5 baseline compiled and transcript-tested on Apple Silicon; extraction hardware confirmation pending
+macOS       supported target; current 0.7.5 baseline compiled, transcript-tested, and partial-path hardware-confirmed on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
