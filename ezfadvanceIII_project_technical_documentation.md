@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.13`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.13 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-MiB, and tiny-tail verification paths are hardware-confirmed; exact 32 MiB is extracted and transcript-tested. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.13 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Linux/BSD validation remains pending.
 
 ---
 
@@ -529,7 +529,10 @@ The custom writer also completed a real-hardware 6-ROM / 24-MiB write, full veri
 
 A separate capture-derived transition is used after programming BANK3. It prepares a full 256-Mbit linear read mapping, after which the writer verifies all 512 x 64-KiB blocks. Independent 6-, 7-, and 8-ROM captures reproduce this same sequence.
 
-A real-hardware 6-ROM / 32-MiB test also completed write, full verification, menu selection, and all six launches successfully.
+Real-hardware full-card tests include a 6-ROM / 32-MiB image, a single 32-MiB
+Kingdom Hearts image, and a 16+8+8-MiB three-ROM image. Each completed all 512
+64-KiB reads through `0x01ff0000`. The single image booted, while both
+multi-ROM menus and every tested entry launched successfully on a real GBA.
 
 ### 11.6 Current verification boundary
 
@@ -2299,6 +2302,13 @@ read-command builder, verification extent and comparison helpers, and generic
 linear verifier were removed. No erase, programming, or unsupported-partial
 behavior changed.
 
+The extracted implementation was then hardware-confirmed with two exact-size
+images. A single 32-MiB Kingdom Hearts ROM completed write and all 512
+read-back blocks through `0x01ff0000`, and booted on a real GBA. A three-ROM
+16+8+8-MiB image completed the same full-card verification; its loader menu and
+all three games booted without issue. The verbose transcript is recorded in
+`resultmultiroms32MiB.log`.
+
 ### 36.34 0.7.13 — bounded readiness retry
 
 The writer preflight, shared read-only cartridge startup, and wipe preflight
@@ -2337,7 +2347,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.13 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-MiB/tiny-tail hardware confirmation on Apple Silicon
+macOS       supported target; current 0.7.13 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-/32-MiB/tiny-tail hardware confirmation on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2770,11 +2780,11 @@ At shared toolset version **0.7.13**, the project has an object-oriented structu
 - catalog type is ROM-size based;
 - catalog map uses values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` alone does not distinguish them;
 - map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
-- partial first-window, extracted exact 8-/16-/24-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven for the tested layouts; the exact 32-MiB path is known;
+- partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven for the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
 - native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;
-- hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, 4-, 8-, exact 16-MiB, and Fire-Emblem-style tiny-tail verification checkpoints, and 6-ROM 24-/32-MiB images.
+- hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, 4-, 8-, exact 16-/32-MiB, and Fire-Emblem-style tiny-tail verification checkpoints, plus 6-ROM 24-/32-MiB and 16+8+8-MiB full-card images.
 
 The current refactored source additionally provides RAII device ownership, an
 injectable USB transport, shared protocol and read-state objects, domain models
