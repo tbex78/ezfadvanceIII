@@ -43,6 +43,7 @@ public:
         const std::vector<std::uint8_t>& bytes) noexcept;
     static std::optional<std::uint32_t> armBranchTarget(
         std::uint32_t instruction) noexcept;
+    static std::uint32_t makeArmBranch(std::uint32_t target);
 };
 
 } // namespace ezfadvance

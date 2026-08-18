@@ -12,7 +12,7 @@
 #   ezfadvanceIII_wipe_card.cpp
 #
 # Optional versioned sources:
-#   make VERSION=0.7.1
+#   make VERSION=0.7.2
 #
 # Command-line make variables override these defaults, for example:
 #   make CXX=clang++
@@ -40,7 +40,7 @@ WIPE = ezfadvanceIII_wipe_card
 
 PROGRAMS = $(WRITER) $(CARD_READER) $(SAVE_READER) $(WIPE)
 TRANSPORT_SOURCES = src/usb_device.cpp src/protocol.cpp
-WRITER_SOURCES = $(TRANSPORT_SOURCES) src/verification_policy.cpp src/writer_options.cpp
+WRITER_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/verification_policy.cpp src/writer_options.cpp
 CARD_READER_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/read_only_cartridge.cpp
 SAVE_READER_SOURCES = $(CARD_READER_SOURCES) src/save_memory_reader.cpp
 WIPE_SOURCES = $(TRANSPORT_SOURCES)
@@ -116,6 +116,8 @@ check:
 
 test: check
 	mkdir -p build
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/arm_branch_test.cpp src/cartridge_format.cpp -o build/arm_branch_test
+	./build/arm_branch_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/cartridge_format_test.cpp src/cartridge_format.cpp -o build/cartridge_format_test
 	./build/cartridge_format_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/protocol_test.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/protocol_test
@@ -137,6 +139,6 @@ print-config:
 	done
 
 clean:
-	rm -f $(PROGRAMS) build/cartridge_format_test build/protocol_test build/verification_policy_test build/writer_options_test
+	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/protocol_test build/verification_policy_test build/writer_options_test
 
 FORCE:

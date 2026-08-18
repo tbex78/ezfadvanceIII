@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "ezfadvance/usb_device.hpp"
+#include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/writer_options.hpp"
 #include "ezfadvance/verification_policy.hpp"
@@ -171,7 +172,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.1 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.2 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -2247,34 +2248,8 @@ static bool verify_image_linear(libusb_device_handle* h,
 static std::optional<uint32_t> arm_branch_target(const std::vector<uint8_t>& rom)
 {
     if (rom.size() < 4) return std::nullopt;
-
-    const uint32_t ins = read_le32(rom.data());
-
-    // Captures use ordinary ARM unconditional B instructions (EAxxxxxx).
-    if ((ins & 0xFF000000u) != 0xEA000000u)
-        return std::nullopt;
-
-    int32_t imm = static_cast<int32_t>(ins & 0x00FFFFFFu);
-    if (imm & 0x00800000)
-        imm |= static_cast<int32_t>(0xFF000000u);
-
-    const int64_t target = 8ll + static_cast<int64_t>(imm) * 4ll;
-    if (target < 0 || target > 0xFFFFFFFFll)
-        return std::nullopt;
-
-    return static_cast<uint32_t>(target);
-}
-
-static uint32_t make_arm_branch(uint32_t target)
-{
-    if (target < 8 || ((target - 8u) & 3u))
-        throw std::runtime_error("loader target cannot be encoded as ARM B");
-
-    const int64_t imm = (static_cast<int64_t>(target) - 8ll) / 4ll;
-    if (imm < -(1ll << 23) || imm >= (1ll << 23))
-        throw std::runtime_error("loader target is outside ARM B range");
-
-    return 0xEA000000u | (static_cast<uint32_t>(imm) & 0x00FFFFFFu);
+    return ezfadvance::CartridgeFormat::armBranchTarget(
+        read_le32(rom.data()));
 }
 
 static bool contains_bytes(const std::vector<uint8_t>& data,
@@ -2812,7 +2787,8 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms)
                   0x00);
     }
 
-    const uint32_t patched = make_arm_branch(loader_start);
+    const uint32_t patched =
+        ezfadvance::CartridgeFormat::makeArmBranch(loader_start);
     write_le32(image, 0, patched);
     std::copy(t.begin(), t.end(),
               image.begin() + static_cast<std::ptrdiff_t>(loader_start));
@@ -3045,7 +3021,8 @@ static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms)
 
     // Only physical/catalog ROM #1 is patched. Reordering therefore matters:
     // the branch is applied after stable sorting, exactly as the captures show.
-    const uint32_t patched = make_arm_branch(loader_start);
+    const uint32_t patched =
+        ezfadvance::CartridgeFormat::makeArmBranch(loader_start);
     write_le32(image, 0, patched);
 
     std::copy(t.begin(),

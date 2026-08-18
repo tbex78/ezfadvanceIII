@@ -62,6 +62,20 @@ std::optional<std::uint32_t> CartridgeFormat::armBranchTarget(
     return static_cast<std::uint32_t>(target);
 }
 
+std::uint32_t CartridgeFormat::makeArmBranch(std::uint32_t target)
+{
+    if (target < 8 || ((target - 8u) & 3u))
+        throw std::invalid_argument("target cannot be encoded as ARM B");
+
+    const std::int64_t immediate =
+        (static_cast<std::int64_t>(target) - 8ll) / 4ll;
+    if (immediate < -(1ll << 23) || immediate >= (1ll << 23))
+        throw std::out_of_range("target is outside ARM B range");
+
+    return 0xEA000000u |
+           (static_cast<std::uint32_t>(immediate) & 0x00FFFFFFu);
+}
+
 GbaHeader GbaHeader::parse(const std::vector<std::uint8_t>& bytes)
 {
     GbaHeader header;
