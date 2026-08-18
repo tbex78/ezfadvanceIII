@@ -12,7 +12,7 @@
 #   ezfadvanceIII_wipe_card.cpp
 #
 # Optional versioned sources:
-#   make VERSION=0.7.4
+#   make VERSION=0.7.5
 #
 # Command-line make variables override these defaults, for example:
 #   make CXX=clang++
@@ -40,11 +40,11 @@ WIPE = ezfadvanceIII_wipe_card
 
 PROGRAMS = $(WRITER) $(CARD_READER) $(SAVE_READER) $(WIPE)
 TRANSPORT_SOURCES = src/usb_device.cpp src/protocol.cpp
-WRITER_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/verification_policy.cpp src/writer_options.cpp
+WRITER_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 CARD_READER_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/read_only_cartridge.cpp
 SAVE_READER_SOURCES = $(CARD_READER_SOURCES) src/save_memory_reader.cpp
 WIPE_SOURCES = $(TRANSPORT_SOURCES)
-ALL_SUPPORT_SOURCES = $(SAVE_READER_SOURCES) src/verification_policy.cpp src/writer_options.cpp
+ALL_SUPPORT_SOURCES = $(SAVE_READER_SOURCES) src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 
 # Source selection is performed by the POSIX shell in each recipe so this
 # Makefile does not depend on GNU/BSD make conditionals.
@@ -124,6 +124,8 @@ test: check
 	./build/protocol_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/verification_policy_test.cpp src/verification_policy.cpp -o build/verification_policy_test
 	./build/verification_policy_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/verification_partial_first_window_test.cpp src/verification_session.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/verification_partial_first_window_test
+	./build/verification_partial_first_window_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/writer_options_test.cpp src/writer_options.cpp -o build/writer_options_test
 	./build/writer_options_test
 
@@ -139,6 +141,6 @@ print-config:
 	done
 
 clean:
-	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/protocol_test build/verification_policy_test build/writer_options_test
+	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/protocol_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test
 
 FORCE:

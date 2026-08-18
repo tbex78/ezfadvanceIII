@@ -31,6 +31,7 @@ The code is organized in layers:
 - `ReadOnlyCartridge` owns the capture-derived initialization and ROM-read state machine.
 - `GbaHeader`, `CatalogEntry`, and `CartridgeFormat` model cartridge metadata.
 - `SaveMemoryReader` owns capture-proven save-bank reads.
+- `VerificationSession` owns the transcript-tested partial first-window verification path.
 - `CartridgeImageBuilder`, `CardWriter`, `CardInspector`, `SaveExtractor`, and `CardEraser` implement the four application workflows.
 
 Hardware tests are intentionally separate because writer and wipe operations

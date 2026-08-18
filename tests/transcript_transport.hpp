@@ -62,6 +62,7 @@ public:
     bool out(const std::uint8_t* data, std::size_t size,
              unsigned timeout_ms) const override
     {
+        observed_out_.emplace_back(data, data + size);
         const ExpectedTransfer* transfer = next(Direction::out, timeout_ms);
         if (!transfer) return false;
         const std::vector<std::uint8_t> actual(data, data + size);
@@ -106,6 +107,10 @@ public:
     }
 
     const std::string& error() const noexcept { return error_; }
+    const std::vector<std::vector<std::uint8_t>>& observedOut() const noexcept
+    {
+        return observed_out_;
+    }
 
 private:
     const ExpectedTransfer* next(Direction actual_direction,
@@ -211,6 +216,7 @@ private:
     std::vector<ExpectedTransfer> expected_;
     mutable std::size_t cursor_ = 0;
     mutable std::string error_;
+    mutable std::vector<std::vector<std::uint8_t>> observed_out_;
 };
 
 } // namespace ezfadvance::test

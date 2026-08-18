@@ -1,0 +1,111 @@
+#include "ezfadvance/verification_session.hpp"
+
+#include <algorithm>
+#include <iostream>
+#include <limits>
+#include <stdexcept>
+
+namespace ezfadvance {
+namespace {
+
+constexpr unsigned usb_timeout_ms = 15000;
+
+void writeLe32(std::vector<std::uint8_t>& bytes, std::size_t offset,
+               std::uint32_t value)
+{
+    bytes[offset] = static_cast<std::uint8_t>(value);
+    bytes[offset + 1] = static_cast<std::uint8_t>(value >> 8);
+    bytes[offset + 2] = static_cast<std::uint8_t>(value >> 16);
+    bytes[offset + 3] = static_cast<std::uint8_t>(value >> 24);
+}
+
+} // namespace
+
+VerificationSession::VerificationSession(Transport& transport) noexcept
+    : transport_(transport), protocol_(transport)
+{
+}
+
+std::size_t VerificationSession::partialFirstWindowExtent(
+    std::size_t image_size)
+{
+    if (image_size == 0 || image_size >= first_window_size)
+        throw std::invalid_argument(
+            "partial first-window verification requires 0 < size < 8 MiB");
+    return (image_size + block_size - 1) & ~(block_size - 1);
+}
+
+bool VerificationSession::statusSequence() const
+{
+    if (!protocol_.tx92Two(0xFF, 0xFF, "STATUS FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "STATUS 04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "STATUS 00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "STATUS 00 B")) return false;
+    return true;
+}
+
+std::vector<std::uint8_t> VerificationSession::readCommand(
+    std::size_t byte_address, std::size_t length)
+{
+    if ((byte_address & 1u) != 0)
+        throw std::invalid_argument("read address must be word-aligned");
+    if (byte_address / 2 > std::numeric_limits<std::uint32_t>::max() ||
+        length > std::numeric_limits<std::uint32_t>::max())
+        throw std::out_of_range("verification read exceeds protocol range");
+
+    std::vector<std::uint8_t> command = {
+        0x5A, 0xA5, 0x91, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x00
+    };
+    writeLe32(command, 4, static_cast<std::uint32_t>(byte_address / 2));
+    writeLe32(command, 8, static_cast<std::uint32_t>(length));
+    return command;
+}
+
+bool VerificationSession::compareBlock(
+    const std::vector<std::uint8_t>& image,
+    std::size_t offset,
+    const std::vector<std::uint8_t>& received)
+{
+    for (std::size_t i = 0; i < received.size(); ++i) {
+        const std::size_t absolute = offset + i;
+        const std::uint8_t expected =
+            absolute < image.size() ? image[absolute] : 0xFF;
+        if (received[i] != expected) {
+            std::cerr << "VERIFY FAILED at byte 0x" << std::hex << absolute
+                      << ": expected 0x" << static_cast<unsigned>(expected)
+                      << " got 0x" << static_cast<unsigned>(received[i])
+                      << std::dec << '\n';
+            return false;
+        }
+    }
+    return true;
+}
+
+bool VerificationSession::verifyPartialFirstWindow(
+    const std::vector<std::uint8_t>& image,
+    const BlockVerifiedCallback& block_verified) const
+{
+    const std::size_t verify_size = partialFirstWindowExtent(image.size());
+    if (!statusSequence()) return false;
+
+    for (std::size_t offset = 0; offset < verify_size; ) {
+        const std::size_t length =
+            std::min(block_size, verify_size - offset);
+        if (!transport_.out(readCommand(offset, length), usb_timeout_ms))
+            return false;
+
+        std::vector<std::uint8_t> received;
+        if (!transport_.inExact(received, length, usb_timeout_ms))
+            return false;
+        if (!compareBlock(image, offset, received)) return false;
+
+        if (block_verified) block_verified(offset, length);
+        offset += length;
+    }
+    return true;
+}
+
+} // namespace ezfadvance

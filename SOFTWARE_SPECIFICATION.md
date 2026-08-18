@@ -240,6 +240,14 @@ application policy permits only the proven 32 KiB `SRAM_V111` path.
 Maps an image extent to a capture-supported verification mode without sending
 USB traffic.
 
+#### `VerificationSession`
+
+Owns transport-injectable post-program verification operations without choosing
+the verification geometry. The partial first-window operation emits only the
+capture-proven status sequence and global-linear `0x91` reads. Exact-size and
+tiny-tail paths remain explicitly separate in the writer pending their own
+transcript fixtures.
+
 #### `WriterOptions`
 
 Parses writer authorization, verification, verbosity, catalog overrides, and

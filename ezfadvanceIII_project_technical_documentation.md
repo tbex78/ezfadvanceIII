@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.4`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.4`<br>
+**Current project/toolset version:** `0.7.5`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.5`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.4 toolset and its refactored architecture have been compiled and hardware-tested on macOS / Apple Silicon; Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.5 toolset has been compiled and transcript-tested on macOS / Apple Silicon; its inherited USB behavior derives from the hardware-tested baseline, while real-hardware confirmation of the partial-verification extraction remains pending. Linux/BSD validation remains pending.
 
 ---
 
@@ -73,6 +73,7 @@ The principal shared components are:
 - `CartridgeFormat`, `GbaHeader`, and `CatalogEntry`, which model and validate binary cartridge metadata;
 - `SaveMemoryReader`, which owns capture-proven save-bank reads;
 - `VerificationPolicy`, which selects only capture-supported verification geometries;
+- `VerificationSession`, which owns the transport-injectable partial first-window verification transcript;
 - `WriterOptions`, which separates command-line parsing from image and device operations.
 
 The application workflows are represented by `CartridgeImageBuilder`,
@@ -2170,6 +2171,16 @@ reports missing, extra, wrong-direction, and mismatched transfers clearly.
 Protocol success tests exercise the helper without changing production or USB
 behavior.
 
+### 36.26 0.7.5 — partial first-window verification transcript
+
+A narrowly scoped `VerificationSession` now owns the `<8 MiB` post-program
+verification operation through `Transport&`. Its offline transcript fixture
+proves the capture-derived `FFFF`, `04`, `00`, `00` status transition, rounded
+64-KiB global-linear `0x91` reads, erased-`FF` tail comparison, exact request
+sizes and timeouts, and the absence of `0020`, `0040`, `0080`, `00C0`, `55AA`,
+and `AA55` mapping operations. Policy selection remains outside the session;
+exact-size and tiny-tail paths remain unchanged in the writer.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2181,7 +2192,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.4 baseline derives from code compiled on Apple Silicon
+macOS       supported target; current 0.7.5 baseline compiled and transcript-tested on Apple Silicon; extraction hardware confirmation pending
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2602,7 +2613,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.4**, the project has an object-oriented structural model:
+At shared toolset version **0.7.5**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

@@ -33,6 +33,7 @@
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/protocol.hpp"
+#include "ezfadvance/verification_session.hpp"
 #include "ezfadvance/writer_options.hpp"
 #include "ezfadvance/verification_policy.hpp"
 
@@ -172,7 +173,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.4 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.5 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -1655,25 +1656,6 @@ static bool flash_status_sequence(libusb_device_handle* h)
 
 
 // ---------------------------------------------------------------------------
-// Partial first-window (<8-MiB) post-program linear-read preparation.
-//
-// 2MB.pcap (single 1-MiB ROM), 2_2MB.pcap (two 1-MiB ROMs / ~2-MiB image),
-// and 4MB.pcap all show the same transition after programming:
-//   FFFF, 04, 00, 00
-// followed directly by ordinary linear 0x91 reads.
-//
-// The USBPcap timestamps show different short gaps before the first 0x91 read,
-// quantized in 15.625-ms increments. There is therefore no evidence for a
-// required fixed application sleep here, and no 0x0020/0x0040 selector is sent.
-static bool flash_partial_bank0_prepare_linear_verify(libusb_device_handle* h)
-{
-    std::cout << "\nPreparing capture-proven partial first-window linear "
-                 "read/verify state...\n";
-    return flash_status_sequence(h);
-}
-
-
-// ---------------------------------------------------------------------------
 // 64-Mbit / lower-8-MiB post-program linear-read mapping.
 //
 // Both 4MiB-4MiB.pcap and FLASH_V121_FLASH512K.pcap show this exact transition
@@ -3131,7 +3113,8 @@ public:
 class CardWriter final {
 public:
     CardWriter(libusb_device_handle* handle, bool verbose) noexcept
-        : handle_(handle), verbose_(verbose)
+        : handle_(handle), verbose_(verbose), transport_(handle),
+          verification_(transport_)
     {
     }
 
@@ -3156,8 +3139,33 @@ public:
     bool verify(const std::vector<uint8_t>& image) {
         return verify_image_linear(handle_, image, verbose_);
     }
-    bool preparePartialFirstWindowVerification() {
-        return flash_partial_bank0_prepare_linear_verify(handle_);
+    bool verifyPartialFirstWindow(const std::vector<uint8_t>& image) {
+        std::cout << "\nPreparing capture-proven partial first-window linear "
+                     "read/verify state...\n"
+                  << "\n========================================\n"
+                  << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
+                  << "========================================\n";
+
+        const size_t verify_size =
+            ezfadvance::VerificationSession::partialFirstWindowExtent(
+                image.size());
+        if (verify_size != image.size()) {
+            std::cout
+                << "Partial BANK0 verify extent rounded to 64-KiB block: 0x"
+                << std::hex << verify_size << std::dec << " bytes\n";
+        }
+        ProgressBar progress("Verify", verify_size, true, !verbose_);
+        return verification_.verifyPartialFirstWindow(
+            image,
+            [&](size_t offset, size_t length) {
+                if (verbose_) {
+                    std::cout << "verified card byte 0x" << std::hex
+                              << std::setw(8) << std::setfill('0') << offset
+                              << " length 0x" << length << std::dec << '\n';
+                } else {
+                    progress.update(offset + length);
+                }
+            });
     }
     bool prepare8MiBVerification() {
         return flash_64mb_prepare_linear_verify(handle_);
@@ -3178,6 +3186,8 @@ public:
 private:
     libusb_device_handle* handle_;
     bool verbose_;
+    ezfadvance::BulkTransport transport_;
+    ezfadvance::VerificationSession verification_;
 };
 
 static void usage(const char* argv0)
@@ -3436,9 +3446,10 @@ int main(int argc, char** argv)
             case ezfadvance::VerificationMode::partial_first_window:
                 // 2MB.pcap, 2_2MB.pcap, and 4MB.pcap prove the generic partial
                 // first-window path: status cleanup only, then ordinary linear
-                // 0x91 reads. verification_extent() rounds the final read to a
+                // 0x91 reads. VerificationSession rounds the final read to a
                 // full 64-KiB block and expects erased 0xFF beyond image.size().
-                verify_after(card_writer.preparePartialFirstWindowVerification());
+                ok = card_writer.verifyPartialFirstWindow(image);
+                full_verify_completed = ok;
                 break;
             case ezfadvance::VerificationMode::tiny_tail_above_16_mib:
                 // fireemblem.pcap proves this tiny BANK2-tail transition and
