@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.6`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.6 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window path is hardware-confirmed; hardware confirmation of the newly extracted exact 8-MiB path remains pending. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.6 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window and exact 8-MiB verification paths are hardware-confirmed. Linux/BSD validation remains pending.
 
 ---
 
@@ -2194,7 +2194,9 @@ fixture preserves the captured status sequence, `55AA`, `0200`, `0040`, `0000`,
 the precisely positioned 125-ms delay, `AA55`, reset/select operations, the
 final read prefix, and all 128 global-linear 64-KiB `0x91` reads. Negative
 assertions prove that `0020`, `0080`, and `00C0` selectors are absent. Hardware
-confirmation of this extraction remains pending.
+confirmation subsequently succeeded with an exact 8-MiB image: writing and full
+read-back verification completed through the final 64-KiB block, and the
+cartridge booted successfully on a real Game Boy Advance.
 
 ---
 
@@ -2207,7 +2209,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.6 baseline compiled and transcript-tested on Apple Silicon; partial path hardware-confirmed, exact 8-MiB extraction confirmation pending
+macOS       supported target; current 0.7.6 baseline compiled, transcript-tested, and partial/exact-8-MiB hardware-confirmed on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending

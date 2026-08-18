@@ -849,7 +849,10 @@ succeeded, and the cartridge booted successfully on a real Game Boy Advance.
 mapping sequence, the narrowly injected 125-ms transition delay, and all 128
 global-linear `0x91` reads. It also proves that `0020`, `0080`, and `00C0`
 selectors are absent. Higher verification paths remain unchanged in the
-writer. Real-hardware confirmation of this extraction is pending.
+writer. The extraction was subsequently hardware-confirmed with an exact
+8-MiB image: writing and full read-back verification succeeded, including the
+final 64-KiB block, and the cartridge booted successfully on a real Game Boy
+Advance.
 
 
 ## Current project status
