@@ -888,6 +888,13 @@ zero verification delays, and the absence of `0020`, `0040`, `0080`, `00C0`,
 `0200`, and `AA55`. Exact 24/32-MiB verification remains in the legacy writer
 verifier, and other partial higher-window geometries remain unsupported.
 
+The extracted path was subsequently confirmed with the capture-derived single
+Fire Emblem layout. The loader was placed at `0x01000010`, producing a
+`0x1000700` image and a `0x700`-byte BANK2 program tail. Full read-back
+verification completed through the rounded final block at `0x01000000`, the
+card reader identified the single-ROM layout and valid header, and the game
+booted successfully on a real Game Boy Advance.
+
 
 ## Current project status
 
@@ -904,12 +911,12 @@ At shared version **0.7.9**, the project has an object-oriented structural model
 - catalog `type` is ROM-size based;
 - catalog `map` uses capture-derived values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` occurs with both;
 - hardware A/B testing proves map correctness is independent of flash verification: both Classic NES map-5 images fully verify but fail at runtime with an identical Game Pak error screen, whereas map 4 works;
-- partial first-window and the extracted exact 8-/16-MiB verification paths are capture-, transcript-, and hardware-proven in the tested layouts; exact 24- and 32-MiB paths are also known;
+- partial first-window, extracted exact 8-/16-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts; exact 24- and 32-MiB paths are also known;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;
 - paired FFTA evidence proves that non-SRAM save-library signatures may survive SRAM patching while runtime save code changes;
 - native scope is macOS/Linux/BSD through libusb; Windows users should use a Linux VM with USB passthrough;
-- real hardware now validates map-4 single/multi cases, mixed map-3/map-4 menus, 4-, 8-, and exact 16-MiB verification checkpoints, and 6-ROM 24-/32-MiB images.
+- real hardware now validates map-4 single/multi cases, mixed map-3/map-4 menus, 4-, 8-, exact 16-MiB, and Fire-Emblem-style tiny-tail verification checkpoints, and 6-ROM 24-/32-MiB images.
 
 The remaining work is primarily **expanding evidence coverage**, especially the EEPROM map-4/map-5 discriminator, 9+ menu counts, save-bank behavior, and Linux/BSD hardware validation.
 

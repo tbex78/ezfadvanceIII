@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.9`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.9 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window and exact 8-/16-MiB verification paths are hardware-confirmed; the tiny-tail path is extracted and transcript-tested. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.9 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-MiB, and tiny-tail verification paths are hardware-confirmed. Linux/BSD validation remains pending.
 
 ---
 
@@ -2238,6 +2238,14 @@ callback, proves zero delay calls, and rejects `0020`, `0040`, `0080`, `00C0`,
 `0200`, and `AA55`. Policy, programming, exact 24/32-MiB verification, and
 unsupported partial higher-window behavior remain unchanged.
 
+Real-hardware confirmation subsequently used the capture-derived single Fire
+Emblem layout. The loader was placed at `0x01000010`, the constructed image was
+`0x1000700`, and the writer programmed a `0x700`-byte BANK2 tail. Full
+read-back verification completed through the rounded block at `0x01000000`.
+The card reader then reported one Fire Emblem ROM, the expected loader address,
+and a valid header, and the game booted successfully on a real Game Boy
+Advance.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2682,11 +2690,11 @@ At shared toolset version **0.7.9**, the project has an object-oriented structur
 - catalog type is ROM-size based;
 - catalog map uses values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` alone does not distinguish them;
 - map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
-- partial first-window and the extracted exact 8-/16-MiB verification paths are capture-, transcript-, and hardware-proven for the tested layouts; exact 24- and 32-MiB paths are known, plus the tiny-tail-above-16-MiB path;
+- partial first-window, extracted exact 8-/16-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven for the tested layouts; exact 24- and 32-MiB paths are known;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
 - native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;
-- hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, 4-, 8-, and exact 16-MiB verification checkpoints, and 6-ROM 24-/32-MiB images.
+- hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, 4-, 8-, exact 16-MiB, and Fire-Emblem-style tiny-tail verification checkpoints, and 6-ROM 24-/32-MiB images.
 
 The current refactored source additionally provides RAII device ownership, an
 injectable USB transport, shared protocol and read-state objects, domain models
