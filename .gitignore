@@ -6,6 +6,7 @@ build/
 experiments/
 misc/
 notes/
+/ezfadvanceIII_0.7.0_developer_recommendations.md
 
 # Makefile output binaries
 /ezfadvanceIII_multirom_writer

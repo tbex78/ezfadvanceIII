@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.0`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.0`<br>
+**Current project/toolset version:** `0.7.1`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.1`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.0 toolset and its refactored architecture have been compiled and hardware-tested on macOS / Apple Silicon; Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.1 toolset and its refactored architecture have been compiled and hardware-tested on macOS / Apple Silicon; Linux/BSD validation remains pending.
 
 ---
 
@@ -2139,6 +2139,14 @@ the proven 0.6.2 hardware protocol behavior.
 
 No USB protocol, erase timing, save-read behavior, or card-read behavior was changed by this cleanup.
 
+### 36.22 0.7.1 — robust writer option parsing
+
+Writer override parsing now uses strict, bounded decimal conversion for
+`--typeN=VALUE` and `--mapN=VALUE`. Invalid text, signs, out-of-range slots,
+values above 255, and numeric overflow are rejected through the normal parser
+error path without uncaught conversion exceptions. Offline tests cover these
+cases. No USB protocol behavior changed.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2150,7 +2158,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.0 baseline derives from code compiled on Apple Silicon
+macOS       supported target; current 0.7.1 baseline derives from code compiled on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2571,7 +2579,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.0**, the project has an object-oriented structural model:
+At shared toolset version **0.7.1**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

@@ -1,8 +1,30 @@
 #include "ezfadvance/writer_options.hpp"
 
+#include <limits>
 #include <ostream>
+#include <string_view>
 
 namespace ezfadvance {
+
+namespace {
+
+bool parseDecimal(std::string_view text, std::size_t maximum,
+                  std::size_t& value)
+{
+    if (text.empty()) return false;
+
+    std::size_t parsed = 0;
+    for (const char character : text) {
+        if (character < '0' || character > '9') return false;
+        const std::size_t digit = static_cast<std::size_t>(character - '0');
+        if (digit > maximum || parsed > (maximum - digit) / 10) return false;
+        parsed = parsed * 10 + digit;
+    }
+    value = parsed;
+    return true;
+}
+
+} // namespace
 
 WriterParseResult WriterOptions::parse(int argc, char** argv,
                                        WriterOptions& options,
@@ -20,16 +42,20 @@ WriterParseResult WriterOptions::parse(int argc, char** argv,
             const auto equals = argument.find('=');
             if (equals == std::string::npos || equals <= 6 ||
                 equals + 1 >= argument.size()) return {false, true};
-            const auto slot = static_cast<std::size_t>(
-                std::stoul(argument.substr(6, equals - 6)));
-            if (slot == 0 || slot > catalog_slots) {
+            std::size_t slot = 0;
+            if (!parseDecimal(
+                    std::string_view(argument).substr(6, equals - 6),
+                    catalog_slots, slot) ||
+                slot == 0) {
                 errors << "Bad type override slot: " << argument
                        << " (valid structural catalog slots are 1.."
                        << catalog_slots << ")\n";
                 return {false, false};
             }
-            const int value = std::stoi(argument.substr(equals + 1));
-            if (value < 0 || value > 255) {
+            std::size_t value = 0;
+            if (!parseDecimal(
+                    std::string_view(argument).substr(equals + 1),
+                    std::numeric_limits<std::uint8_t>::max(), value)) {
                 errors << "Bad type override value: " << argument << '\n';
                 return {false, false};
             }
@@ -38,16 +64,20 @@ WriterParseResult WriterOptions::parse(int argc, char** argv,
             const auto equals = argument.find('=');
             if (equals == std::string::npos || equals <= 5 ||
                 equals + 1 >= argument.size()) return {false, true};
-            const auto slot = static_cast<std::size_t>(
-                std::stoul(argument.substr(5, equals - 5)));
-            if (slot == 0 || slot > catalog_slots) {
+            std::size_t slot = 0;
+            if (!parseDecimal(
+                    std::string_view(argument).substr(5, equals - 5),
+                    catalog_slots, slot) ||
+                slot == 0) {
                 errors << "Bad mapping override slot: " << argument
                        << " (valid structural catalog slots are 1.."
                        << catalog_slots << ")\n";
                 return {false, false};
             }
-            const int value = std::stoi(argument.substr(equals + 1));
-            if (value < 0 || value > 255) {
+            std::size_t value = 0;
+            if (!parseDecimal(
+                    std::string_view(argument).substr(equals + 1),
+                    std::numeric_limits<std::uint8_t>::max(), value)) {
                 errors << "Bad mapping override value: " << argument << '\n';
                 return {false, false};
             }
