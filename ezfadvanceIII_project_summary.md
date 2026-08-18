@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.6**.
+Current shared project/toolset version covered by this summary: **0.7.7**.
 
 All mainline utilities carry this same version:
 
@@ -774,7 +774,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.6 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.7 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -854,10 +854,18 @@ writer. The extraction was subsequently hardware-confirmed with an exact
 final 64-KiB block, and the cartridge booted successfully on a real Game Boy
 Advance.
 
+## 0.7.7 release changes
+
+**0.7.7** strengthens the exact 8-MiB offline fixture by giving every 64-KiB
+block distinct content and asserting every verified callback offset and length.
+The explicit test-delay constructor now rejects an empty callback immediately
+instead of deferring failure until a captured delay is reached. Production
+timing and USB behavior are unchanged.
+
 
 ## Current project status
 
-At shared version **0.7.6**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.7**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -900,4 +908,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.6 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.7 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -80,8 +81,12 @@ int main()
         ezfadvance::VerificationSession::block_size;
 
     std::vector<std::uint8_t> image(image_size);
-    for (std::size_t i = 0; i < image.size(); ++i)
-        image[i] = static_cast<std::uint8_t>((i * 37u) & 0xFFu);
+    for (std::size_t i = 0; i < image.size(); ++i) {
+        const std::size_t block = i / block_size;
+        const std::size_t within_block = i % block_size;
+        image[i] = static_cast<std::uint8_t>(
+            (within_block * 37u + block * 53u) & 0xFFu);
+    }
 
     ezfadvance::test::TranscriptTransport transcript;
 
@@ -127,11 +132,20 @@ int main()
                     std::vector<std::uint8_t>{0x00, 0x00};
         });
 
-    std::size_t verified_blocks = 0;
+    std::vector<std::size_t> verified_offsets;
+    std::vector<std::size_t> verified_lengths;
     assert(verification.verifyExact8MiB(
         image,
-        [&](std::size_t, std::size_t) { ++verified_blocks; }));
-    assert(verified_blocks == image_size / block_size);
+        [&](std::size_t offset, std::size_t length) {
+            verified_offsets.push_back(offset);
+            verified_lengths.push_back(length);
+        }));
+    assert(verified_offsets.size() == image_size / block_size);
+    assert(verified_lengths.size() == image_size / block_size);
+    for (std::size_t block = 0; block < verified_offsets.size(); ++block) {
+        assert(verified_offsets[block] == block * block_size);
+        assert(verified_lengths[block] == block_size);
+    }
     assert(transcript.complete());
 
     assert(delays.size() == 1);
@@ -144,4 +158,15 @@ int main()
     assert(!observed(transcript, {0x00, 0x20}));
     assert(!observed(transcript, {0x00, 0x80}));
     assert(!observed(transcript, {0x00, 0xC0}));
+
+    bool rejected_empty_delay = false;
+    try {
+        ezfadvance::test::TranscriptTransport unused_transport;
+        ezfadvance::VerificationSession invalid_session(
+            unused_transport, ezfadvance::VerificationSession::DelayCallback{});
+        (void)invalid_session;
+    } catch (const std::invalid_argument&) {
+        rejected_empty_delay = true;
+    }
+    assert(rejected_empty_delay);
 }

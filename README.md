@@ -34,6 +34,15 @@ The code is organized in layers:
 - `VerificationSession` owns the transcript-tested partial first-window and exact 8 MiB verification paths.
 - `CartridgeImageBuilder`, `CardWriter`, `CardInspector`, `SaveExtractor`, and `CardEraser` implement the four application workflows.
 
+## Project status
+
+This project is a working community-developed alternative for EZF Advance III
+hardware. Its core workflows are covered by offline tests, and supported write
+and read-back verification paths have been exercised successfully on real
+hardware. Development and reverse engineering are still ongoing, so hardware
+and cartridge configurations outside the documented and tested paths may not
+behave as expected.
+
 Hardware tests are intentionally separate because writer and wipe operations
 are destructive. Always run a dry-run writer command first and review its
 layout before supplying `--yes-really-write`.
@@ -54,11 +63,11 @@ This project was started because the original software and drivers for the **EZF
 
 The purpose of this project is therefore to research, document, and develop an independent alternative that can help preserve continued use of existing EZF Advance III hardware on modern Unix-like systems, without requiring the original Windows XP environment. The project is focused on compatibility and interoperability with hardware that users already own; it is not intended to represent, replace, or imply official software, drivers, support, or endorsement from Nintendo or the EZ-Flash Team.
 
-We hope that someone with the necessary technical knowledge and interest will **fork this repository and continue the project further**. This repository is shared primarily as an experimental starting point and as a record of the work already done, in the hope that others may improve, correct, document, and extend it.
+We hope that someone with the necessary technical knowledge and interest will **fork this repository and continue the project further**. This repository is shared as a working community-developed alternative and as a record of the work already done, in the hope that others may improve, correct, document, and extend it.
 
 This software and project are provided **“AS IS” and “AS AVAILABLE,” without warranty of any kind**, express or implied.
 
-This project is **highly experimental** and may contain bugs, incomplete features, incorrect assumptions, or unexpected behavior. Use of this software may cause data loss, corruption, malfunction, permanent damage, or otherwise render an **EZF Avance III Device partially or completely unusable (“bricked”)**.
+This project remains under active development and may contain bugs, incomplete features, incorrect assumptions, or unexpected behavior, particularly on hardware and configurations that have not yet been tested. Use of this software may cause data loss, corruption, malfunction, permanent damage, or otherwise render an **EZF Avance III Device partially or completely unusable (“bricked”)**.
 
 A substantial portion of this project was created through **“vibe coding,” reverse engineering, experimentation, and the use of AI-assisted development tools, including ChatGPT**. As a result, the code may contain errors, inaccurate implementations, undocumented behavior, or functionality that has not been thoroughly tested or independently verified.
 

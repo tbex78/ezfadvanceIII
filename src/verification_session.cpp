@@ -36,6 +36,8 @@ VerificationSession::VerificationSession(Transport& transport,
                                          DelayCallback delay)
     : transport_(transport), protocol_(transport), delay_(std::move(delay))
 {
+    if (!delay_)
+        throw std::invalid_argument("verification delay callback is empty");
 }
 
 std::size_t VerificationSession::partialFirstWindowExtent(
