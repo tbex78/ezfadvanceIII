@@ -88,14 +88,20 @@ static bool bulk_in_max(libusb_device_handle* h,
     return ezfadvance::BulkTransport(h).inMax(data, max_len, timeout_ms);
 }
 
-// Non-destructive cartridge/readiness preflight.  The writer and real-device
-// testing established that an inserted, ready EZ-Flash Advance III returns a
-// single 0x01 byte to command 0x98.  Keep this check minimal so the captured
-// delete.pcap erase sequence below remains otherwise unchanged.
+// Non-destructive bridge startup and cartridge/readiness preflight.  Use the
+// same capture-proven 0x97 -> 0x98 -> 0x99 startup as the writer so the wipe
+// does not depend on the bridge state left by a preceding read-only utility.
+// The captured delete.pcap erase sequence below remains otherwise unchanged.
 static bool cartridge_ready_preflight(libusb_device_handle* h)
 {
+    const std::vector<uint8_t> c97 = {
+        0x5A,0xA5,0x97,0,0,0,0,0,0,0,0,0,0
+    };
     const std::vector<uint8_t> c98 = {
         0x5A,0xA5,0x98,0,0,0,0,0,0,0,0,0,0
+    };
+    const std::vector<uint8_t> c99 = {
+        0x5A,0xA5,0x99,0,0x01,0,0,0,0,0,0,0,0
     };
 
     std::vector<uint8_t> response;
@@ -103,6 +109,17 @@ static bool cartridge_ready_preflight(libusb_device_handle* h)
     std::cout << "\n========================================\n"
               << "CARTRIDGE PREFLIGHT\n"
               << "========================================\n";
+
+    if (!bulk_out(h, c97, 5000) ||
+        !bulk_in_max(h, response, 1, 5000) ||
+        response.size() != 1 || response[0] != 0x00) {
+        std::cerr
+            << "CARTRIDGE PREFLIGHT FAILED: 0x97 bridge reset did not "
+               "return 00.\n"
+            << "No erase operation was attempted.\n";
+        return false;
+    }
+    std::cout << "0x97 -> 00 (bridge reset)\n";
 
     bool ready = false;
     for (unsigned attempt = 1; attempt <= READINESS_ATTEMPTS; ++attempt) {
@@ -152,6 +169,17 @@ static bool cartridge_ready_preflight(libusb_device_handle* h)
     }
 
     std::cout << "0x98 -> 01 (cartridge inserted / ready)\n";
+
+    if (!bulk_out(h, c99, 5000) ||
+        !bulk_in_max(h, response, c99.size(), 5000) ||
+        response != c99) {
+        std::cerr
+            << "CARTRIDGE PREFLIGHT FAILED: 0x99 bridge setup echo "
+               "did not match.\n"
+            << "No erase operation was attempted.\n";
+        return false;
+    }
+    std::cout << "0x99 parameter 01 echo OK (bridge configured)\n";
     return true;
 }
 
