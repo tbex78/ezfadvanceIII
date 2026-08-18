@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.9**.
+Current shared project/toolset version covered by this summary: **0.7.10**.
 
 All mainline utilities carry this same version:
 
@@ -774,7 +774,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.9 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.10 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -895,10 +895,23 @@ verification completed through the rounded final block at `0x01000000`, the
 card reader identified the single-ROM layout and valid header, and the game
 booted successfully on a real Game Boy Advance.
 
+## 0.7.10 release changes
+
+**0.7.10** moves only the exact 24-MiB verification path from the legacy
+writer into `VerificationSession`. Its complete transcript preserves the
+capture-derived `00C0` mapping transition and all 384 global-linear 64-KiB
+reads through final offset `0x017f0000`. The capture shows an approximately
+109-ms quiet interval; the implementation intentionally retains the established
+exact `125000`-microsecond settle, asserted once after
+`55AA / 0200 / 00C0 / 0000` and immediately before `AA55`. The fixture uses
+block-distinct data, checks every callback, rejects wrong sizes, and proves
+that `0020`, `0040`, and `0080` selectors are absent. Exact 32-MiB verification
+remains in the legacy writer verifier.
+
 
 ## Current project status
 
-At shared version **0.7.9**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.10**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -941,4 +954,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.9 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.10 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

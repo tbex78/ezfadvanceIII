@@ -203,6 +203,41 @@ bool VerificationSession::verifyTinyTailAbove16MiB(
     return verifyLinear(image, verify_size, block_verified);
 }
 
+bool VerificationSession::verifyExact24MiB(
+    const std::vector<std::uint8_t>& image,
+    const BlockVerifiedCallback& block_verified) const
+{
+    if (image.size() != three_window_size)
+        throw std::invalid_argument(
+            "exact 24-MiB verification requires a 24-MiB image");
+
+    if (!statusSequence()) return false;
+
+    if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY192 55AA")) return false;
+    if (!protocol_.tx92Two(0x02, 0x00, "VERIFY192 0200")) return false;
+    if (!protocol_.tx92Two(0x00, 0xC0, "VERIFY192 00C0")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192 0000 A")) return false;
+
+    delay_(std::chrono::microseconds(125000));
+
+    if (!protocol_.tx92Two(0xAA, 0x55, "VERIFY192 AA55")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192 0000 B")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192 0000 C")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192 0000 D")) return false;
+    if (!protocol_.tx92One(0x00, 0xAA, "VERIFY192 selector0 AA")) return false;
+    if (!protocol_.tx92One(0x00, 0x55, "VERIFY192 selector0 55")) return false;
+    if (!protocol_.tx92One(0x01, 0x06, "VERIFY192 selector1 06")) return false;
+
+    if (!statusSequence()) return false;
+
+    if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY192READ 55AA")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192READ 0000 A")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192READ 0000 B")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192READ 0000 C")) return false;
+
+    return verifyLinear(image, image.size(), block_verified);
+}
+
 bool VerificationSession::verifyLinear(
     const std::vector<std::uint8_t>& image,
     std::size_t verify_size,

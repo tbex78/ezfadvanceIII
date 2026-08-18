@@ -173,7 +173,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.9 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.10 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -1661,52 +1661,6 @@ static bool flash_status_sequence(libusb_device_handle* h)
 // sequence restricted to that tiny-tail geometry; a larger partial BANK2
 // multi-ROM image previously produced a boundary false negative.
 
-// 192-Mbit / exact-24-MiB post-program linear-read mapping from
-// 4_4_4_4_8MB.pcap.
-//
-// After the final block in physical window 2, original EZ3Manager selects
-// 0x00C0 before entering global linear-read mode:
-//   status, 55AA, 0200, 00C0, 0000, ~0.11-0.125 s, AA55,
-//   0000 x3, AA,55,06, status, then 55AA,0000,0000,0000.
-// Verification then reads 384 consecutive 64-KiB blocks from byte 0 through
-// byte 0x017FFFFF with ordinary linear 0x91 addresses.
-static bool flash_192mb_prepare_linear_verify(libusb_device_handle* h)
-{
-    std::cout << "\nPreparing 192-Mbit / 24-MiB linear read/verify mapping...\n";
-
-    if (!flash_status_sequence(h))
-        return false;
-
-    if (!tx92_2(h,0x55,0xAA,"VERIFY192 55AA")) return false;
-    if (!tx92_2(h,0x02,0x00,"VERIFY192 0200")) return false;
-    if (!tx92_2(h,0x00,0xC0,"VERIFY192 00C0")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY192 0000 A")) return false;
-
-    // USBPcap timestamps quantize the observed quiet interval to about
-    // 109 ms; use the same 125-ms settle already capture-proven throughout
-    // the writer's other flash-window transitions.
-    std::cout << "    VERIFY192 pre-AA55 settle: 125000 us\n";
-    std::this_thread::sleep_for(std::chrono::microseconds(125000));
-
-    if (!tx92_2(h,0xAA,0x55,"VERIFY192 AA55")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY192 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY192 0000 C")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY192 0000 D")) return false;
-    if (!tx92_1(h,0x00,0xAA,"VERIFY192 selector0 AA")) return false;
-    if (!tx92_1(h,0x00,0x55,"VERIFY192 selector0 55")) return false;
-    if (!tx92_1(h,0x01,0x06,"VERIFY192 selector1 06")) return false;
-
-    if (!flash_status_sequence(h))
-        return false;
-
-    if (!tx92_2(h,0x55,0xAA,"VERIFY192READ 55AA")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY192READ 0000 A")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY192READ 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY192READ 0000 C")) return false;
-
-    return true;
-}
-
 // 256MBits-rom.pcap exact transition from the 0x00C0 program window to
 // 32-MiB linear reads. A 125-ms quiet interval occurs after the 0x0200 word.
 static bool flash_256mb_prepare_linear_verify(libusb_device_handle* h)
@@ -3119,8 +3073,26 @@ public:
                 }
             });
     }
-    bool prepare24MiBVerification() {
-        return flash_192mb_prepare_linear_verify(handle_);
+    bool verifyExact24MiB(const std::vector<uint8_t>& image) {
+        std::cout
+            << "\nPreparing 192-Mbit / 24-MiB linear read/verify mapping...\n"
+            << "    capture quiet interval: approximately 109 ms\n"
+            << "    preserved pre-AA55 settle: 125000 us\n"
+            << "\n========================================\n"
+            << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
+            << "========================================\n";
+        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        return verification_.verifyExact24MiB(
+            image,
+            [&](size_t offset, size_t length) {
+                if (verbose_) {
+                    std::cout << "verified card byte 0x" << std::hex
+                              << std::setw(8) << std::setfill('0') << offset
+                              << " length 0x" << length << std::dec << '\n';
+                } else {
+                    progress.update(offset + length);
+                }
+            });
     }
     bool prepare32MiBVerification() {
         return flash_256mb_prepare_linear_verify(handle_);
@@ -3376,7 +3348,8 @@ int main(int argc, char** argv)
                 verify_after(card_writer.prepare32MiBVerification());
                 break;
             case ezfadvance::VerificationMode::exact_24_mib:
-                verify_after(card_writer.prepare24MiBVerification());
+                ok = card_writer.verifyExact24MiB(image);
+                full_verify_completed = ok;
                 break;
             case ezfadvance::VerificationMode::exact_16_mib:
                 ok = card_writer.verifyExact16MiB(image);
