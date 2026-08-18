@@ -49,6 +49,16 @@ std::size_t VerificationSession::partialFirstWindowExtent(
     return (image_size + block_size - 1) & ~(block_size - 1);
 }
 
+std::size_t VerificationSession::tinyTailAbove16MiBExtent(
+    std::size_t image_size)
+{
+    if (image_size <= two_window_size ||
+        image_size > two_window_size + block_size)
+        throw std::invalid_argument(
+            "tiny-tail verification requires 16 MiB < size <= 16 MiB + 64 KiB");
+    return (image_size + block_size - 1) & ~(block_size - 1);
+}
+
 bool VerificationSession::statusSequence() const
 {
     if (!protocol_.tx92Two(0xFF, 0xFF, "STATUS FFFF")) return false;
@@ -176,6 +186,21 @@ bool VerificationSession::verifyExact16MiB(
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY128READ 0000 C")) return false;
 
     return verifyLinear(image, image.size(), block_verified);
+}
+
+bool VerificationSession::verifyTinyTailAbove16MiB(
+    const std::vector<std::uint8_t>& image,
+    const BlockVerifiedCallback& block_verified) const
+{
+    const std::size_t verify_size = tinyTailAbove16MiBExtent(image.size());
+
+    if (!statusSequence()) return false;
+    if (!protocol_.tx92Two(0x55, 0xAA, "VERIFYTAIL 55AA")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFYTAIL 0000 A")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFYTAIL 0000 B")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFYTAIL 0000 C")) return false;
+
+    return verifyLinear(image, verify_size, block_verified);
 }
 
 bool VerificationSession::verifyLinear(

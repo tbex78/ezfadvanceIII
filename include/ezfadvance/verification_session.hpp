@@ -44,7 +44,14 @@ public:
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 
+    // fireemblem.pcap: short status/read prefix with no mapping transition or
+    // delay, followed by global-linear reads through one rounded tail block.
+    bool verifyTinyTailAbove16MiB(
+        const std::vector<std::uint8_t>& image,
+        const BlockVerifiedCallback& block_verified = {}) const;
+
     static std::size_t partialFirstWindowExtent(std::size_t image_size);
+    static std::size_t tinyTailAbove16MiBExtent(std::size_t image_size);
 
 private:
     bool statusSequence() const;

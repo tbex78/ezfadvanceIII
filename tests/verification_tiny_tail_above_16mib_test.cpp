@@ -1,0 +1,166 @@
+#include "ezfadvance/protocol.hpp"
+#include "ezfadvance/verification_session.hpp"
+#include "transcript_transport.hpp"
+
+#include <algorithm>
+#include <cassert>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+namespace {
+
+constexpr unsigned timeout_ms = 15000;
+
+void writeLe32(std::vector<std::uint8_t>& bytes, std::size_t offset,
+               std::uint32_t value)
+{
+    bytes[offset] = static_cast<std::uint8_t>(value);
+    bytes[offset + 1] = static_cast<std::uint8_t>(value >> 8);
+    bytes[offset + 2] = static_cast<std::uint8_t>(value >> 16);
+    bytes[offset + 3] = static_cast<std::uint8_t>(value >> 24);
+}
+
+std::vector<std::uint8_t> readCommand(std::uint32_t byte_address,
+                                      std::uint32_t length)
+{
+    std::vector<std::uint8_t> command = {
+        0x5A, 0xA5, 0x91, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    writeLe32(command, 4, byte_address / 2);
+    writeLe32(command, 8, length);
+    return command;
+}
+
+void expect92Two(ezfadvance::test::TranscriptTransport& transcript,
+                 std::uint8_t first, std::uint8_t second)
+{
+    const auto command = ezfadvance::Protocol::command92Two();
+    transcript.expectOut(command, timeout_ms)
+              .expectOut({first, second}, timeout_ms)
+              .expectInMax(command, 64, timeout_ms);
+}
+
+void expect92One(ezfadvance::test::TranscriptTransport& transcript,
+                 std::uint8_t selector, std::uint8_t value)
+{
+    const auto command = ezfadvance::Protocol::command92One(selector);
+    transcript.expectOut(command, timeout_ms)
+              .expectOut({value}, timeout_ms)
+              .expectInMax(command, 64, timeout_ms);
+}
+
+void expectStatus(ezfadvance::test::TranscriptTransport& transcript)
+{
+    expect92Two(transcript, 0xFF, 0xFF);
+    expect92One(transcript, 0x01, 0x04);
+    expect92One(transcript, 0x00, 0x00);
+    expect92One(transcript, 0x00, 0x00);
+}
+
+bool observed(const ezfadvance::test::TranscriptTransport& transcript,
+              const std::vector<std::uint8_t>& payload)
+{
+    const auto& writes = transcript.observedOut();
+    return std::find(writes.begin(), writes.end(), payload) != writes.end();
+}
+
+} // namespace
+
+int main()
+{
+    constexpr std::size_t block_size =
+        ezfadvance::VerificationSession::block_size;
+    constexpr std::size_t image_size =
+        ezfadvance::VerificationSession::two_window_size + 0x700;
+    constexpr std::size_t verify_size =
+        ezfadvance::VerificationSession::two_window_size + block_size;
+
+    static_assert(image_size < verify_size);
+    assert(ezfadvance::VerificationSession::tinyTailAbove16MiBExtent(
+               image_size) == verify_size);
+
+    std::vector<std::uint8_t> image(image_size);
+    for (std::size_t i = 0; i < image.size(); ++i) {
+        const std::size_t block = i / block_size;
+        const std::size_t within_block = i % block_size;
+        image[i] = static_cast<std::uint8_t>(
+            (within_block * 43u + block * 67u) & 0xFFu);
+    }
+
+    ezfadvance::test::TranscriptTransport transcript;
+    expectStatus(transcript);
+    expect92Two(transcript, 0x55, 0xAA);
+    expect92Two(transcript, 0x00, 0x00);
+    expect92Two(transcript, 0x00, 0x00);
+    expect92Two(transcript, 0x00, 0x00);
+
+    for (std::size_t offset = 0; offset < verify_size; offset += block_size) {
+        std::vector<std::uint8_t> block(block_size, 0xFF);
+        const std::size_t available =
+            offset < image.size()
+                ? std::min(block_size, image.size() - offset)
+                : 0;
+        std::copy_n(image.begin() + static_cast<std::ptrdiff_t>(offset),
+                    available, block.begin());
+        transcript
+            .expectOut(readCommand(static_cast<std::uint32_t>(offset),
+                                   static_cast<std::uint32_t>(block_size)),
+                       timeout_ms)
+            .expectInExact(std::move(block), block_size, timeout_ms);
+    }
+
+    std::size_t delay_count = 0;
+    ezfadvance::VerificationSession verification(
+        transcript, [&](std::chrono::microseconds) { ++delay_count; });
+    std::vector<std::size_t> verified_offsets;
+    std::vector<std::size_t> verified_lengths;
+    assert(verification.verifyTinyTailAbove16MiB(
+        image,
+        [&](std::size_t offset, std::size_t length) {
+            verified_offsets.push_back(offset);
+            verified_lengths.push_back(length);
+        }));
+
+    assert(verified_offsets.size() == 257);
+    assert(verified_lengths.size() == 257);
+    for (std::size_t block = 0; block < verified_offsets.size(); ++block) {
+        assert(verified_offsets[block] == block * block_size);
+        assert(verified_lengths[block] == block_size);
+    }
+    assert(verified_offsets.back() == 0x1000000);
+    assert(verified_lengths.back() == block_size);
+    assert(delay_count == 0);
+    assert(transcript.complete());
+
+    assert(observed(transcript, {0x55, 0xAA}));
+    assert(observed(transcript, {0x00, 0x00}));
+    assert(!observed(transcript, {0x00, 0x20}));
+    assert(!observed(transcript, {0x00, 0x40}));
+    assert(!observed(transcript, {0x00, 0x80}));
+    assert(!observed(transcript, {0x00, 0xC0}));
+    assert(!observed(transcript, {0x02, 0x00}));
+    assert(!observed(transcript, {0xAA, 0x55}));
+
+    bool rejected_lower_boundary = false;
+    try {
+        (void)ezfadvance::VerificationSession::tinyTailAbove16MiBExtent(
+            ezfadvance::VerificationSession::two_window_size);
+    } catch (const std::invalid_argument&) {
+        rejected_lower_boundary = true;
+    }
+    assert(rejected_lower_boundary);
+
+    bool rejected_upper_boundary = false;
+    try {
+        (void)ezfadvance::VerificationSession::tinyTailAbove16MiBExtent(
+            verify_size + 1);
+    } catch (const std::invalid_argument&) {
+        rejected_upper_boundary = true;
+    }
+    assert(rejected_upper_boundary);
+}

@@ -173,7 +173,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.8 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.9 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -1707,18 +1707,6 @@ static bool flash_192mb_prepare_linear_verify(libusb_device_handle* h)
     return true;
 }
 
-static bool flash_bank2_prepare_linear_verify(libusb_device_handle* h)
-{
-    std::cout << "\nPreparing tiny BANK2-tail linear read/verify mapping "
-                 "(fireemblem.pcap)...\n";
-    if (!flash_status_sequence(h)) return false;
-    if (!tx92_2(h,0x55,0xAA,"VERIFYREAD 55AA")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYREAD 0000 A")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYREAD 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYREAD 0000 C")) return false;
-    return true;
-}
-
 // 256MBits-rom.pcap exact transition from the 0x00C0 program window to
 // 32-MiB linear reads. A 125-ms quiet interval occurs after the 0x0200 word.
 static bool flash_256mb_prepare_linear_verify(libusb_device_handle* h)
@@ -2066,16 +2054,6 @@ static size_t verification_extent(const std::vector<uint8_t>& image)
             std::cout << "Partial BANK0 verify extent rounded to 64-KiB block: 0x"
                       << std::hex << verify_size << std::dec << " bytes\n";
         }
-    }
-
-    // Preserve the capture-derived behavior used for a short tail immediately
-    // beyond the 16-MiB boundary: verify the rest of that 64-KiB block as FF.
-    if (image.size() > CARD_HALF_SIZE &&
-        image.size() <= CARD_HALF_SIZE + PROGRAM_BLOCK) {
-        verify_size =
-            (image.size() + PROGRAM_BLOCK - 1) & ~(PROGRAM_BLOCK - 1);
-        std::cout << "Short BANK2 tail verify extent: 0x"
-                  << std::hex << verify_size << std::dec << " bytes\n";
     }
 
     return verify_size;
@@ -3116,8 +3094,30 @@ public:
                 }
             });
     }
-    bool prepareTinyTailVerification() {
-        return flash_bank2_prepare_linear_verify(handle_);
+    bool verifyTinyTailAbove16MiB(const std::vector<uint8_t>& image) {
+        const size_t verify_size =
+            ezfadvance::VerificationSession::tinyTailAbove16MiBExtent(
+                image.size());
+        std::cout
+            << "\nPreparing tiny BANK2-tail linear read/verify mapping "
+               "(fireemblem.pcap)...\n"
+            << "Short BANK2 tail verify extent: 0x" << std::hex
+            << verify_size << std::dec << " bytes\n"
+            << "\n========================================\n"
+            << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
+            << "========================================\n";
+        ProgressBar progress("Verify", verify_size, true, !verbose_);
+        return verification_.verifyTinyTailAbove16MiB(
+            image,
+            [&](size_t offset, size_t length) {
+                if (verbose_) {
+                    std::cout << "verified card byte 0x" << std::hex
+                              << std::setw(8) << std::setfill('0') << offset
+                              << " length 0x" << length << std::dec << '\n';
+                } else {
+                    progress.update(offset + length);
+                }
+            });
     }
     bool prepare24MiBVerification() {
         return flash_192mb_prepare_linear_verify(handle_);
@@ -3399,7 +3399,8 @@ int main(int argc, char** argv)
             case ezfadvance::VerificationMode::tiny_tail_above_16_mib:
                 // fireemblem.pcap proves this tiny BANK2-tail transition and
                 // verifies one complete 64-KiB block beyond 16 MiB.
-                verify_after(card_writer.prepareTinyTailVerification());
+                ok = card_writer.verifyTinyTailAbove16MiB(image);
+                full_verify_completed = ok;
                 break;
             case ezfadvance::VerificationMode::unsupported_partial_higher_window:
                 // 0.5.1 proved that reusing program-window selection for local

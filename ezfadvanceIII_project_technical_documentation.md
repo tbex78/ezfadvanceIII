@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.8`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.8`<br>
+**Current project/toolset version:** `0.7.9`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.9`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.8 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window and exact 8-/16-MiB verification paths are hardware-confirmed. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.9 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window and exact 8-/16-MiB verification paths are hardware-confirmed; the tiny-tail path is extracted and transcript-tested. Linux/BSD validation remains pending.
 
 ---
 
@@ -2225,6 +2225,19 @@ Writing completed, full read-back verification reached and completed the final
 64-KiB block at `0x00ff0000`, and the cartridge booted successfully on a real
 Game Boy Advance.
 
+### 36.30 0.7.9 — tiny-tail-above-16-MiB verification extraction
+
+The narrow `fireemblem.pcap` verification exception now belongs to
+`VerificationSession`. It accepts only `16 MiB < size <= 16 MiB + 64 KiB`,
+rounds the read extent through `0x1010000`, and compares bytes beyond the image
+end against erased `0xFF`. The transcript preserves the short status and
+four-write read prefix followed by 257 global-linear 64-KiB reads.
+
+The fixture uses a non-aligned tail and block-distinct content, checks every
+callback, proves zero delay calls, and rejects `0020`, `0040`, `0080`, `00C0`,
+`0200`, and `AA55`. Policy, programming, exact 24/32-MiB verification, and
+unsupported partial higher-window behavior remain unchanged.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2236,7 +2249,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.8 baseline compiled and transcript-tested, with partial/exact-8-/16-MiB hardware confirmation on Apple Silicon
+macOS       supported target; current 0.7.9 baseline compiled and transcript-tested, with partial/exact-8-/16-MiB hardware confirmation on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2657,7 +2670,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.8**, the project has an object-oriented structural model:
+At shared toolset version **0.7.9**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;
