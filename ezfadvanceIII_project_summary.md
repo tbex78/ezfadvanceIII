@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.10**.
+Current shared project/toolset version covered by this summary: **0.7.11**.
 
 All mainline utilities carry this same version:
 
@@ -774,7 +774,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.10 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.11 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -914,10 +914,19 @@ transition completed, and full read-back verification reached the final
 64-KiB block at `0x017f0000`. Card inspection and menu behavior were correct,
 and all selected games launched successfully on a real Game Boy Advance.
 
+## 0.7.11 release changes
+
+**0.7.11** adds a read-only `Stored end` field to every ROM reported by the
+card reader. The value is the inclusive physical end address derived from the
+catalog entry's stored start and capture-derived size class (`type 0` = 32 MiB
+through `type 9` = 64 KiB). Invalid catalog size classes or extents are reported
+explicitly instead of producing a wrapped address. USB and card state behavior
+are unchanged.
+
 
 ## Current project status
 
-At shared version **0.7.10**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.11**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -960,4 +969,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.10 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.11 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

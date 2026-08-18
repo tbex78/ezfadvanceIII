@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.10`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.10`<br>
+**Current project/toolset version:** `0.7.11`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.11`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.10 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-MiB, and tiny-tail verification paths are hardware-confirmed. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.11 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-MiB, and tiny-tail verification paths are hardware-confirmed. Linux/BSD validation remains pending.
 
 ---
 
@@ -2246,6 +2246,16 @@ The card reader then reported one Fire Emblem ROM, the expected loader address,
 and a valid header, and the game booted successfully on a real Game Boy
 Advance.
 
+### 36.32 0.7.11 — card-reader stored end reporting
+
+The read-only card inspector now reports an inclusive `Stored end` address for
+every cataloged ROM. It derives the value from the physical start and the
+catalog size class (`type 0` = 32 MiB through `type 9` = 64 KiB), so compact
+layouts remain represented by their catalog allocations rather than inferred
+from the next ROM or loader address. Invalid classes or extents are identified
+without address wraparound. No USB reads, mappings, or card state transitions
+changed.
+
 ### 36.31 0.7.10 — exact 24-MiB verification extraction
 
 The exact 24-MiB path from `4_4_4_4_8MB.pcap` is now an explicit
@@ -2280,7 +2290,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.10 baseline compiled and transcript-tested, with partial/exact-8-/16-MiB/tiny-tail hardware confirmation on Apple Silicon
+macOS       supported target; current 0.7.11 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-MiB/tiny-tail hardware confirmation on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2701,7 +2711,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.10**, the project has an object-oriented structural model:
+At shared toolset version **0.7.11**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

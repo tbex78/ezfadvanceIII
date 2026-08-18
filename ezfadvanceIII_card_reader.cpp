@@ -33,7 +33,7 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 
-// EZF Advance III card reader 0.7.10, read-only inspector.
+// EZF Advance III card reader 0.7.11, read-only inspector.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Card-read protocol behavior remains unchanged from 0.5.13.
 //
@@ -215,6 +215,19 @@ static std::string hex32(uint32_t v)
     return s.str();
 }
 
+static std::optional<uint32_t> stored_end(const CatalogEntry& entry)
+{
+    if (entry.type > 9)
+        return std::nullopt;
+    const uint64_t size_class =
+        static_cast<uint64_t>(CARD_IMAGE_LIMIT) >> entry.type;
+    const uint64_t end =
+        static_cast<uint64_t>(entry.start) + size_class - 1;
+    if (end >= CARD_IMAGE_LIMIT)
+        return std::nullopt;
+    return static_cast<uint32_t>(end);
+}
+
 static void print_rom(size_t index,
                       const CatalogEntry& e,
                       const GbaHeader& g,
@@ -237,6 +250,10 @@ static void print_rom(size_t index,
         std::cout << "  Orig. entry  : " << hex32(e.target_or_start) << "\n";
     else
         std::cout << "  Stored start : " << hex32(e.target_or_start) << "\n";
+
+    const auto end = stored_end(e);
+    std::cout << "  Stored end   : "
+              << (end ? hex32(*end) : "(invalid size class/extent)") << "\n";
 
     if (g.readable) {
         std::cout << "  GBA title    : " << (g.title.empty() ? "(blank)" : g.title) << "\n"

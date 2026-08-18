@@ -12,7 +12,7 @@
 #   ezfadvanceIII_wipe_card.cpp
 #
 # Optional versioned sources:
-#   make VERSION=0.7.10
+#   make VERSION=0.7.11
 #
 # Command-line make variables override these defaults, for example:
 #   make CXX=clang++
