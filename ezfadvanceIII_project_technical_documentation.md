@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.6.2`  
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.6.2`  
-**Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`  
-**Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge  
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.6.2 protocol baseline and its refactored architecture have been compiled and hardware-tested on macOS / Apple Silicon; Linux/BSD validation remains pending.
+**Current project/toolset version:** `0.7.0`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.0`<br>
+**Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
+**Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.0 toolset and its refactored architecture have been compiled and hardware-tested on macOS / Apple Silicon; Linux/BSD validation remains pending.
 
 ---
 
@@ -2128,6 +2128,15 @@ EZF Advance III card wipe utility (macOS)
 
 The shared release version remains represented by filenames, source comments, tags/releases, packaged artifacts, and documentation. The GBA header's `ROM version` field is not a tool version and remains unaffected.
 
+### 36.21 0.7.0 — object-oriented architecture migration
+
+The toolset was migrated from largely monolithic utilities to shared,
+composable C++17 modules. This release introduces RAII USB ownership, an
+injectable transport abstraction, shared protocol and read-state objects,
+cartridge domain models, application services, and offline unit tests. The
+major architectural change warrants a minor-version increment while retaining
+the proven 0.6.2 hardware protocol behavior.
+
 No USB protocol, erase timing, save-read behavior, or card-read behavior was changed by this cleanup.
 
 ---
@@ -2141,7 +2150,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.6.2 baseline derives from code compiled on Apple Silicon
+macOS       supported target; current 0.7.0 baseline derives from code compiled on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2562,7 +2571,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.6.2**, the project has a mostly structural model:
+At shared toolset version **0.7.0**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

@@ -43,7 +43,7 @@ static constexpr const char* host_platform_name()
 #endif
 }
 
-// ezfadvanceIII wipe utility 0.6.2.
+// ezfadvanceIII wipe utility 0.7.0.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Erase protocol/timing behavior remains unchanged from 0.5.10.
 //
