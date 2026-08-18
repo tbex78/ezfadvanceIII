@@ -12,7 +12,7 @@
 #   ezfadvanceIII_wipe_card.cpp
 #
 # Optional versioned sources:
-#   make VERSION=0.7.7
+#   make VERSION=0.7.8
 #
 # Command-line make variables override these defaults, for example:
 #   make CXX=clang++
@@ -126,6 +126,8 @@ test: check
 	./build/verification_policy_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/verification_exact_8mib_test.cpp src/verification_session.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/verification_exact_8mib_test
 	./build/verification_exact_8mib_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/verification_exact_16mib_test.cpp src/verification_session.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/verification_exact_16mib_test
+	./build/verification_exact_16mib_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/verification_partial_first_window_test.cpp src/verification_session.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/verification_partial_first_window_test
 	./build/verification_partial_first_window_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/writer_options_test.cpp src/writer_options.cpp -o build/writer_options_test
@@ -143,6 +145,6 @@ print-config:
 	done
 
 clean:
-	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/protocol_test build/verification_exact_8mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test
+	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/protocol_test build/verification_exact_8mib_test build/verification_exact_16mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test
 
 FORCE:

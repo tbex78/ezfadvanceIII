@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.7`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.7`<br>
+**Current project/toolset version:** `0.7.8`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.8`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.7 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window and exact 8-MiB verification paths are hardware-confirmed. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.8 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window and exact 8-MiB verification paths are hardware-confirmed; the exact 16-MiB path is now extracted and transcript-tested. Linux/BSD validation remains pending.
 
 ---
 
@@ -2207,6 +2207,19 @@ callback is rejected during `VerificationSession` construction with a clear
 argument error. The production constructor, timing, and USB behavior are
 unchanged.
 
+### 36.29 0.7.8 — exact 16-MiB verification extraction
+
+The exact 16-MiB path is now an explicit `VerificationSession` operation. It
+preserves the `FFFF`, `04`, `00`, `00` status sequence, the capture-derived
+`55AA`, `0200`, `0080`, `0000` mapping transition, the 125-ms settle before
+`AA55`, the selector writes, the second status sequence, the four-write read
+prefix, and 256 global-linear 64-KiB reads.
+
+The offline transcript uses different content in each block, asserts every
+verification callback offset and length, and rejects unintended `0020`,
+`0040`, and `00C0` selectors. Policy selection, erase/program behavior, and
+all remaining verification geometries are unchanged.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2218,7 +2231,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.7 baseline compiled, transcript-tested, and partial/exact-8-MiB hardware-confirmed on Apple Silicon
+macOS       supported target; current 0.7.8 baseline compiled and transcript-tested, with partial/exact-8-MiB hardware confirmation on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2639,7 +2652,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.7**, the project has an object-oriented structural model:
+At shared toolset version **0.7.8**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

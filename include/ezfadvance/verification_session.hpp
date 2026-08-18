@@ -16,6 +16,7 @@ class VerificationSession final {
 public:
     static constexpr std::size_t block_size = 0x10000;
     static constexpr std::size_t first_window_size = 0x800000;
+    static constexpr std::size_t two_window_size = 0x1000000;
 
     using BlockVerifiedCallback =
         std::function<void(std::size_t offset, std::size_t length)>;
@@ -34,6 +35,12 @@ public:
     // 4MiB-4MiB.pcap and FLASH_V121_FLASH512K.pcap: explicit 0x0040
     // mapping transition followed by global-linear 0x91 reads.
     bool verifyExact8MiB(
+        const std::vector<std::uint8_t>& image,
+        const BlockVerifiedCallback& block_verified = {}) const;
+
+    // writerom128Mb.pcap: explicit 0x0080 mapping transition followed by
+    // 256 global-linear 0x91 reads.
+    bool verifyExact16MiB(
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 

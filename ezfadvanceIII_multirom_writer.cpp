@@ -173,7 +173,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.7 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.8 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -1655,55 +1655,6 @@ static bool flash_status_sequence(libusb_device_handle* h)
 }
 
 
-// ---------------------------------------------------------------------------
-// 128-Mbit post-program linear-read mapping.
-//
-// writerom128Mb.pcap shows that verification does NOT begin directly after
-// finishing bank-1 programming.  The original manager first leaves program
-// mode, selects a distinct 0x0080 mapping, resets/statuses it, then sends a
-// short 55AA/0000/0000/0000 prefix before issuing linear 0x91 reads.
-//
-// This is capture-derived and intentionally differs from bank-1 write setup,
-// which uses 0x0040.
-// ---------------------------------------------------------------------------
-static bool flash_128mb_prepare_linear_verify(libusb_device_handle* h)
-{
-    std::cout << "\nPreparing 128-Mbit linear read/verify mapping...\n";
-
-    // Exact sequence immediately after the final 64-KiB program block.
-    if (!flash_status_sequence(h))
-        return false;
-
-    if (!tx92_2(h,0x55,0xAA,"VERIFYMAP 55AA")) return false;
-    if (!tx92_2(h,0x02,0x00,"VERIFYMAP 0200")) return false;
-    if (!tx92_2(h,0x00,0x80,"VERIFYMAP 0080")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYMAP 0000 A")) return false;
-
-    // Capture timing is approximately 0.11-0.125 s before AA55; use the
-    // same 125-ms settle already proven for the other flash-window setups.
-    std::cout << "    VERIFYMAP pre-AA55 settle: 125000 us\n";
-    std::this_thread::sleep_for(std::chrono::microseconds(125000));
-
-    if (!tx92_2(h,0xAA,0x55,"VERIFYMAP AA55")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYMAP 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYMAP 0000 C")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYMAP 0000 D")) return false;
-    if (!tx92_1(h,0x00,0xAA,"VERIFYMAP selector0 AA")) return false;
-    if (!tx92_1(h,0x00,0x55,"VERIFYMAP selector0 55")) return false;
-    if (!tx92_1(h,0x01,0x06,"VERIFYMAP selector1 06")) return false;
-
-    if (!flash_status_sequence(h))
-        return false;
-
-    // Exact four writes immediately before the first linear 0x91 read.
-    if (!tx92_2(h,0x55,0xAA,"VERIFYREAD 55AA")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYREAD 0000 A")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYREAD 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYREAD 0000 C")) return false;
-
-    return true;
-}
-
 // fireemblem.pcap ends programming in window 0x0080 with only a short
 // loader tail beyond 16 MiB. The original manager then performs status/reset
 // plus the four-write linear-read prefix before 0x91 verification. Keep this
@@ -3146,8 +3097,24 @@ public:
                 }
             });
     }
-    bool prepare16MiBVerification() {
-        return flash_128mb_prepare_linear_verify(handle_);
+    bool verifyExact16MiB(const std::vector<uint8_t>& image) {
+        std::cout
+            << "\nPreparing 128-Mbit / 16-MiB linear read/verify mapping...\n"
+            << "\n========================================\n"
+            << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
+            << "========================================\n";
+        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        return verification_.verifyExact16MiB(
+            image,
+            [&](size_t offset, size_t length) {
+                if (verbose_) {
+                    std::cout << "verified card byte 0x" << std::hex
+                              << std::setw(8) << std::setfill('0') << offset
+                              << " length 0x" << length << std::dec << '\n';
+                } else {
+                    progress.update(offset + length);
+                }
+            });
     }
     bool prepareTinyTailVerification() {
         return flash_bank2_prepare_linear_verify(handle_);
@@ -3412,7 +3379,8 @@ int main(int argc, char** argv)
                 verify_after(card_writer.prepare24MiBVerification());
                 break;
             case ezfadvance::VerificationMode::exact_16_mib:
-                verify_after(card_writer.prepare16MiBVerification());
+                ok = card_writer.verifyExact16MiB(image);
+                full_verify_completed = ok;
                 break;
             case ezfadvance::VerificationMode::exact_8_mib:
                 // Exact 8 MiB is independently capture-proven by both the
