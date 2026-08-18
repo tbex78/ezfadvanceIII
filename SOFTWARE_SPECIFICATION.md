@@ -157,8 +157,13 @@ Known command families:
 The manager-compatible startup sequence is:
 
 1. send `0x97` and require response `00`;
-2. send `0x98` and require response `01`;
+2. send `0x98` and require response `01`, retrying an explicit transient `00`
+   up to five checks at 100-ms intervals;
 3. send `0x99` with parameter `01` and require the 13-byte command echo.
+
+After card inspection or a successfully initialized save-reader operation, the
+read-only tool closes the manager-style session with the capture-derived three
+`0x98 -> 01` polls and 1000-ms quiet interval.
 
 For manager-style command/data transactions, the implementation preserves the
 legacy 750 microsecond command-to-data delay. The wipe workflow retains its
@@ -308,7 +313,8 @@ skipped, and distinguish that outcome from verification success.
 1. Dry-run writer execution must not initialize libusb or access the device.
 2. Writer erase/program operations require `--yes-really-write`.
 3. Full-card erase requires `--yes-really-wipe`.
-4. Wipe must require the proven `0x98 -> 01` readiness response before erase.
+4. Wipe must require the proven `0x98 -> 01` readiness response before erase;
+   an explicit transient `00` may be retried under the bounded startup policy.
 5. Failed writer preflight must occur before any erase or program operation.
 6. Read-only programs must not expose destructive methods.
 7. Unsupported mappings and save configurations must fail conservatively.

@@ -15,10 +15,12 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "ezfadvance/usb_device.hpp"
@@ -43,7 +45,10 @@ static constexpr const char* host_platform_name()
 #endif
 }
 
-// ezfadvanceIII wipe utility 0.7.12.
+static constexpr unsigned READINESS_ATTEMPTS = 5;
+static constexpr auto READINESS_RETRY_DELAY = std::chrono::milliseconds(100);
+
+// ezfadvanceIII wipe utility 0.7.13.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Erase protocol/timing behavior remains unchanged from 0.5.10.
 //
@@ -99,33 +104,49 @@ static bool cartridge_ready_preflight(libusb_device_handle* h)
               << "CARTRIDGE PREFLIGHT\n"
               << "========================================\n";
 
-    if (!bulk_out(h, c98, 5000)) {
-        std::cerr
-            << "CARTRIDGE PREFLIGHT FAILED: could not send the 0x98 readiness command.\n"
-            << "Check the EZF Advance III USB connection and try again.\n"
-            << "No erase operation was attempted.\n";
-        return false;
+    bool ready = false;
+    for (unsigned attempt = 1; attempt <= READINESS_ATTEMPTS; ++attempt) {
+        if (!bulk_out(h, c98, 5000)) {
+            std::cerr
+                << "CARTRIDGE PREFLIGHT FAILED: could not send the 0x98 "
+                   "readiness command.\n"
+                << "Check the EZF Advance III USB connection and try again.\n"
+                << "No erase operation was attempted.\n";
+            return false;
+        }
+        if (!bulk_in_max(h, response, 1, 5000) || response.size() != 1) {
+            std::cerr
+                << "GBA CARTRIDGE NOT DETECTED / NOT READY.\n"
+                << "The EZF Advance III did not return the required 0x98 "
+                   "readiness byte (expected 01).\n"
+                << "No erase operation was attempted.\n";
+            return false;
+        }
+        if (response[0] == 0x01) {
+            ready = true;
+            break;
+        }
+        if (response[0] != 0x00) {
+            std::cerr << "Unexpected 0x98 readiness value 0x"
+                      << std::hex << std::setw(2) << std::setfill('0')
+                      << static_cast<unsigned>(response[0])
+                      << std::dec << std::setfill(' ') << ".\n"
+                      << "No erase operation was attempted.\n";
+            return false;
+        }
+        if (attempt != READINESS_ATTEMPTS) {
+            std::cout << "0x98 readiness returned 00; retrying ("
+                      << attempt << '/' << READINESS_ATTEMPTS << ")...\n";
+            std::this_thread::sleep_for(READINESS_RETRY_DELAY);
+        }
     }
-
-    if (!bulk_in_max(h, response, 1, 5000) || response.size() != 1) {
+    if (!ready) {
         std::cerr
             << "GBA CARTRIDGE NOT DETECTED / NOT READY.\n"
-            << "The EZF Advance III did not return the required 0x98 readiness byte "
-               "(expected 01).\n"
-            << "Make sure an EZ-Flash Advance III cartridge is fully inserted, then retry.\n"
-            << "No erase operation was attempted.\n";
-        return false;
-    }
-
-    if (response[0] != 0x01) {
-        std::cerr
-            << "GBA CARTRIDGE NOT DETECTED / NOT READY.\n"
-            << "0x98 readiness returned 0x"
-            << std::hex << std::setw(2) << std::setfill('0')
-            << static_cast<unsigned>(response[0])
-            << std::dec << std::setfill(' ')
-            << "; expected 0x01.\n"
-            << "Make sure an EZ-Flash Advance III cartridge is fully inserted, then retry.\n"
+            << "0x98 readiness remained 0x00 after " << READINESS_ATTEMPTS
+            << " checks.\n"
+            << "Make sure an EZ-Flash Advance III cartridge is fully inserted, "
+               "then retry.\n"
             << "No erase operation was attempted.\n";
         return false;
     }

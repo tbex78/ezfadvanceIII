@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.12**.
+Current shared project/toolset version covered by this summary: **0.7.13**.
 
 All mainline utilities carry this same version:
 
@@ -86,7 +86,9 @@ The original-manager startup sequence includes:
 0x99 with parameter 01 -> 13-byte echo
 ```
 
-`0x98 -> 01` is used as the cartridge readiness gate.
+`0x98 -> 01` is used as the cartridge readiness gate. A transient `00` is
+retried up to five times at 100-ms intervals; transport failures, unexpected
+values, or five consecutive `00` responses still fail safely before mutation.
 
 The project deliberately replays the full startup/probe state because early experiments that omitted parts of the initialization could erase/read successfully but failed to transfer complete 64-KiB program blocks.
 
@@ -774,7 +776,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.12 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.13 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -936,10 +938,24 @@ data, checks every callback, rejects wrong sizes, and proves `0020`, `0040`,
 path delegated, the now-dead legacy writer-side read command, extent,
 comparison, and generic verifier were removed.
 
+## 0.7.13 release changes
+
+**0.7.13** makes startup tolerate a cartridge that reports transiently late
+readiness. The writer preflight, shared read-only card session, and wipe
+preflight retry only a valid `0x98 -> 00` response up to five times with
+100-ms intervals. `01` continues startup; transport failures, unexpected
+response values, or five consecutive `00` responses fail safely. The writer
+and reader's surrounding `0x97` and `0x99` sequence and all flash protocol
+behavior are unchanged. After card inspection and after any successfully
+initialized save-reader operation, the read-only tools now also replay the
+already capture-derived close-manager transition—three successful `0x98` polls
+followed by a 1000-ms quiet interval—before releasing the device, to avoid
+leaving the bridge in the observed stale session state.
+
 
 ## Current project status
 
-At shared version **0.7.12**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.13**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -982,4 +998,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.12 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.13 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

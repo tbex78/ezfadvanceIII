@@ -26,6 +26,10 @@ public:
     bool prepareLinear24MiB();
     bool prepareLinear32MiB();
 
+    // Capture-derived close-manager transition: three successful readiness
+    // polls followed by the observed one-second quiet interval.
+    bool finishSession();
+
 private:
     bool startup();
     bool probeUnlockTail();

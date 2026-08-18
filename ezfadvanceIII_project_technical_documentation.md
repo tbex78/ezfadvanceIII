@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.12`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.12`<br>
+**Current project/toolset version:** `0.7.13`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.13`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.12 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-MiB, and tiny-tail verification paths are hardware-confirmed; exact 32 MiB is extracted and transcript-tested. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.13 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-MiB, and tiny-tail verification paths are hardware-confirmed; exact 32 MiB is extracted and transcript-tested. Linux/BSD validation remains pending.
 
 ---
 
@@ -233,13 +233,17 @@ The original-manager startup sequence includes three bridge-level commands:
 
 ### 5.1 `0x98` is the readiness gate
 
-The `0x98` response is treated as the cartridge presence/readiness signal:
+The `0x98` response is treated as the cartridge presence/readiness signal. A
+transient `00` is retried up to five checks with 100-ms intervals:
 
 ```text
-expected: 01
+01 -> ready
+00 -> retry, then not ready after five checks
+other -> unexpected state and immediate failure
 ```
 
-If it is missing or not `01`, the custom writer aborts **before erase or programming**.
+If the response is missing, unexpected, or remains `00`, the custom writer
+aborts **before erase or programming**.
 
 This was important because earlier experimental writers could communicate with the USB bridge even when the cartridge itself was absent or not electrically ready.
 
@@ -2295,6 +2299,24 @@ read-command builder, verification extent and comparison helpers, and generic
 linear verifier were removed. No erase, programming, or unsupported-partial
 behavior changed.
 
+### 36.34 0.7.13 — bounded readiness retry
+
+The writer preflight, shared read-only cartridge startup, and wipe preflight
+now tolerate a device that initially returns `0x98 -> 00` while the inserted
+cartridge becomes ready. They perform at most five readiness checks separated
+by 100 ms, retrying only the explicit `00` state. A transport failure or
+unexpected byte still fails immediately, and five `00` responses fail before
+any destructive action. The writer and reader's surrounding capture-derived
+`0x97` and `0x99` startup operations are unchanged.
+
+After card inspection and after any successfully initialized save-reader
+operation, the read-only tools replay the capture-derived close-manager
+transition already used by the writer: three `0x98 -> 01` polls followed by a
+1000-ms quiet interval. This is intended to leave the bridge in a ready state
+for a following writer or wipe process without requiring a USB unplug/replug
+cycle. It remains non-destructive and is reported as a session close failure
+if any poll does not return `01`.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2306,7 +2328,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.12 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-MiB/tiny-tail hardware confirmation on Apple Silicon
+macOS       supported target; current 0.7.13 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-MiB/tiny-tail hardware confirmation on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2727,7 +2749,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.12**, the project has an object-oriented structural model:
+At shared toolset version **0.7.13**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

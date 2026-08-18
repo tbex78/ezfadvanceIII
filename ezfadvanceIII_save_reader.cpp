@@ -36,7 +36,7 @@
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"
 
-// EZF Advance III save reader 0.7.12, read-only dumper.
+// EZF Advance III save reader 0.7.13, read-only dumper.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Save-read protocol behavior remains unchanged from 0.5.10.
 //
@@ -573,6 +573,12 @@ int main(int argc, char** argv)
     if (original_manager_read_prime(h)) {
         SaveExtractor extractor(h, output, requested_rom);
         result = extractor.run();
+        if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+            std::cerr << "Save-reader operation finished, but the "
+                         "capture-derived read-session close transition "
+                         "failed.\n";
+            if (result == 0) result = 2;
+        }
     }
     else
         std::cerr << "Card initialization/read-prime failed.\n";

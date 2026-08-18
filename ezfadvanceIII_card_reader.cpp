@@ -33,7 +33,7 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 
-// EZF Advance III card reader 0.7.12, read-only inspector.
+// EZF Advance III card reader 0.7.13, read-only inspector.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Card-read protocol behavior remains unchanged from 0.5.13.
 //
@@ -415,6 +415,12 @@ static int inspect_card(libusb_device_handle* h)
             span_end = (i+1 < entries.size()) ? entries[i+1].start : loader_start;
         const GbaHeader g = read_gba_header(h,entries[i].start);
         print_rom(i+1,entries[i],g,span_end);
+    }
+
+    if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+        std::cerr << "Card inspection succeeded, but the capture-derived "
+                     "read-session close transition failed.\n";
+        return 2;
     }
 
     std::cout << "\nNo erase or ROM programming operation was performed.\n";

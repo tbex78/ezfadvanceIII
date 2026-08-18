@@ -173,7 +173,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.12 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.13 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -385,6 +385,8 @@ private:
 // Existing v33 cartridge-readiness, EEPROM safety, loader templates, and all
 // previously hardware-proven <=16-MiB behaviors are preserved.
 static constexpr unsigned COMMAND_DATA_SETTLE_US = 750; // exact legacy DLL busy-wait
+static constexpr unsigned READINESS_ATTEMPTS = 5;
+static constexpr auto READINESS_RETRY_DELAY = std::chrono::milliseconds(100);
 
 static constexpr uint32_t GBA_ROM_BASE = 0x08000000u;
 
@@ -1188,34 +1190,47 @@ static bool original_bridge_startup_979899(libusb_device_handle* h)
     // A run with no cartridge inserted fails at this exact step.  Keep the
     // protocol unchanged, but turn that condition into an explicit preflight
     // diagnostic so the program stops before any erase/program operation.
-    if (!bulk_out(h, c98)) {
-        std::cerr
-            << "\nCARTRIDGE PREFLIGHT FAILED: could not send the 0x98 "
-               "readiness command.\n"
-            << "Check the ezfadvanceIII USB connection and try again.\n"
-            << "No erase or program operation was attempted.\n";
-        return false;
+    bool ready = false;
+    for (unsigned attempt = 1; attempt <= READINESS_ATTEMPTS; ++attempt) {
+        if (!bulk_out(h, c98)) {
+            std::cerr
+                << "\nCARTRIDGE PREFLIGHT FAILED: could not send the 0x98 "
+                   "readiness command.\n"
+                << "Check the ezfadvanceIII USB connection and try again.\n"
+                << "No erase or program operation was attempted.\n";
+            return false;
+        }
+        if (!bulk_in_exact(h, response, 1)) {
+            std::cerr
+                << "\nGBA CARTRIDGE NOT DETECTED / NOT READY.\n"
+                << "The ezfadvanceIII device did not return the required 0x98 "
+                   "readiness byte (expected 01).\n"
+                << "No erase or program operation was attempted.\n";
+            return false;
+        }
+        if (response[0] == 0x01) {
+            ready = true;
+            break;
+        }
+        if (response[0] != 0x00) {
+            std::cerr << "\nUnexpected 0x98 readiness value 0x"
+                      << std::hex << std::setw(2) << std::setfill('0')
+                      << static_cast<unsigned>(response[0])
+                      << std::dec << std::setfill(' ') << ".\n"
+                      << "No erase or program operation was attempted.\n";
+            return false;
+        }
+        if (attempt != READINESS_ATTEMPTS) {
+            std::cout << "0x98 readiness returned 00; retrying ("
+                      << attempt << '/' << READINESS_ATTEMPTS << ")...\n";
+            std::this_thread::sleep_for(READINESS_RETRY_DELAY);
+        }
     }
-
-    if (!bulk_in_exact(h, response, 1)) {
+    if (!ready) {
         std::cerr
             << "\nGBA CARTRIDGE NOT DETECTED / NOT READY.\n"
-            << "The ezfadvanceIII device did not return the required 0x98 readiness "
-               "byte (expected 01).\n"
-            << "Make sure an EZ-Flash Advance III cartridge is fully inserted, "
-               "then retry.\n"
-            << "No erase or program operation was attempted.\n";
-        return false;
-    }
-
-    if (response[0] != 0x01) {
-        std::cerr
-            << "\nGBA CARTRIDGE NOT DETECTED / NOT READY.\n"
-            << "0x98 readiness returned 0x"
-            << std::hex << std::setw(2) << std::setfill('0')
-            << static_cast<unsigned>(response[0])
-            << std::dec << std::setfill(' ')
-            << "; expected 0x01.\n"
+            << "0x98 readiness remained 0x00 after " << READINESS_ATTEMPTS
+            << " checks.\n"
             << "Make sure an EZ-Flash Advance III cartridge is fully inserted, "
                "then retry.\n"
             << "No erase or program operation was attempted.\n";
