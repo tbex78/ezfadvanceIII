@@ -98,7 +98,8 @@ Executable: `ezfadvanceIII_wipe_card`
 Responsibilities:
 
 - require the explicit `--yes-really-wipe` authorization option;
-- verify cartridge readiness before sending any erase command;
+- establish the full manager-compatible `0x97 -> 0x98 -> 0x99` bridge state
+  and verify cartridge readiness before sending any erase command;
 - erase all four physical flash windows using the captured sector geometry;
 - perform final flash status cleanup;
 - perform the two capture-derived blank-check reads.
@@ -162,8 +163,9 @@ The manager-compatible startup sequence is:
 3. send `0x99` with parameter `01` and require the 13-byte command echo.
 
 After card inspection or a successfully initialized save-reader operation, the
-read-only tool closes the manager-style session with the capture-derived three
-`0x98 -> 01` polls and 1000-ms quiet interval.
+read-only tool performs three `0x98 -> 01` polls and a 1000-ms quiet interval.
+This is a readiness transition, not a substitute for destructive tools
+establishing their own full manager-compatible startup state.
 
 For manager-style command/data transactions, the implementation preserves the
 legacy 750 microsecond command-to-data delay. The wipe workflow retains its
@@ -313,8 +315,9 @@ skipped, and distinguish that outcome from verification success.
 1. Dry-run writer execution must not initialize libusb or access the device.
 2. Writer erase/program operations require `--yes-really-write`.
 3. Full-card erase requires `--yes-really-wipe`.
-4. Wipe must require the proven `0x98 -> 01` readiness response before erase;
-   an explicit transient `00` may be retried under the bounded startup policy.
+4. Wipe must complete `0x97 -> 00`, require the proven `0x98 -> 01` readiness
+   response, and validate the `0x99` parameter-`01` echo before erase; an
+   explicit transient `00` may be retried under the bounded startup policy.
 5. Failed writer preflight must occur before any erase or program operation.
 6. Read-only programs must not expose destructive methods.
 7. Unsupported mappings and save configurations must fail conservatively.
@@ -410,7 +413,7 @@ Acceptance criteria for a supported card:
 
 Acceptance criteria:
 
-- readiness succeeds before erase;
+- full `0x97 -> 0x98 -> 0x99` startup and readiness succeed before erase;
 - all four windows are erased;
 - cleanup succeeds;
 - both captured blank-check reads contain only `0xFF`.

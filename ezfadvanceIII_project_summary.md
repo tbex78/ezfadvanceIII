@@ -947,10 +947,15 @@ preflight retry only a valid `0x98 -> 00` response up to five times with
 response values, or five consecutive `00` responses fail safely. The writer
 and reader's surrounding `0x97` and `0x99` sequence and all flash protocol
 behavior are unchanged. After card inspection and after any successfully
-initialized save-reader operation, the read-only tools now also replay the
-already capture-derived close-manager transition—three successful `0x98` polls
-followed by a 1000-ms quiet interval—before releasing the device, to avoid
-leaving the bridge in the observed stale session state.
+initialized save-reader operation, the read-only tools replay three successful
+`0x98` polls followed by a 1000-ms quiet interval. Hardware testing showed
+that this restores readiness but does not by itself guarantee an erase-ready
+bridge: a following wipe returned `0x98 -> 01`, then rejected the first `0x96`
+erase status `01`. The wipe now establishes its own known-good bridge state
+with the same capture-derived `0x97 -> 0x98 -> 0x99` startup used by the
+writer. A repeated card-reader-to-wipe test succeeded without unplugging the
+USB device. The writer already performed that full startup and required no
+corresponding protocol change.
 
 
 ## Current project status

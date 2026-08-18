@@ -2310,12 +2310,21 @@ any destructive action. The writer and reader's surrounding capture-derived
 `0x97` and `0x99` startup operations are unchanged.
 
 After card inspection and after any successfully initialized save-reader
-operation, the read-only tools replay the capture-derived close-manager
-transition already used by the writer: three `0x98 -> 01` polls followed by a
-1000-ms quiet interval. This is intended to leave the bridge in a ready state
-for a following writer or wipe process without requiring a USB unplug/replug
-cycle. It remains non-destructive and is reported as a session close failure
-if any poll does not return `01`.
+operation, the read-only tools replay three `0x98 -> 01` polls followed by a
+1000-ms quiet interval. The first hardware retest proved that this restores
+the readiness response, but not necessarily an erase-ready bridge: a wipe
+started without unplugging passed `0x98 -> 01`, then safely stopped when its
+first `0x96` erase returned status `01` instead of the required `00`. No later
+erase command was issued.
+
+The wipe preflight was therefore brought to the same known-good bridge-startup
+boundary already owned by the writer: require `0x97 -> 00`, bounded
+`0x98 -> 01`, then the exact `0x99` parameter-`01` echo before entering the
+otherwise unchanged captured erase sequence. Repeating card reader then wipe
+without an unplug/replug cycle completed successfully on real hardware. The
+writer already performed the full manager startup and needed no protocol
+change. This evidence supports describing the three-poll reader epilogue as a
+readiness transition, not as a complete bridge reset.
 
 ---
 
