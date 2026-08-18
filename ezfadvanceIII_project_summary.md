@@ -976,6 +976,14 @@ delay. The completed verification mappings are unchanged. The verbose
 `resultmultiroms32MiB.log` capture remains a local hardware artifact and is
 ignored; its durable results are summarized in this document.
 
+The 0.7.14 stabilization checkpoint is hardware-confirmed on macOS / Apple
+Silicon. Card reader followed immediately by wipe, without unplugging the USB
+device, completed successfully. Save reader followed immediately by a real
+writer operation, also without unplugging, completed successfully. These two
+chains confirm that the read-only epilogue restores readiness and that both
+destructive workflows independently establish the required full
+`0x97 -> 0x98 -> 0x99` bridge state.
+
 ## Current project status
 
 At shared version **0.7.14**, the project has an object-oriented structural model of original EZ3Manager behavior:
@@ -991,6 +999,7 @@ At shared version **0.7.14**, the project has an object-oriented structural mode
 - catalog `type` is ROM-size based;
 - catalog `map` uses capture-derived values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` occurs with both;
 - hardware A/B testing proves map correctness is independent of flash verification: both Classic NES map-5 images fully verify but fail at runtime with an identical Game Pak error screen, whereas map 4 works;
+- 0.7.14 no-unplug transition tests pass for card-reader-to-wipe and save-reader-to-writer workflows;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;

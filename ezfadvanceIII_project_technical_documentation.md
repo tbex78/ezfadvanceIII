@@ -2355,6 +2355,19 @@ flash protocol sequence changed. `resultmultiroms32MiB.log` is intentionally a
 local ignored hardware artifact; the durable exact-32-MiB results are recorded
 in sections 11.5 and 36.33.
 
+Real-hardware stabilization then exercised both process boundaries without a
+USB unplug/replug cycle:
+
+```text
+card reader -> wipe       passed
+save reader -> writer     passed
+```
+
+The wipe and writer each completed their own full `0x97 -> 0x98 -> 0x99`
+startup before destructive work. Together these tests hardware-confirm the
+0.7.14 ownership rule: the read-only epilogue is a readiness transition only,
+while every destructive workflow establishes its own complete bridge state.
+
 ---
 
 ## 37. Build environment and native platform scope
