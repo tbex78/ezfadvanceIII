@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.8`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.8 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window and exact 8-MiB verification paths are hardware-confirmed; the exact 16-MiB path is now extracted and transcript-tested. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.8 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window and exact 8-/16-MiB verification paths are hardware-confirmed. Linux/BSD validation remains pending.
 
 ---
 
@@ -2220,6 +2220,11 @@ verification callback offset and length, and rejects unintended `0020`,
 `0040`, and `00C0` selectors. Policy selection, erase/program behavior, and
 all remaining verification geometries are unchanged.
 
+Real-hardware confirmation subsequently succeeded with an exact 16-MiB image.
+Writing completed, full read-back verification reached and completed the final
+64-KiB block at `0x00ff0000`, and the cartridge booted successfully on a real
+Game Boy Advance.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2231,7 +2236,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.8 baseline compiled and transcript-tested, with partial/exact-8-MiB hardware confirmation on Apple Silicon
+macOS       supported target; current 0.7.8 baseline compiled and transcript-tested, with partial/exact-8-/16-MiB hardware confirmation on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2664,11 +2669,11 @@ At shared toolset version **0.7.8**, the project has an object-oriented structur
 - catalog type is ROM-size based;
 - catalog map uses values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` alone does not distinguish them;
 - map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
-- partial first-window verification is capture- and hardware-proven for the tested small layouts; exact 8-, 16-, 24-, and 32-MiB paths are known, plus the tiny-tail-above-16-MiB path;
+- partial first-window and the extracted exact 8-/16-MiB verification paths are capture-, transcript-, and hardware-proven for the tested layouts; exact 24- and 32-MiB paths are known, plus the tiny-tail-above-16-MiB path;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
 - native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;
-- hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, single 4-MiB verification, and 6-ROM 24-/32-MiB images.
+- hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, 4-, 8-, and exact 16-MiB verification checkpoints, and 6-ROM 24-/32-MiB images.
 
 The current refactored source additionally provides RAII device ownership, an
 injectable USB transport, shared protocol and read-state objects, domain models
