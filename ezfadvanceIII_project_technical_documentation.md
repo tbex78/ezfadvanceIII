@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.13`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.13`<br>
+**Current project/toolset version:** `0.7.14`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.14`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.13 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.14 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Linux/BSD validation remains pending.
 
 ---
 
@@ -2338,6 +2338,25 @@ readiness transition, not as a complete bridge reset.
 
 ---
 
+### 36.35 0.7.14 — read-session transition regression coverage
+
+The post-0.7.13 wipe startup correction is now represented by synchronized
+toolset version 0.7.14. A narrow `ReadSessionTransition` component owns only
+the read-only path's bounded `0x98` readiness polling and its three-poll
+readiness epilogue. Its transcript fixture asserts immediate success, explicit
+`00` retries with 100-ms delays, success after retries, five-attempt
+exhaustion, unexpected-response and transport failures, and exactly three
+successful epilogue polls followed by exactly one 1000-ms delay.
+
+The reader epilogue remains classified as a readiness transition rather than
+a full bridge reset. Destructive workflows remain responsible for their own
+complete `0x97 -> 0x98 -> 0x99` startup. No verification mapping or other
+flash protocol sequence changed. `resultmultiroms32MiB.log` is intentionally a
+local ignored hardware artifact; the durable exact-32-MiB results are recorded
+in sections 11.5 and 36.33.
+
+---
+
 ## 37. Build environment and native platform scope
 
 The current source targets C++17 and libusb on Unix-like systems. The portable
@@ -2347,7 +2366,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.13 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-/32-MiB/tiny-tail hardware confirmation on Apple Silicon
+macOS       supported target; current 0.7.14 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-/32-MiB/tiny-tail hardware confirmation on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2768,7 +2787,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.13**, the project has an object-oriented structural model:
+At shared toolset version **0.7.14**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

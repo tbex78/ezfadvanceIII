@@ -167,6 +167,10 @@ read-only tool performs three `0x98 -> 01` polls and a 1000-ms quiet interval.
 This is a readiness transition, not a substitute for destructive tools
 establishing their own full manager-compatible startup state.
 
+The bounded readiness polls and read-only epilogue are owned by the narrow
+`ReadSessionTransition` component and covered by deterministic transport and
+delay-callback transcript tests.
+
 For manager-style command/data transactions, the implementation preserves the
 legacy 750 microsecond command-to-data delay. The wipe workflow retains its
 separately captured timing behavior and must not inherit a delay that was not

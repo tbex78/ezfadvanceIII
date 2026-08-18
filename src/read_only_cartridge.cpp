@@ -1,4 +1,5 @@
 #include "ezfadvance/read_only_cartridge.hpp"
+#include "ezfadvance/read_session_transition.hpp"
 
 #include <algorithm>
 #include <array>
@@ -13,8 +14,6 @@ namespace ezfadvance {
 namespace {
 
 constexpr unsigned timeout_ms = 15000;
-constexpr unsigned readiness_attempts = 5;
-constexpr auto readiness_retry_delay = std::chrono::milliseconds(100);
 
 void writeLe32(std::vector<std::uint8_t>& bytes,
                std::size_t offset,
@@ -77,33 +76,19 @@ bool ReadOnlyCartridge::read(std::uint32_t byte_address,
 bool ReadOnlyCartridge::startup()
 {
     const std::vector<std::uint8_t> c97 = {0x5A,0xA5,0x97,0,0,0,0,0,0,0,0,0,0};
-    const std::vector<std::uint8_t> c98 = {0x5A,0xA5,0x98,0,0,0,0,0,0,0,0,0,0};
     const std::vector<std::uint8_t> c99 = {0x5A,0xA5,0x99,0,1,0,0,0,0,0,0,0,0};
     std::vector<std::uint8_t> response;
     if (!transport_.out(c97, timeout_ms) ||
         !transport_.inExact(response, 1, timeout_ms) || response[0] != 0)
         return false;
 
-    bool ready = false;
-    for (unsigned attempt = 1; attempt <= readiness_attempts; ++attempt) {
-        if (!transport_.out(c98, timeout_ms) ||
-            !transport_.inExact(response, 1, timeout_ms))
-            return false;
-        if (response[0] == 1) {
-            ready = true;
-            break;
-        }
-        if (response[0] != 0)
-            return false;
-        if (attempt != readiness_attempts) {
-            std::cout << "0x98 readiness returned 00; retrying ("
-                      << attempt << '/' << readiness_attempts << ")...\n";
-            std::this_thread::sleep_for(readiness_retry_delay);
-        }
-    }
-    if (!ready) {
-        std::cerr << "GBA CARTRIDGE NOT DETECTED / NOT READY after "
-                  << readiness_attempts << " readiness checks.\n";
+    ReadSessionTransition transition(
+        transport_, [](std::chrono::milliseconds duration) {
+            std::this_thread::sleep_for(duration);
+        });
+    if (!transition.waitUntilReady()) {
+        std::cerr << "GBA CARTRIDGE NOT DETECTED / NOT READY after bounded "
+                     "readiness checks.\n";
         return false;
     }
 
@@ -204,21 +189,16 @@ bool ReadOnlyCartridge::initialize()
 
 bool ReadOnlyCartridge::finishSession()
 {
-    const std::vector<std::uint8_t> c98 = {
-        0x5A,0xA5,0x98,0,0,0,0,0,0,0,0,0,0};
-    std::vector<std::uint8_t> response;
-    std::cout << "Closing manager-style read session: 3 x 0x98 polls...\n";
-    for (unsigned attempt = 1; attempt <= 3; ++attempt) {
-        if (!transport_.out(c98, timeout_ms) ||
-            !transport_.inExact(response, 1, timeout_ms) ||
-            response[0] != 1) {
-            std::cerr << "Read-session close failed at 0x98 poll "
-                      << attempt << "/3.\n";
-            return false;
-        }
+    std::cout << "Finishing read session readiness transition: 3 x 0x98 polls...\n";
+    ReadSessionTransition transition(
+        transport_, [](std::chrono::milliseconds duration) {
+            std::this_thread::sleep_for(duration);
+        });
+    if (!transition.finishReadinessTransition()) {
+        std::cerr << "Read-session readiness transition failed.\n";
+        return false;
     }
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    std::cout << "Read session closed after 1000-ms quiet interval.\n";
+    std::cout << "Readiness transition complete after 1000-ms quiet interval.\n";
     return true;
 }
 

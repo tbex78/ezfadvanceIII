@@ -26,8 +26,9 @@ public:
     bool prepareLinear24MiB();
     bool prepareLinear32MiB();
 
-    // Capture-derived close-manager transition: three successful readiness
-    // polls followed by the observed one-second quiet interval.
+    // Capture-derived readiness transition: three successful readiness polls
+    // followed by the observed one-second quiet interval. This is not a full
+    // bridge reset for a following destructive workflow.
     bool finishSession();
 
 private:
