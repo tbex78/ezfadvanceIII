@@ -7,6 +7,8 @@ experiments/
 misc/
 notes/
 /ezfadvanceIII_0.7.0_developer_recommendations.md
+/ezfadvanceIII_0.7.3_team_review.md
+/ezfadvanceIII_transcript_test_plan.md
 
 # Makefile output binaries
 /ezfadvanceIII_multirom_writer

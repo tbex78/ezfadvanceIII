@@ -1,10 +1,12 @@
 #include "ezfadvance/protocol.hpp"
+#include "transcript_transport.hpp"
 
 #include <cassert>
 #include <chrono>
 #include <cstdint>
 #include <deque>
 #include <limits>
+#include <string>
 #include <vector>
 
 class RecordingTransport final : public ezfadvance::Transport {
@@ -72,33 +74,81 @@ void testCommandLayouts()
             0x00, 0x01, 0x00, 0x00, 0x00, 0x00}));
 }
 
+void testTranscriptDiagnostics()
+{
+    {
+        ezfadvance::test::TranscriptTransport transport;
+        transport.expectOut({0x01}, 10);
+        assert(!transport.complete());
+        assert(transport.error().find("incomplete") != std::string::npos);
+    }
+    {
+        ezfadvance::test::TranscriptTransport transport;
+        assert(!transport.out(std::vector<std::uint8_t>{0x01}, 10));
+        assert(transport.error().find("after transcript end") !=
+               std::string::npos);
+    }
+    {
+        ezfadvance::test::TranscriptTransport transport;
+        transport.expectOut({0x01}, 10);
+        assert(!transport.out(std::vector<std::uint8_t>{0x02}, 10));
+        assert(transport.error().find("transfer 1 OUT mismatch") !=
+               std::string::npos);
+        assert(transport.error().find("first differing byte: 0") !=
+               std::string::npos);
+        assert(transport.error().find("expected (1 bytes)") !=
+               std::string::npos);
+        assert(transport.error().find("received (1 bytes)") !=
+               std::string::npos);
+    }
+    {
+        ezfadvance::test::TranscriptTransport transport;
+        transport.expectOut({0x01}, 10);
+        assert(!transport.out(std::vector<std::uint8_t>{0x01}, 11));
+        assert(transport.error().find("expected timeout") !=
+               std::string::npos);
+    }
+}
+
+void testTranscriptInputModes()
+{
+    ezfadvance::test::TranscriptTransport transport;
+    transport.expectInExact({0x10, 0x20}, 2, 30)
+             .expectInMax({0x30}, 64, 40);
+
+    std::vector<std::uint8_t> response;
+    assert(transport.inExact(response, 2, 30));
+    assert((response == std::vector<std::uint8_t>{0x10, 0x20}));
+    assert(transport.inMax(response, 64, 40));
+    assert((response == std::vector<std::uint8_t>{0x30}));
+    assert(transport.complete());
+}
+
 void testMatchingEchoAndTimeouts()
 {
-    RecordingTransport transport;
-    ezfadvance::Protocol protocol(transport);
     const auto command = ezfadvance::Protocol::command92Two();
-    transport.responses.push_back(command);
+    ezfadvance::test::TranscriptTransport transport;
+    transport.expectOut(command, 1234)
+             .expectOut({0x55, 0xAA}, 1234)
+             .expectInMax(command, 64, 1234);
+    ezfadvance::Protocol protocol(transport);
 
     assert(protocol.tx92Two(0x55, 0xAA, "match", no_delay));
-    assert(transport.writes.size() == 2);
-    assert(transport.writes[0] == command);
-    assert((transport.writes[1] ==
-            std::vector<std::uint8_t>{0x55, 0xAA}));
-    assert((transport.timeouts ==
-            std::vector<unsigned>{1234, 1234, 1234}));
-    assert((transport.maxima == std::vector<std::size_t>{64}));
+    assert(transport.complete());
+    assert(transport.error().empty());
 }
 
 void testSelectorAndValuePreserved()
 {
-    RecordingTransport transport;
-    ezfadvance::Protocol protocol(transport);
     const auto command = ezfadvance::Protocol::command92One(0xC7);
-    transport.responses.push_back(command);
+    ezfadvance::test::TranscriptTransport transport;
+    transport.expectOut(command, 1234)
+             .expectOut({0xE3}, 1234)
+             .expectInMax(command, 64, 1234);
+    ezfadvance::Protocol protocol(transport);
 
     assert(protocol.tx92One(0xC7, 0xE3, "selector", no_delay));
-    assert(transport.writes[0] == command);
-    assert((transport.writes[1] == std::vector<std::uint8_t>{0xE3}));
+    assert(transport.complete());
 }
 
 void testEchoMismatch()
@@ -171,6 +221,8 @@ void testCustomSettleDelay()
 int main()
 {
     testCommandLayouts();
+    testTranscriptDiagnostics();
+    testTranscriptInputModes();
     testMatchingEchoAndTimeouts();
     testSelectorAndValuePreserved();
     testEchoMismatch();
