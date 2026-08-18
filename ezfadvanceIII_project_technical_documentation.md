@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.10`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.10 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-MiB, and tiny-tail verification paths are hardware-confirmed; exact 24 MiB is extracted and transcript-tested. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.10 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-MiB, and tiny-tail verification paths are hardware-confirmed. Linux/BSD validation remains pending.
 
 ---
 
@@ -2262,6 +2262,13 @@ uses block-distinct data, verifies every callback, rejects the wrong size, and
 proves `0020`, `0040`, and `0080` are absent. Exact 32-MiB verification remains
 unchanged in the legacy writer.
 
+Real-hardware confirmation subsequently used an exact five-ROM
+`0x01800000` image. Programming and the preserved 125-ms transition succeeded,
+and full read-back verification completed through the final 64-KiB block at
+`0x017f0000`. Card inspection reported the expected layout, menu behavior was
+correct, and all selected games launched successfully on a real Game Boy
+Advance.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2706,7 +2713,7 @@ At shared toolset version **0.7.10**, the project has an object-oriented structu
 - catalog type is ROM-size based;
 - catalog map uses values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` alone does not distinguish them;
 - map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
-- partial first-window, extracted exact 8-/16-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven for the tested layouts; exact 24- and 32-MiB paths are known;
+- partial first-window, extracted exact 8-/16-/24-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven for the tested layouts; the exact 32-MiB path is known;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
 - native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;

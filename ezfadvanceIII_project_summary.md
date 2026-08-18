@@ -908,6 +908,12 @@ block-distinct data, checks every callback, rejects wrong sizes, and proves
 that `0020`, `0040`, and `0080` selectors are absent. Exact 32-MiB verification
 remains in the legacy writer verifier.
 
+The extracted path was subsequently confirmed on real hardware with an exact
+five-ROM `0x01800000` image. Programming succeeded, the preserved 125-ms
+transition completed, and full read-back verification reached the final
+64-KiB block at `0x017f0000`. Card inspection and menu behavior were correct,
+and all selected games launched successfully on a real Game Boy Advance.
+
 
 ## Current project status
 
@@ -924,7 +930,7 @@ At shared version **0.7.10**, the project has an object-oriented structural mode
 - catalog `type` is ROM-size based;
 - catalog `map` uses capture-derived values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` occurs with both;
 - hardware A/B testing proves map correctness is independent of flash verification: both Classic NES map-5 images fully verify but fail at runtime with an identical Game Pak error screen, whereas map 4 works;
-- partial first-window, extracted exact 8-/16-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts; exact 24- and 32-MiB paths are also known;
+- partial first-window, extracted exact 8-/16-/24-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts; the exact 32-MiB path is also known;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;
 - paired FFTA evidence proves that non-SRAM save-library signatures may survive SRAM patching while runtime save code changes;
