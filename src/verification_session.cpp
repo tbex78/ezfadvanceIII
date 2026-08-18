@@ -238,6 +238,39 @@ bool VerificationSession::verifyExact24MiB(
     return verifyLinear(image, image.size(), block_verified);
 }
 
+bool VerificationSession::verifyExact32MiB(
+    const std::vector<std::uint8_t>& image,
+    const BlockVerifiedCallback& block_verified) const
+{
+    if (image.size() != four_window_size)
+        throw std::invalid_argument(
+            "exact 32-MiB verification requires a 32-MiB image");
+
+    if (!statusSequence()) return false;
+    if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY256 55AA")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 A")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 B")) return false;
+    if (!protocol_.tx92Two(0x02, 0x00, "VERIFY256 0200")) return false;
+
+    delay_(std::chrono::microseconds(125000));
+
+    if (!protocol_.tx92Two(0xAA, 0x55, "VERIFY256 AA55")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 C")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 D")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 E")) return false;
+    if (!protocol_.tx92One(0x00, 0xAA, "VERIFY256 selector0 AA")) return false;
+    if (!protocol_.tx92One(0x00, 0x55, "VERIFY256 selector0 55")) return false;
+    if (!protocol_.tx92One(0x01, 0x06, "VERIFY256 selector1 06")) return false;
+
+    if (!statusSequence()) return false;
+    if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY256READ 55AA")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256READ 0000 A")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256READ 0000 B")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256READ 0000 C")) return false;
+
+    return verifyLinear(image, image.size(), block_verified);
+}
+
 bool VerificationSession::verifyLinear(
     const std::vector<std::uint8_t>& image,
     std::size_t verify_size,

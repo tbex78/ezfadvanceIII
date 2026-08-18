@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.11**.
+Current shared project/toolset version covered by this summary: **0.7.12**.
 
 All mainline utilities carry this same version:
 
@@ -774,7 +774,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.11 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.12 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -923,10 +923,23 @@ through `type 9` = 64 KiB). Invalid catalog size classes or extents are reported
 explicitly instead of producing a wrapped address. USB and card state behavior
 are unchanged.
 
+## 0.7.12 release changes
+
+**0.7.12** moves the final exact 32-MiB verification path into
+`VerificationSession`. The capture-derived transition deliberately emits no
+`00C0` selector because programming already ended in that window. Its complete
+transcript preserves `55AA / 0000 / 0000 / 0200`, exactly one
+`125000`-microsecond delay immediately before `AA55`, and all 512 global-linear
+64-KiB reads through final offset `0x01ff0000`. The fixture uses block-distinct
+data, checks every callback, rejects wrong sizes, and proves `0020`, `0040`,
+`0080`, and `00C0` selectors are absent. With every supported verification
+path delegated, the now-dead legacy writer-side read command, extent,
+comparison, and generic verifier were removed.
+
 
 ## Current project status
 
-At shared version **0.7.11**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.12**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -969,4 +982,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.11 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.12 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

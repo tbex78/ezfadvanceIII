@@ -173,7 +173,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.11 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.12 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -1661,33 +1661,6 @@ static bool flash_status_sequence(libusb_device_handle* h)
 // sequence restricted to that tiny-tail geometry; a larger partial BANK2
 // multi-ROM image previously produced a boundary false negative.
 
-// 256MBits-rom.pcap exact transition from the 0x00C0 program window to
-// 32-MiB linear reads. A 125-ms quiet interval occurs after the 0x0200 word.
-static bool flash_256mb_prepare_linear_verify(libusb_device_handle* h)
-{
-    std::cout << "\nPreparing 256-Mbit linear read/verify mapping...\n";
-    if (!flash_status_sequence(h)) return false;
-    if (!tx92_2(h,0x55,0xAA,"VERIFY256 55AA")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY256 0000 A")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY256 0000 B")) return false;
-    if (!tx92_2(h,0x02,0x00,"VERIFY256 0200")) return false;
-    std::cout << "    VERIFY256 pre-AA55 settle: 125000 us\n";
-    std::this_thread::sleep_for(std::chrono::microseconds(125000));
-    if (!tx92_2(h,0xAA,0x55,"VERIFY256 AA55")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY256 0000 C")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY256 0000 D")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFY256 0000 E")) return false;
-    if (!tx92_1(h,0x00,0xAA,"VERIFY256 selector0 AA")) return false;
-    if (!tx92_1(h,0x00,0x55,"VERIFY256 selector0 55")) return false;
-    if (!tx92_1(h,0x01,0x06,"VERIFY256 selector1 06")) return false;
-    if (!flash_status_sequence(h)) return false;
-    if (!tx92_2(h,0x55,0xAA,"VERIFYREAD 55AA")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYREAD 0000 A")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYREAD 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"VERIFYREAD 0000 C")) return false;
-    return true;
-}
-
 static bool erase_sector(libusb_device_handle* h,
                          uint32_t word_address,
                          size_t index,
@@ -1882,24 +1855,6 @@ static std::vector<uint8_t> make_program_command(uint32_t byte_address,
     return c;
 }
 
-static std::vector<uint8_t> make_read_command(uint32_t byte_address,
-                                              uint32_t length)
-{
-    if (byte_address & 1u)
-        throw std::runtime_error("read address must be word-aligned");
-
-    const uint32_t word_address = byte_address / 2u;
-    std::vector<uint8_t> c = {
-        0x5A,0xA5,0x91,0x00,
-        0,0,0,0,
-        0,0,0,0,
-        0x00
-    };
-    write_le32(c, 4, word_address);
-    write_le32(c, 8, length);
-    return c;
-}
-
 static bool program_transaction_single(libusb_device_handle* h,
                                        uint32_t byte_address,
                                        const uint8_t* data,
@@ -1988,82 +1943,6 @@ static bool program_image(libusb_device_handle* h,
                 h, static_cast<uint32_t>(local_off),
                 image.data() + off, n, verbose))
             return false;
-        off += n;
-        progress.update(off);
-    }
-    return true;
-}
-
-static size_t verification_extent(const std::vector<uint8_t>& image)
-{
-    size_t verify_size = image.size();
-
-    // 2MB.pcap and 2_2MB.pcap prove that a partial first-window image is read
-    // back through the end of the containing 64-KiB block. Bytes beyond the
-    // programmed image extent are expected to remain erased (0xFF).
-    if (image.size() < FLASH_WINDOW_SIZE) {
-        verify_size =
-            (image.size() + PROGRAM_BLOCK - 1) & ~(PROGRAM_BLOCK - 1);
-        if (verify_size != image.size()) {
-            std::cout << "Partial BANK0 verify extent rounded to 64-KiB block: 0x"
-                      << std::hex << verify_size << std::dec << " bytes\n";
-        }
-    }
-
-    return verify_size;
-}
-
-static bool compare_verify_block(const std::vector<uint8_t>& image,
-                                 size_t absolute_off,
-                                 const std::vector<uint8_t>& got)
-{
-    for (size_t i = 0; i < got.size(); ++i) {
-        const size_t absolute = absolute_off + i;
-        const uint8_t expected =
-            (absolute < image.size()) ? image[absolute] : 0xFF;
-
-        if (got[i] != expected) {
-            std::cerr << "VERIFY FAILED at byte 0x" << std::hex << absolute
-                      << ": expected 0x" << static_cast<unsigned>(expected)
-                      << " got 0x" << static_cast<unsigned>(got[i])
-                      << std::dec << '\n';
-            return false;
-        }
-    }
-    return true;
-}
-
-// Capture-proven global-linear verification. Current evidence covers partial
-// first-window images (~1 MiB, ~2 MiB, exact 4 MiB), exact 8 MiB, exact 16 MiB,
-// exact 24 MiB, exact 32 MiB, and the captured tiny BANK2-tail case.
-static bool verify_image_linear(libusb_device_handle* h,
-                                const std::vector<uint8_t>& image,
-                                bool verbose)
-{
-    std::cout << "\n========================================\n"
-              << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
-              << "========================================\n";
-
-    const size_t verify_size = verification_extent(image);
-    ProgressBar progress("Verify", verify_size, true, !verbose);
-
-    for (size_t off = 0; off < verify_size; ) {
-        const size_t n = std::min(PROGRAM_BLOCK, verify_size - off);
-        const auto cmd = make_read_command(
-            static_cast<uint32_t>(off), static_cast<uint32_t>(n));
-        if (!bulk_out(h, cmd)) return false;
-
-        std::vector<uint8_t> got;
-        if (!bulk_in_exact(h, got, n)) return false;
-
-        if (!compare_verify_block(image, off, got))
-            return false;
-
-        if (verbose) {
-            std::cout << "verified card byte 0x" << std::hex << std::setw(8)
-                      << std::setfill('0') << off << " length 0x" << n
-                      << std::dec << '\n';
-        }
         off += n;
         progress.update(off);
     }
@@ -2979,9 +2858,6 @@ public:
     bool program(const std::vector<uint8_t>& image) {
         return program_image(handle_, image, verbose_);
     }
-    bool verify(const std::vector<uint8_t>& image) {
-        return verify_image_linear(handle_, image, verbose_);
-    }
     bool verifyPartialFirstWindow(const std::vector<uint8_t>& image) {
         std::cout << "\nPreparing capture-proven partial first-window linear "
                      "read/verify state...\n"
@@ -3094,8 +2970,25 @@ public:
                 }
             });
     }
-    bool prepare32MiBVerification() {
-        return flash_256mb_prepare_linear_verify(handle_);
+    bool verifyExact32MiB(const std::vector<uint8_t>& image) {
+        std::cout
+            << "\nPreparing 256-Mbit / 32-MiB linear read/verify mapping...\n"
+            << "    preserved pre-AA55 settle: 125000 us\n"
+            << "\n========================================\n"
+            << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
+            << "========================================\n";
+        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        return verification_.verifyExact32MiB(
+            image,
+            [&](size_t offset, size_t length) {
+                if (verbose_) {
+                    std::cout << "verified card byte 0x" << std::hex
+                              << std::setw(8) << std::setfill('0') << offset
+                              << " length 0x" << length << std::dec << '\n';
+                } else {
+                    progress.update(offset + length);
+                }
+            });
     }
 
 private:
@@ -3337,15 +3230,11 @@ int main(int argc, char** argv)
             // Compact packing now turns the Piano+MegaManZ case into the
             // original manager's exact 8-MiB geometry, so it remains entirely
             // on the simple capture-linear path.
-            const auto verify_after = [&](bool prepared) {
-                ok = prepared;
-                if (ok) ok = card_writer.verify(image);
-                full_verify_completed = ok;
-            };
             const ezfadvance::VerificationPolicy verification_policy;
             switch (verification_policy.modeFor(image.size())) {
             case ezfadvance::VerificationMode::exact_32_mib:
-                verify_after(card_writer.prepare32MiBVerification());
+                ok = card_writer.verifyExact32MiB(image);
+                full_verify_completed = ok;
                 break;
             case ezfadvance::VerificationMode::exact_24_mib:
                 ok = card_writer.verifyExact24MiB(image);

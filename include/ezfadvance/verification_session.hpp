@@ -18,6 +18,7 @@ public:
     static constexpr std::size_t first_window_size = 0x800000;
     static constexpr std::size_t two_window_size = 0x1000000;
     static constexpr std::size_t three_window_size = 0x1800000;
+    static constexpr std::size_t four_window_size = 0x2000000;
 
     using BlockVerifiedCallback =
         std::function<void(std::size_t offset, std::size_t length)>;
@@ -54,6 +55,12 @@ public:
     // 4_4_4_4_8MB.pcap: explicit 0x00C0 mapping transition followed by
     // 384 global-linear 0x91 reads.
     bool verifyExact24MiB(
+        const std::vector<std::uint8_t>& image,
+        const BlockVerifiedCallback& block_verified = {}) const;
+
+    // 256MBits-rom.pcap: transition from the already-selected 0x00C0 program
+    // window without emitting another window selector, then 512 linear reads.
+    bool verifyExact32MiB(
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 
