@@ -673,6 +673,9 @@ The current durable support boundary is:
 | Linux/BSD physical hardware operation | applicable | build target | pending |
 
 Known open boundaries include the original manager's official-ROM size
-algorithm, general EZ3 density detection, multi-ROM save-bank switching, EEPROM map-4
-versus map-5 inference, FLASH1M-specific save-cycle validation, menu behavior
-above eight active entries, and Linux/BSD hardware qualification.
+algorithm, general EZ3 density detection, multi-ROM save-bank switching,
+EEPROM map-4 versus map-5 discrimination, FLASH1M-specific save-cycle
+validation, menu behavior above eight active entries, and Linux/BSD hardware
+qualification. EEPROM map-4/map-5 discrimination is the next active engineering
+task; a generic rule requires direct capture or controlled hardware evidence
+and must not be inferred from ROM titles, save-library strings, or assumptions.

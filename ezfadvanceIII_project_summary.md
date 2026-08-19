@@ -764,7 +764,10 @@ higher-window extents remain deliberately unproven.
 
 ### EEPROM map-4 / map-5 discriminator
 
-`EEPROM_V124` is proven with both map 4 and map 5. The missing rule is the generic ROM-level property that makes EZ3Manager choose one or the other.
+`EEPROM_V124` is proven with both map 4 and map 5. The missing discriminator is
+the next active engineering task. Any generic rule must come from direct
+original-manager capture or controlled hardware evidence; ROM titles,
+save-library strings, and assumptions are not sufficient.
 
 The Classic NES A/B tests prove map 4 and map 5 are not interchangeable: map 4 works, while map 5 still writes and fully verifies but is rejected at runtime with the same `GAME PACK ERROR / TURN THE POWER OFF.` screen in both tested titles.
 
@@ -1147,7 +1150,9 @@ At shared version **0.7.23**, the project has an object-oriented structural mode
 - native scope is macOS/Linux/BSD through libusb; Windows users should use a Linux VM with USB passthrough;
 - real hardware now validates 1-/2-/4-MiB partial-first-window checkpoints, exact 8-/16-/24-/32-MiB paths, explicit partial 12-/20-/28-MiB paths, and the Fire-Emblem-style tiny-tail checkpoint, plus the documented map and multi-ROM layouts.
 
-The remaining work is primarily **expanding evidence coverage**, especially the EEPROM map-4/map-5 discriminator, 9+ menu counts, save-bank behavior, and Linux/BSD hardware validation.
+The next active engineering task is the **EEPROM map-4/map-5 discriminator**,
+which requires direct capture or controlled hardware evidence. Later work
+includes 9+ menu counts, save-bank behavior, and Linux/BSD hardware validation.
 
 ## Multi-ROM evidence carried into 0.6.0
 

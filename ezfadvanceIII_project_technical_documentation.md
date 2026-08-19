@@ -2919,7 +2919,10 @@ Classic NES Super Mario / Castlevania -> map 4
 Tales of Phantasia                    -> map 5
 ```
 
-The open question is the generic ROM-level property—likely related to EEPROM capacity/configuration—that original EZ3Manager uses to choose between them.
+The discriminator used by original EZ3Manager remains unknown. Recovering it is
+the next active engineering task, and any generic rule must come from direct
+capture or controlled hardware evidence. ROM titles, save-library strings, and
+assumptions are not sufficient.
 
 The Classic NES A/B tests prove the distinction is runtime-significant rather than cosmetic catalog metadata: both titles fully verify when forced to map 5, yet both reject that configuration with the identical `GAME PACK ERROR / TURN THE POWER OFF.` screen. Map 4 works normally.
 
@@ -3032,4 +3035,7 @@ checkpoints completed during this refactor covered card inspection, byte-stable
 save extraction, full-card wipe/blank verification, and write/full read-back
 verification.
 
-Remaining work centers on 9+ menu counts, the EEPROM map-4/map-5 discriminator, save-bank behavior, additional save-library families, and Linux/BSD hardware validation.
+The next active engineering task is the EEPROM map-4/map-5 discriminator,
+using direct capture or controlled hardware evidence only. Remaining work also
+includes 9+ menu counts, save-bank behavior, additional save-library families,
+and Linux/BSD hardware validation.
