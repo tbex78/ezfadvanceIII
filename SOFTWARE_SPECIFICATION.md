@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.18` toolset, including the guarded
+**Specification baseline:** shared `0.7.19` toolset, including the guarded
 official-cartridge detection and raw-extraction increment of 2026-08-19.
 
 This specification distinguishes capture evidence, deterministic transcript
@@ -119,6 +119,9 @@ conservatively.
 Classification alone does not authorize extraction. The first returned block
 must contain the GBA fixed header byte `0x96` at offset `0xB2` and pass the
 header complement checksum before extraction proceeds beyond that block.
+Ordinary official-cartridge inspection must apply the same fixed-byte and
+checksum requirements before labeling the cartridge confirmed and reporting
+its header. Rejection must attempt the normal read-session cleanup.
 
 The extraction interface is:
 
@@ -640,7 +643,7 @@ The current durable support boundary is:
 |---|---|---|---|
 | EZ3 inspection and catalog parsing | yes | partial/pure parsing | yes |
 | Official-ROM detection and header inspection | yes | yes | yes, Golden Sun on macOS |
-| Official full scan with 2/4/8/16/32-MiB trimming | scan yes / trim heuristic | yes | pending guarded dump/hash comparison |
+| Official full scan with 2/4/8/16/32-MiB trimming | scan yes / trim heuristic | yes | yes, Golden Sun 8-MiB trim/hash/boot on macOS |
 | Partial first-window verification | yes | yes | yes |
 | Exact 8/16/24/32-MiB verification | yes | yes | yes |
 | Tiny tail immediately above 16 MiB | yes | yes | yes |

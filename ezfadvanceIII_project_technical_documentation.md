@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.18`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.18`<br>
+**Current project/toolset version:** `0.7.19`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.19`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.18 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection and header inspection are hardware-confirmed; guarded extraction/trimming and hash comparison remain pending. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.19 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. Linux/BSD validation remains pending.
 
 ---
 
@@ -2451,8 +2451,7 @@ longer sufficient to authorize a complete dump.
 
 The save reader requires EZ3 classification before parsing a loader or catalog
 or selecting save memory, preventing official-ROM initialization from falling
-through into EZ3-only semantics. Full extraction and trusted populated-region
-hash comparison remain pending, so the feature is not hardware-complete.
+through into EZ3-only semantics.
 
 ### 36.39 0.7.18 — generic official-ROM erased-padding trim
 
@@ -2460,8 +2459,19 @@ Official extraction continues to read the full 32-MiB address space. After a
 successful read and cleanup, a pure tested sizing function finds the final
 non-`FF` byte and rounds its exclusive end up to 2, 4, 8, 16, or 32 MiB. The
 output file contains the selected prefix byte-for-byte; only trailing erased
-padding is removed. Guarded extraction, selected extent, and trusted hash
-comparison remain subject to the official-ROM hardware gate.
+padding is removed. Hardware testing completed the guarded 32-MiB Golden Sun
+scan, selected the correct 8-MiB extent, matched the trusted SHA-256
+`5eb59f508c25548fb0ef72911cc75a81867f16b0ef8fca2a22cb6d026a862cd8`,
+and booted the extracted file successfully on real hardware.
+
+### 36.40 0.7.19 — shared official-header confirmation policy
+
+Ordinary official-cartridge inspection now requires the same GBA fixed byte
+`0x96` and complement checksum used to authorize extraction. Probe behavior
+still selects the candidate official-ROM branch, but the program does not print
+the confirmed official-cartridge report unless the header validation passes.
+Failure attempts the normal read-session cleanup. No classification command,
+EZ3 probe, extraction block count, or word address changed.
 
 ---
 
@@ -2474,7 +2484,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.18 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-/32-MiB/tiny-tail and official-header hardware confirmation on Apple Silicon
+macOS       supported target; current 0.7.19 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon; the new confirmation gate awaits rerun
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2895,7 +2905,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.18**, the project has an object-oriented structural model:
+At shared toolset version **0.7.19**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;
@@ -2913,8 +2923,8 @@ At shared toolset version **0.7.18**, the project has an object-oriented structu
 - native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;
 - official GBA cartridge classification, header inspection, and read-session
   cleanup are transcript-tested and hardware-confirmed on macOS with Golden
-  Sun; full 32-MiB official-ROM extraction is transcript-tested and awaits a
-  hardware dump/hash comparison;
+  Sun; guarded full-address-space extraction, correct 8-MiB trimming, trusted
+  SHA-256 equality, and extracted-file boot are also hardware-confirmed;
 - hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, 4-, 8-, exact 16-/32-MiB, and Fire-Emblem-style tiny-tail verification checkpoints, plus 6-ROM 24-/32-MiB and 16+8+8-MiB full-card images.
 
 The current refactored source additionally provides RAII device ownership, an

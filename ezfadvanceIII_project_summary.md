@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.18**.
+Current shared project/toolset version covered by this summary: **0.7.19**.
 
 All mainline utilities carry this same version:
 
@@ -776,7 +776,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.18 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.19 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1012,9 +1012,7 @@ authorize a dump.
 
 The save reader now explicitly requires `CartridgeKind::ez3_flash` before EZ3
 catalog or save processing, closing the shared-initializer regression. Offline
-tests pass. Full 32-MiB Golden Sun extraction and populated-region comparison
-against a trusted dump/hash remain the hardware gate, so the official-ROM
-feature is not yet closed.
+tests pass.
 
 ## 0.7.18 release changes
 
@@ -1022,12 +1020,24 @@ feature is not yet closed.
 written `.gba` generically. After successful reading and cleanup, the reader
 finds the final non-`FF` byte and selects the smallest 2-, 4-, 8-, 16-, or
 32-MiB extent that contains it. All bytes inside that extent are preserved;
-only trailing erased address-space padding is omitted. The sizing rule is
-unit-tested but remains part of the pending official-ROM hardware gate.
+only trailing erased address-space padding is omitted. Hardware testing with
+Golden Sun completed the guarded 32-MiB scan, selected the correct 8-MiB
+output, matched the trusted SHA-256
+`5eb59f508c25548fb0ef72911cc75a81867f16b0ef8fca2a22cb6d026a862cd8`,
+and booted the extracted file successfully on real hardware.
+
+## 0.7.19 release changes
+
+**0.7.19** makes ordinary official-cartridge inspection use the same GBA fixed
+header byte and complement-checksum confirmation required by extraction.
+Unchanged official-ROM probe behavior is no longer enough to print the
+confirmed official-cartridge report. A rejected header still receives the
+normal read-session cleanup. USB classification, EZ3 probing, extraction read
+count, and word-address progression are unchanged.
 
 ## Current project status
 
-At shared version **0.7.18**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.19**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -1043,8 +1053,10 @@ At shared version **0.7.18**, the project has an object-oriented structural mode
 - 0.7.14 no-unplug transition tests pass for card-reader-to-wipe and save-reader-to-writer workflows;
 - 0.7.15 official-ROM detection/header inspection is hardware-proven on macOS;
 - 0.7.16 adds the transcript-tested 32-MiB raw extraction interface;
-- 0.7.17 guards extraction with header validation and restores the EZ3-only save-reader boundary; guarded full extraction remains hardware-pending;
+- 0.7.17 guards extraction with header validation and restores the EZ3-only save-reader boundary;
 - 0.7.18 trims the completed official-ROM scan to the smallest supported 2/4/8/16/32-MiB extent containing all non-`FF` data;
+- 0.7.19 requires valid GBA fixed-byte/checksum confirmation for ordinary official-cartridge inspection;
+- official Golden Sun extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;
@@ -1075,4 +1087,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.18 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.19 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

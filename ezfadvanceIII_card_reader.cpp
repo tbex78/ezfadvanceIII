@@ -35,7 +35,7 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 
-// EZF Advance III card reader 0.7.18, read-only inspector.
+// EZF Advance III card reader 0.7.19, read-only inspector.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Card-read protocol behavior remains unchanged from 0.5.13.
 //
@@ -266,9 +266,20 @@ static GbaHeader read_gba_header(libusb_device_handle* h, uint32_t start)
 
 static int inspect_official_cartridge(libusb_device_handle* h)
 {
-    const GbaHeader header = read_gba_header(h, 0);
-    if (!header.readable) {
-        std::cerr << "Official GBA cartridge was detected, but its header could not be parsed.\n";
+    std::vector<std::uint8_t> header_bytes;
+    const bool read_ok = read_card(h, 0, header_bytes, 0xC0);
+    const bool header_ok = read_ok &&
+        ezfadvance::CartridgeFormat::validGbaRomHeader(header_bytes);
+    const GbaHeader header = read_ok ? GbaHeader::parse(header_bytes)
+                                     : GbaHeader{};
+    if (!header_ok) {
+        std::cerr << "Official-ROM probe behavior was detected, but the GBA "
+                     "fixed header byte/checksum validation failed; the "
+                     "cartridge is not confirmed as an official GBA ROM.\n";
+        if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+            std::cerr << "Read-session cleanup after header rejection failed.\n";
+            return 2;
+        }
         return 3;
     }
     std::cout << "\n========================================\n"
