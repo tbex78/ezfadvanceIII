@@ -2459,10 +2459,13 @@ Official extraction continues to read the full 32-MiB address space. After a
 successful read and cleanup, a pure tested sizing function finds the final
 non-`FF` byte and rounds its exclusive end up to 2, 4, 8, 16, or 32 MiB. The
 output file contains the selected prefix byte-for-byte; only trailing erased
-padding is removed. Hardware testing completed the guarded 32-MiB Golden Sun
+padding is removed. This is a documented generic sizing heuristic, not a claim
+that every selected size has been established on hardware. Hardware testing
+completed the guarded 32-MiB Golden Sun
 scan, selected the correct 8-MiB extent, matched the trusted SHA-256
 `5eb59f508c25548fb0ef72911cc75a81867f16b0ef8fca2a22cb6d026a862cd8`,
-and booted the extracted file successfully on real hardware.
+and booted the extracted file successfully on real hardware. The 2-, 4-, 16-,
+and 32-MiB sizing outcomes remain without equivalent hardware evidence.
 
 ### 36.40 0.7.19 — shared official-header confirmation policy
 
@@ -2924,7 +2927,8 @@ At shared toolset version **0.7.19**, the project has an object-oriented structu
 - official GBA cartridge classification, header inspection, and read-session
   cleanup are transcript-tested and hardware-confirmed on macOS with Golden
   Sun; guarded full-address-space extraction, correct 8-MiB trimming, trusted
-  SHA-256 equality, and extracted-file boot are also hardware-confirmed;
+  SHA-256 equality, and extracted-file boot are also hardware-confirmed, while
+  the other generic trim sizes are not yet hardware-generalized;
 - hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, 4-, 8-, exact 16-/32-MiB, and Fire-Emblem-style tiny-tail verification checkpoints, plus 6-ROM 24-/32-MiB and 16+8+8-MiB full-card images.
 
 The current refactored source additionally provides RAII device ownership, an

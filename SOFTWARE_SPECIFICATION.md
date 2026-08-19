@@ -643,7 +643,7 @@ The current durable support boundary is:
 |---|---|---|---|
 | EZ3 inspection and catalog parsing | yes | partial/pure parsing | yes |
 | Official-ROM detection and header inspection | yes | yes | yes, Golden Sun on macOS |
-| Official full scan with 2/4/8/16/32-MiB trimming | scan yes / trim heuristic | yes | yes, Golden Sun 8-MiB trim/hash/boot on macOS |
+| Official full scan with 2/4/8/16/32-MiB trailing-`FF` sizing | scan yes / generic sizing heuristic | yes | 8 MiB only: Golden Sun trim/hash/boot on macOS; 2/4/16/32-MiB sizing not yet hardware-generalized |
 | Partial first-window verification | yes | yes | yes |
 | Exact 8/16/24/32-MiB verification | yes | yes | yes |
 | Tiny tail immediately above 16 MiB | yes | yes | yes |

@@ -1017,14 +1017,16 @@ tests pass.
 ## 0.7.18 release changes
 
 **0.7.18** keeps the capture-proven full 32-MiB official-ROM scan but trims the
-written `.gba` generically. After successful reading and cleanup, the reader
-finds the final non-`FF` byte and selects the smallest 2-, 4-, 8-, 16-, or
-32-MiB extent that contains it. All bytes inside that extent are preserved;
-only trailing erased address-space padding is omitted. Hardware testing with
-Golden Sun completed the guarded 32-MiB scan, selected the correct 8-MiB
-output, matched the trusted SHA-256
+written `.gba` using a documented generic heuristic. After successful reading
+and cleanup, the reader finds the final non-`FF` byte and selects the smallest
+2-, 4-, 8-, 16-, or 32-MiB extent that contains it. All bytes inside that
+extent are preserved; only trailing erased address-space padding is omitted.
+Hardware testing with Golden Sun completed the guarded 32-MiB scan, selected
+the correct 8-MiB output, matched the trusted SHA-256
 `5eb59f508c25548fb0ef72911cc75a81867f16b0ef8fca2a22cb6d026a862cd8`,
-and booted the extracted file successfully on real hardware.
+and booted the extracted file successfully on real hardware. That result
+proves the 8-MiB case only; the 2-, 4-, 16-, and 32-MiB sizing outcomes have
+not yet been generalized from hardware evidence.
 
 ## 0.7.19 release changes
 
@@ -1054,9 +1056,9 @@ At shared version **0.7.19**, the project has an object-oriented structural mode
 - 0.7.15 official-ROM detection/header inspection is hardware-proven on macOS;
 - 0.7.16 adds the transcript-tested 32-MiB raw extraction interface;
 - 0.7.17 guards extraction with header validation and restores the EZ3-only save-reader boundary;
-- 0.7.18 trims the completed official-ROM scan to the smallest supported 2/4/8/16/32-MiB extent containing all non-`FF` data;
+- 0.7.18 applies a generic trailing-`FF` heuristic that trims the completed official-ROM scan to the smallest supported 2/4/8/16/32-MiB extent containing all non-`FF` data;
 - 0.7.19 requires valid GBA fixed-byte/checksum confirmation for ordinary official-cartridge inspection;
-- official Golden Sun extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot;
+- official Golden Sun extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot; other heuristic trim sizes are not yet hardware-generalized;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;
