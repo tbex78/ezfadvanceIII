@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.21`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.21`<br>
+**Current project/toolset version:** `0.7.22`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.22`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.21 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, explicit partial 12-MiB, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.22 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, explicit partial 12-MiB, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. The explicit partial 20-MiB path is capture- and transcript-proven and awaits hardware qualification. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD validation remains pending.
 
 ---
 
@@ -74,7 +74,7 @@ The principal shared components are:
 - `SaveMemoryReader`, which owns capture-proven save-bank reads;
 - `VerificationPolicy`, which selects only capture-supported verification geometries;
 - `VerificationSession`, which owns the transport-injectable partial
-  first-window, explicit partial 12-MiB, exact 8-/16-/24-/32-MiB, and
+  first-window, explicit partial 12-/20-MiB, exact 8-/16-/24-/32-MiB, and
   tiny-tail verification transcripts;
 - `WriterOptions`, which separates command-line parsing from image and device operations.
 
@@ -547,7 +547,8 @@ image == 12 MiB            capture/transcript/hardware-proven
 other 8 MiB < image < 16 MiB verification skipped
 image == 16 MiB            full read-back verification
 captured tiny >16-MiB tail full read-back verification
-16 MiB < image < 24 MiB    verification skipped
+image == 20 MiB            capture/transcript-proven; hardware pending
+other 16 MiB < image < 24 MiB verification skipped
 image == 24 MiB            full read-back verification
 24 MiB < image < 32 MiB    verification skipped
 image == 32 MiB            full read-back verification
@@ -2510,6 +2511,22 @@ Existing real-hardware tests prove 1-MiB Classic NES images on the EZ3
 build/program/verify/boot path; physical official-cartridge extraction at
 1 MiB remains pending a trusted dump/hash comparison.
 
+### 36.43 0.7.22 — explicit 20-MiB partial verification transcript
+
+The writer now recognizes exactly `0x01400000` bytes as the capture-proven
+20-MiB partial higher-window checkpoint. `16_4MB.pcap` and `4_8_8MB.pcap`
+independently show the same transition despite different ROM compositions.
+The dedicated `VerificationSession` operation emits the standard status
+sequence followed by `55AA` and three `0000` writes, then performs 320
+global-linear 64-KiB `0x91` reads. The final read begins at `0x013F0000` and
+ends at `0x01400000`.
+
+The transcript test asserts every callback offset and length, block-varying
+payload data, no delay, and the absence of `0200`, `0020`, `0040`, `0080`,
+`00C0`, `AA55`, and the `AA/55/06` selector tail. No other size in the
+16–24-MiB partial range is enabled, and all existing verification paths remain
+unchanged. Hardware qualification is the remaining 20-MiB checkpoint.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2521,7 +2538,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.21 baseline compiled and transcript-tested, with partial-12-/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.7.22 baseline compiled and transcript-tested, with partial-12-/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon; partial-20-MiB and 1-MiB official extraction await hardware qualification
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2942,7 +2959,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.21**, the project has an object-oriented structural model:
+At shared toolset version **0.7.22**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;
@@ -2956,6 +2973,7 @@ At shared toolset version **0.7.21**, the project has an object-oriented structu
 - map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven for the tested layouts;
 - the explicit 12-MiB partial higher-window path is capture-, transcript-, and hardware-proven through all 192 reads, menu boot, and successful launch of both games;
+- the explicit 20-MiB partial higher-window path is capture- and transcript-proven through 320 reads; its hardware checkpoint remains pending;
 - official-ROM extraction recognizes 1/2/4/8/16/32-MiB extents through a generic trailing-`FF` heuristic; only the Golden Sun 8-MiB extraction size is hardware-qualified;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;

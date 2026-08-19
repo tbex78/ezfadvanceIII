@@ -6,6 +6,7 @@ VerificationMode VerificationPolicy::modeFor(std::size_t size) const noexcept
 {
     if (size == size_32_mib) return VerificationMode::exact_32_mib;
     if (size == size_24_mib) return VerificationMode::exact_24_mib;
+    if (size == size_20_mib) return VerificationMode::partial_20_mib;
     if (size == size_16_mib) return VerificationMode::exact_16_mib;
     if (size == size_12_mib) return VerificationMode::partial_12_mib;
     if (size == window_size) return VerificationMode::exact_8_mib;

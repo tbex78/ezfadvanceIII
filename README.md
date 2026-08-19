@@ -31,7 +31,7 @@ The code is organized in layers:
 - `ReadOnlyCartridge` owns the capture-derived initialization and ROM-read state machine.
 - `GbaHeader`, `CatalogEntry`, and `CartridgeFormat` model cartridge metadata.
 - `SaveMemoryReader` owns capture-proven save-bank reads.
-- `VerificationSession` owns all capture-supported post-program verification paths: partial first-window, explicit partial 12 MiB, exact 8/16/24/32 MiB, and tiny-tail-above-16-MiB.
+- `VerificationSession` owns all capture-supported post-program verification paths: partial first-window, explicit partial 12/20 MiB, exact 8/16/24/32 MiB, and tiny-tail-above-16-MiB.
 - `CartridgeImageBuilder`, `CardWriter`, `CardInspector`, `SaveExtractor`, and `CardEraser` implement the four application workflows.
 
 ## Project status
