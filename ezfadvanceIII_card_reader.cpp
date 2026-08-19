@@ -35,7 +35,7 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 
-// EZF Advance III card reader 0.7.17, read-only inspector.
+// EZF Advance III card reader 0.7.18, read-only inspector.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Card-read protocol behavior remains unchanged from 0.5.13.
 //
@@ -369,6 +369,19 @@ static int extract_official_cartridge(libusb_device_handle* h,
         return 2;
     }
 
+    const auto output_size =
+        ezfadvance::CartridgeFormat::trimmedGbaRomSize(image);
+    if (!output_size) {
+        std::cerr << "Could not derive a supported 2/4/8/16/32-MiB ROM size "
+                     "from the trailing 0xFF region; no output was written.\n";
+        return 3;
+    }
+    const std::size_t removed = image.size() - *output_size;
+    image.resize(*output_size);
+    std::cout << "Detected ROM extent: " << (image.size() / (1024 * 1024))
+              << " MiB; removed " << (removed / (1024 * 1024))
+              << " MiB of trailing 0xFF address-space padding.\n";
+
     std::ofstream output(output_path, std::ios::binary | std::ios::out);
     if (!output) {
         std::cerr << "Could not create output file: " << output_path << '\n';
@@ -383,8 +396,8 @@ static int extract_official_cartridge(libusb_device_handle* h,
     }
 
     std::cout << "Wrote " << image.size() << " bytes to " << output_path
-              << "\nThis is an untrimmed 32-MiB raw dump; exact ROM-size "
-                 "detection is not yet implemented.\n"
+              << "\nThe output was rounded up to the smallest supported "
+                 "2/4/8/16/32-MiB size containing all non-0xFF data.\n"
               << "No erase or ROM programming operation was performed.\n";
     return 0;
 }
@@ -659,7 +672,7 @@ static void usage(const char* argv0)
               << "  " << argv0 << "\n"
               << "  " << argv0 << " --extract OUTPUT.gba [--verbose]\n\n"
               << "Read-only EZF Advance III card inspector (" << host_platform_name() << ").\n"
-              << "--extract writes an untrimmed 32-MiB raw dump of a detected "
+              << "--extract reads 32 MiB and writes a trimmed .gba dump of a detected "
                  "official GBA cartridge.\n"
               << "--verbose replaces the extraction progress bar with per-block "
                  "address and timing diagnostics.\n";

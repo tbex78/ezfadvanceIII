@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.17`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.17`<br>
+**Current project/toolset version:** `0.7.18`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.18`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.17 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection and header inspection are hardware-confirmed; full raw extraction/hash comparison remains pending. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.18 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection and header inspection are hardware-confirmed; guarded extraction/trimming and hash comparison remain pending. Linux/BSD validation remains pending.
 
 ---
 
@@ -1671,10 +1671,13 @@ verbose mode is intended for protocol and performance diagnosis; it does not
 change the USB transcript or output bytes. The option is rejected unless
 `--extract` is also present.
 
-The result is intentionally an untrimmed `0x02000000`-byte raw dump. Current
-capture evidence proves the scan extent but not the original manager's exact
-logical-ROM-size algorithm. Automatic trimming, header-database size lookup,
-and title-specific rules remain out of scope.
+After the complete scan and session cleanup, the reader finds the last byte
+that is not `0xFF` and writes the smallest standard extent—2, 4, 8, 16, or
+32 MiB—that contains it. Bytes inside that extent remain unchanged; only the
+trailing erased address-space padding is omitted. This is a generic,
+deterministic heuristic and is not claimed to reproduce the original manager's
+unknown size-detection algorithm. Header-database lookup and title-specific
+rules remain out of scope.
 
 Extraction authorization is deliberately stronger than classification. The
 first 64-KiB block must contain the GBA fixed header byte `0x96` at offset
@@ -2451,6 +2454,15 @@ or selecting save memory, preventing official-ROM initialization from falling
 through into EZ3-only semantics. Full extraction and trusted populated-region
 hash comparison remain pending, so the feature is not hardware-complete.
 
+### 36.39 0.7.18 — generic official-ROM erased-padding trim
+
+Official extraction continues to read the full 32-MiB address space. After a
+successful read and cleanup, a pure tested sizing function finds the final
+non-`FF` byte and rounds its exclusive end up to 2, 4, 8, 16, or 32 MiB. The
+output file contains the selected prefix byte-for-byte; only trailing erased
+padding is removed. Guarded extraction, selected extent, and trusted hash
+comparison remain subject to the official-ROM hardware gate.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2462,7 +2474,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.17 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-/32-MiB/tiny-tail and official-header hardware confirmation on Apple Silicon
+macOS       supported target; current 0.7.18 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-/32-MiB/tiny-tail and official-header hardware confirmation on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2883,7 +2895,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.17**, the project has an object-oriented structural model:
+At shared toolset version **0.7.18**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

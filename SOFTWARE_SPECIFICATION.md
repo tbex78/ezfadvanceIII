@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.17` toolset, including the guarded
+**Specification baseline:** shared `0.7.18` toolset, including the guarded
 official-cartridge detection and raw-extraction increment of 2026-08-19.
 
 This specification distinguishes capture evidence, deterministic transcript
@@ -138,10 +138,15 @@ It is restricted to a detected official GBA cartridge and must:
 - display an in-place progress bar with percentage, completed/total MiB,
   throughput, elapsed time, and ETA;
 - complete the read-session readiness transition before writing the file;
-- write exactly 32 MiB and identify it as an untrimmed raw dump.
+- locate the final byte that is not `0xFF` after the complete read;
+- choose the smallest supported output extent—2, 4, 8, 16, or 32 MiB—that
+  contains that byte;
+- remove only trailing `0xFF` address-space padding beyond the selected extent;
+- preserve every byte within the selected output extent unchanged.
 
-Exact logical ROM-size detection and automatic trailing-data trimming are not
-specified because the original manager's size algorithm is not yet proven.
+This is a deterministic erased-padding heuristic, not a reconstruction of the
+original manager's size-detection algorithm. An all-`0xFF` scan or meaningful
+data beyond the supported 32-MiB extent must fail without creating output.
 
 With `--verbose`, extraction replaces the live progress bar with one diagnostic
 line per 64-KiB block containing the byte address, transfer length, elapsed
@@ -562,7 +567,9 @@ Acceptance criteria:
 
 - the inserted cartridge is classified as an official GBA ROM;
 - exactly 512 sequential 64-KiB reads complete;
-- the output file is exactly `0x02000000` bytes;
+- the device scan is exactly `0x02000000` bytes;
+- the output is exactly 2, 4, 8, 16, or 32 MiB according to the last-non-`FF`
+  rounding rule;
 - populated ROM regions match a trusted dump or hash;
 - session cleanup succeeds before file creation;
 - an existing destination is not overwritten;
@@ -633,7 +640,7 @@ The current durable support boundary is:
 |---|---|---|---|
 | EZ3 inspection and catalog parsing | yes | partial/pure parsing | yes |
 | Official-ROM detection and header inspection | yes | yes | yes, Golden Sun on macOS |
-| Official 32-MiB raw extraction | yes | yes | pending dump/hash comparison |
+| Official full scan with 2/4/8/16/32-MiB trimming | scan yes / trim heuristic | yes | pending guarded dump/hash comparison |
 | Partial first-window verification | yes | yes | yes |
 | Exact 8/16/24/32-MiB verification | yes | yes | yes |
 | Tiny tail immediately above 16 MiB | yes | yes | yes |
@@ -644,7 +651,7 @@ The current durable support boundary is:
 | More than 8 active menu entries | structural slots only | parser bound | pending |
 | Linux/BSD physical hardware operation | applicable | build target | pending |
 
-Known open boundaries include exact official-ROM size detection/trimming,
-general EZ3 density detection, multi-ROM save-bank switching, EEPROM map-4
+Known open boundaries include the original manager's official-ROM size
+algorithm, general EZ3 density detection, multi-ROM save-bank switching, EEPROM map-4
 versus map-5 inference, FLASH1M-specific save-cycle validation, menu behavior
 above eight active entries, and Linux/BSD hardware qualification.

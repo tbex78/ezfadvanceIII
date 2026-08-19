@@ -1,5 +1,6 @@
 #include "ezfadvance/cartridge_format.hpp"
 
+#include <array>
 #include <stdexcept>
 
 namespace ezfadvance {
@@ -54,6 +55,24 @@ bool CartridgeFormat::validGbaRomHeader(
     // never authorize a full official-ROM extraction.
     return bytes.size() >= 0xC0 && bytes[0xB2] == 0x96 &&
            gbaHeaderChecksumValid(bytes);
+}
+
+std::optional<std::size_t> CartridgeFormat::trimmedGbaRomSize(
+    const std::vector<std::uint8_t>& bytes) noexcept
+{
+    std::size_t meaningful_end = bytes.size();
+    while (meaningful_end != 0 && bytes[meaningful_end - 1] == 0xFF)
+        --meaningful_end;
+    if (meaningful_end == 0)
+        return std::nullopt;
+
+    constexpr std::array<std::size_t, 5> supported_sizes = {
+        0x00200000, 0x00400000, 0x00800000, 0x01000000, 0x02000000};
+    for (const std::size_t size : supported_sizes) {
+        if (meaningful_end <= size && size <= bytes.size())
+            return size;
+    }
+    return std::nullopt;
 }
 
 std::optional<std::uint32_t> CartridgeFormat::armBranchTarget(

@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.17**.
+Current shared project/toolset version covered by this summary: **0.7.18**.
 
 All mainline utilities carry this same version:
 
@@ -776,7 +776,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.17 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.18 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1016,9 +1016,18 @@ tests pass. Full 32-MiB Golden Sun extraction and populated-region comparison
 against a trusted dump/hash remain the hardware gate, so the official-ROM
 feature is not yet closed.
 
+## 0.7.18 release changes
+
+**0.7.18** keeps the capture-proven full 32-MiB official-ROM scan but trims the
+written `.gba` generically. After successful reading and cleanup, the reader
+finds the final non-`FF` byte and selects the smallest 2-, 4-, 8-, 16-, or
+32-MiB extent that contains it. All bytes inside that extent are preserved;
+only trailing erased address-space padding is omitted. The sizing rule is
+unit-tested but remains part of the pending official-ROM hardware gate.
+
 ## Current project status
 
-At shared version **0.7.17**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.18**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -1035,6 +1044,7 @@ At shared version **0.7.17**, the project has an object-oriented structural mode
 - 0.7.15 official-ROM detection/header inspection is hardware-proven on macOS;
 - 0.7.16 adds the transcript-tested 32-MiB raw extraction interface;
 - 0.7.17 guards extraction with header validation and restores the EZ3-only save-reader boundary; guarded full extraction remains hardware-pending;
+- 0.7.18 trims the completed official-ROM scan to the smallest supported 2/4/8/16/32-MiB extent containing all non-`FF` data;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;
@@ -1065,4 +1075,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.17 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.18 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

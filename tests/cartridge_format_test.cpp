@@ -50,6 +50,21 @@ int main()
     assert(!CartridgeFormat::validGbaRomHeader(
         std::vector<std::uint8_t>(0xBF, 0)));
 
+    std::vector<std::uint8_t> raw_rom(0x2000000, 0xFF);
+    assert(!CartridgeFormat::trimmedGbaRomSize(raw_rom));
+    raw_rom[0] = 0;
+    assert(CartridgeFormat::trimmedGbaRomSize(raw_rom) == 0x200000);
+    raw_rom[0x200000] = 0;
+    assert(CartridgeFormat::trimmedGbaRomSize(raw_rom) == 0x400000);
+    raw_rom[0x400000] = 0;
+    assert(CartridgeFormat::trimmedGbaRomSize(raw_rom) == 0x800000);
+    raw_rom[0x800000] = 0;
+    assert(CartridgeFormat::trimmedGbaRomSize(raw_rom) == 0x1000000);
+    raw_rom[0x1000000] = 0;
+    assert(CartridgeFormat::trimmedGbaRomSize(raw_rom) == 0x2000000);
+    raw_rom.back() = 0;
+    assert(CartridgeFormat::trimmedGbaRomSize(raw_rom) == 0x2000000);
+
     std::vector<std::uint8_t> loader(28, 0);
     const char name[] = "CATALOG";
     for (std::size_t i = 0; i < 7; ++i) loader[i] = name[i];
