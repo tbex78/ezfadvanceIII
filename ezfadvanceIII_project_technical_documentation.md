@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.22`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.22 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, explicit partial 12-MiB, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. The explicit partial 20-MiB path is capture- and transcript-proven and awaits hardware qualification. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.22 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, explicit partial 12-/20-MiB, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD validation remains pending.
 
 ---
 
@@ -547,7 +547,7 @@ image == 12 MiB            capture/transcript/hardware-proven
 other 8 MiB < image < 16 MiB verification skipped
 image == 16 MiB            full read-back verification
 captured tiny >16-MiB tail full read-back verification
-image == 20 MiB            capture/transcript-proven; hardware pending
+image == 20 MiB            capture/transcript/hardware-proven
 other 16 MiB < image < 24 MiB verification skipped
 image == 24 MiB            full read-back verification
 24 MiB < image < 32 MiB    verification skipped
@@ -2525,7 +2525,9 @@ The transcript test asserts every callback offset and length, block-varying
 payload data, no delay, and the absence of `0200`, `0020`, `0040`, `0080`,
 `00C0`, `AA55`, and the `AA/55/06` selector tail. No other size in the
 16–24-MiB partial range is enabled, and all existing verification paths remain
-unchanged. Hardware qualification is the remaining 20-MiB checkpoint.
+unchanged. Hardware testing without a preliminary full-card wipe completed all
+320 reads through final offset `0x013F0000`. The menu booted on a real GBA,
+and both Tales of Phantasia and F-Zero launched successfully.
 
 ---
 
@@ -2538,7 +2540,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.22 baseline compiled and transcript-tested, with partial-12-/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon; partial-20-MiB and 1-MiB official extraction await hardware qualification
+macOS       supported target; current 0.7.22 baseline compiled and transcript-tested, with partial-12-/20-/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2973,7 +2975,7 @@ At shared toolset version **0.7.22**, the project has an object-oriented structu
 - map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven for the tested layouts;
 - the explicit 12-MiB partial higher-window path is capture-, transcript-, and hardware-proven through all 192 reads, menu boot, and successful launch of both games;
-- the explicit 20-MiB partial higher-window path is capture- and transcript-proven through 320 reads; its hardware checkpoint remains pending;
+- the explicit 20-MiB partial higher-window path is capture-, transcript-, and hardware-proven through a no-pre-wipe write, all 320 reads, menu boot, and successful launch of both games;
 - official-ROM extraction recognizes 1/2/4/8/16/32-MiB extents through a generic trailing-`FF` heuristic; only the Golden Sun 8-MiB extraction size is hardware-qualified;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;

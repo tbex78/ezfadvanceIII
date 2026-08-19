@@ -148,7 +148,7 @@ partial 12 MiB:
     then 192 linear 0x91 reads; hardware-proven
 partial 20 MiB:
     FFFF / 04 / 00 / 00 / 55AA / 0000 / 0000 / 0000
-    then 320 linear 0x91 reads; hardware qualification pending
+    then 320 linear 0x91 reads; hardware-proven
 exact 16 MiB
 exact 24 MiB
 exact 32 MiB
@@ -179,7 +179,7 @@ Current boundary:
 other 8–16 MiB partial  skip
 = 16 MiB                verify
 captured tiny >16 MiB   verify
-= 20 MiB                verify; hardware pending
+= 20 MiB                verify; hardware-proven
 other 16–24 MiB partial skip
 = 24 MiB                verify
 24–32 MiB partial       skip
@@ -1082,7 +1082,9 @@ verification checkpoint, independently corroborated by `16_4MB.pcap` and
 through final offset `0x013F0000`. It emits no `0200`, size selector, `AA55`,
 selector tail, or inferred delay. Existing exact-size, 12-MiB, tiny-tail,
 erase, program, extraction, and startup paths are unchanged. Offline transcript
-coverage is complete; real-hardware qualification remains pending.
+coverage is complete. Hardware testing without a preliminary full-card wipe
+completed all 320 reads through final offset `0x013F0000`; the menu booted and
+both Tales of Phantasia and F-Zero launched successfully on a real GBA.
 
 ## Current project status
 
@@ -1107,7 +1109,7 @@ At shared version **0.7.22**, the project has an object-oriented structural mode
 - 0.7.19 requires valid GBA fixed-byte/checksum confirmation for ordinary official-cartridge inspection;
 - 0.7.20 adds the explicit capture-, transcript-, and hardware-proven 12-MiB partial higher-window verification checkpoint, including menu boot and successful launch of both games;
 - 0.7.21 adds 1 MiB to the generic official-ROM trailing-`FF` sizing table; physical 1-MiB official-cartridge extraction remains hardware-pending;
-- 0.7.22 adds the explicit capture- and transcript-proven 20-MiB partial higher-window verification checkpoint; hardware qualification remains pending;
+- 0.7.22 adds the explicit capture-, transcript-, and hardware-proven 20-MiB partial higher-window verification checkpoint, including a successful no-pre-wipe write, menu boot, and launch of both games;
 - official Golden Sun extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot; other heuristic trim sizes are not yet hardware-generalized;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;

@@ -441,7 +441,7 @@ rounded up to a `0x100`-byte boundary.
 | Other partial 8–16 MiB | Skip as unsupported |
 | Exactly 16 MiB | Full verification |
 | Up to one 64 KiB block above 16 MiB | Dedicated tiny-tail verification |
-| Exactly 20 MiB | Capture-proven partial higher-window verification; hardware qualification pending |
+| Exactly 20 MiB | Capture-, transcript-, and hardware-proven partial higher-window verification |
 | Other partial 16–24 MiB | Skip as unsupported |
 | Exactly 24 MiB | Full verification |
 | Partial 24–32 MiB | Skip as unsupported |
@@ -452,13 +452,15 @@ mapping. It must perform status cleanup, report that full verification was
 skipped, and distinguish that outcome from verification success.
 
 New capture evidence exists for representative 12-, 20-, and 28-MiB partial
-higher-window verification using the simple global-linear prefix. Version
-Versions 0.7.20 and 0.7.22 select only the explicit 12- and 20-MiB
+higher-window verification using the simple global-linear prefix. Versions
+0.7.20 and 0.7.22 select only the explicit 12- and 20-MiB
 checkpoints, each backed by a deterministic transcript fixture. The 12-MiB
 hardware test completed all 192 reads through final offset `0x00BF0000`,
-booted the menu, and launched both games. The 20-MiB hardware qualification is
-pending. The 28-MiB checkpoint remains unsupported until its separate
-implementation increment. The existing tiny-tail exception remains unchanged.
+booted the menu, and launched both games. The 20-MiB hardware test, performed
+without a preliminary full-card wipe, completed all 320 reads through
+`0x013F0000`, booted the menu, and launched both games. The 28-MiB checkpoint
+remains unsupported until its separate implementation increment. The existing
+tiny-tail exception remains unchanged.
 
 ## 9. Safety requirements
 
@@ -651,7 +653,7 @@ The current durable support boundary is:
 | Partial first-window verification | yes | yes | yes |
 | Exact 8/16/24/32-MiB verification | yes | yes | yes |
 | Tiny tail immediately above 16 MiB | yes | yes | yes |
-| Representative 12/20/28-MiB verification | yes | 12/20 MiB yes; 28 MiB pending integration | 12 MiB yes; 20/28 MiB pending |
+| Representative 12/20/28-MiB verification | yes | 12/20 MiB yes; 28 MiB pending integration | 12/20 MiB yes; 28 MiB pending |
 | Other arbitrary partial higher extents | no | no | no |
 | `SRAM_V111` 32-KiB save extraction | yes | protocol component coverage | yes |
 | EEPROM map-4/map-5 generic discriminator | incomplete | no | explicit override required |
