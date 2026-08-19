@@ -1,5 +1,13 @@
 # EZF Advance III Software Specification
 
+**Specification baseline:** shared `0.7.14` sources plus the working-tree
+official-cartridge detection and raw-extraction increment of 2026-08-19.
+
+This specification distinguishes capture evidence, deterministic transcript
+coverage, and physical-hardware confirmation. A behavior is not described as
+hardware-proven merely because it compiles, passes an offline transcript, or
+completes a USB transfer.
+
 ## 1. Purpose
 
 This document specifies the architecture, behavior, safety properties, and
@@ -9,6 +17,12 @@ The software provides an independent, capture-derived interface to an
 EZ-Flash Advance III Game Boy Advance flash cartridge on modern Unix-like
 systems. It reproduces only behavior supported by USB captures and real-device
 tests. Unproven flash mappings and save-slot operations must not be guessed.
+
+The maintained scope comprises four command-line workflows: EZ3 image
+construction/programming, read-only cartridge inspection and official-ROM
+dumping, supported save extraction, and explicit full-card erase. It is not a
+generic GBA cartridge programmer, ROM database, save converter, or native
+Windows driver replacement.
 
 ## 2. Supported platforms
 
@@ -20,6 +34,11 @@ The native targets are:
 - OpenBSD
 - NetBSD
 - DragonFly BSD
+
+macOS on Apple Silicon is the current compile, transcript, and physical-device
+validation baseline. Linux and BSD are supported source/build targets, but
+their hardware qualification remains pending unless a later durable test
+record states otherwise.
 
 The project requires:
 
@@ -56,6 +75,20 @@ planner.
 `--skip-verify` may disable post-write comparison, but it must not disable the
 final status/reset cleanup.
 
+Writer metadata rules are:
+
+- catalog `type` is derived from the ROM size class (`32 MiB -> 0` through
+  `64 KiB -> 9`) unless explicitly overridden;
+- SRAM/other ROMs use map `3` and FLASH-family ROMs use map `6` under the
+  current capture-derived classifier;
+- EEPROM requires an explicit per-slot map `4` or `5` because
+  `EEPROM_V124` alone does not distinguish the required hardware behavior;
+- FLASH/FLASH512/FLASH1M/EEPROM signatures require an interactive warning
+  acknowledgement, and save routines are never patched automatically;
+- `--typeN=VALUE` and `--mapN=VALUE` accept structural slots `1..120` and
+  byte values `0..255`; 120 is a parser/catalog safety bound, while only
+  1..8 active entries are capture-proven.
+
 ### 3.2 Card inspector
 
 Executable: `ezfadvanceIII_card_reader`
@@ -63,14 +96,44 @@ Executable: `ezfadvanceIII_card_reader`
 Responsibilities:
 
 - initialize the bridge through the capture-proven read path;
+- retain the classification-relevant four-byte flash-probe responses;
+- classify the inserted cartridge as EZ3 flash, official GBA ROM, or unknown;
 - read and identify the EZ3 loader;
 - parse single- and multi-ROM catalogs;
 - select a proven linear read mapping when required;
 - read and validate GBA headers;
-- report catalog and ROM metadata.
+- report catalog and ROM metadata;
+- optionally extract the complete 32-MiB GBA address space from a detected
+  official cartridge to a local `.gba` file.
 
 The inspector is read-only. It must not send flash erase commands or ROM
 program payloads.
+
+Official-cartridge classification must be based on capture-observed probe
+behavior, not on an ARM branch at ROM byte zero or one game-specific reset
+instruction. A recognized official cartridge must branch away before the
+remaining EZ3-only `0040`, `0080`, `00C0`, and `0200` probes and before the
+EZ3 manager `0x95` read-prime. Unknown changed probe behavior must fail
+conservatively.
+
+The extraction interface is:
+
+```sh
+ezfadvanceIII_card_reader --extract OUTPUT.gba
+```
+
+It is restricted to a detected official GBA cartridge and must:
+
+- refuse to overwrite an existing output file;
+- issue 512 sequential `0x91/sub0` reads of 64 KiB each;
+- encode each command address as `byte_offset / 2`;
+- read through final byte offset `0x01FF0000` and exclusive end
+  `0x02000000`;
+- complete the read-session readiness transition before writing the file;
+- write exactly 32 MiB and identify it as an untrimmed raw dump.
+
+Exact logical ROM-size detection and automatic trailing-data trimming are not
+specified because the original manager's size algorithm is not yet proven.
 
 ### 3.3 Save reader
 
@@ -90,6 +153,20 @@ save-slot configurations because no general hardware save-slot switch has been
 proven.
 
 The save reader must not write save memory, erase flash, or program ROM data.
+
+Supported invocations are:
+
+```sh
+ezfadvanceIII_save_reader
+ezfadvanceIII_save_reader --output FILE.sav
+ezfadvanceIII_save_reader --rom N [--output FILE.sav]
+```
+
+The capture-proven application path is `SRAM_V111`, selector `0x0900`, and
+one `0x8000`-byte read. Other SRAM signatures may be reported during scanning
+but must not be exported as if their size or bank selection were proven.
+`--rom` identifies catalog intent only; it must not imply that a general
+multi-ROM hardware save-slot switch exists.
 
 ### 3.4 Card eraser
 
@@ -141,6 +218,10 @@ Program-window state and read-mapping state are distinct. Code must not assume
 that selecting a programming window changes the physical region returned by a
 local `0x91` read.
 
+The geometry in this section describes the tested EZ3 flash cartridge. An
+official GBA cartridge is read through the adapter but is not assumed to share
+EZ3 erase/program geometry, and no destructive operation is exposed for it.
+
 ## 5. USB protocol contract
 
 Known command families:
@@ -154,6 +235,14 @@ Known command families:
 | `0x97` | bridge startup |
 | `0x98` | cartridge readiness |
 | `0x99` | bridge large-transfer initialization |
+
+Known `0x91` subcommands used by the maintained tools are:
+
+| Subcommand | Use |
+|---:|---|
+| `0x00` | word-addressed ROM/card data read |
+| `0x01` | capture-proven save-memory read |
+| `0x02` | four-byte cartridge/flash probe read |
 
 The manager-compatible startup sequence is:
 
@@ -170,6 +259,14 @@ establishing their own full manager-compatible startup state.
 The bounded readiness polls and read-only epilogue are owned by the narrow
 `ReadSessionTransition` component and covered by deterministic transport and
 delay-callback transcript tests.
+
+Read-only initialization preserves two classification-relevant four-byte
+`0x91/sub2` responses. A post-flash-ID value of `1C 00 B8 00` or
+`1C 00 B9 00` selects the known EZ3 path. An unchanged value across the
+captured flash-ID attempt selects the official-ROM path. Any other changed
+response is unknown and fails before later EZ3-only probing. This decision is
+based on probe behavior; it must not classify from an ARM branch or from the
+captured Golden Sun word `EE 00 00 EA` alone.
 
 For manager-style command/data transactions, the implementation preserves the
 legacy 750 microsecond command-to-data delay. The wipe workflow retains its
@@ -223,8 +320,10 @@ transactions. It accepts either a real or test transport.
 #### `ReadOnlyCartridge`
 
 Owns the capture-derived startup, flash probing, chunked ROM reads, status
-transitions, and 16/24/32 MiB linear-read mappings. It deliberately exposes no
-erase or program operation.
+transitions, explicit cartridge classification, and 16/24/32 MiB linear-read
+mappings. Its four-byte `0x91/sub2` helper preserves probe data for the
+classification decision. It deliberately exposes no erase or program
+operation.
 
 #### `CartridgeFormat`
 
@@ -257,8 +356,9 @@ Owns transport-injectable post-program verification operations without choosing
 the verification geometry. The partial first-window operation emits only the
 capture-proven status sequence and global-linear `0x91` reads. The exact 8-MiB
 operation preserves its explicit `0x0040` mapping transition and captured
-125-ms delay. Higher exact-size and tiny-tail paths remain explicitly separate
-in the writer pending their own transcript fixtures.
+125-ms delay. Exact 16-, 24-, and 32-MiB and tiny-tail-above-16-MiB operations
+remain explicit capture-derived state machines. Every currently selected mode
+has a deterministic transcript fixture.
 
 #### `WriterOptions`
 
@@ -270,6 +370,8 @@ ROM paths independently from image construction and device access.
 - `CartridgeImageBuilder` constructs and aligns writer images.
 - `CardWriter` coordinates preflight, erase, program, cleanup, and verification.
 - `CardInspector` coordinates catalog and ROM inspection.
+- The official-ROM extraction branch coordinates a fixed 32-MiB read,
+  read-session cleanup, and local `.gba` creation.
 - `SaveExtractor` coordinates ROM selection and local save-file creation.
 - `CardEraser` coordinates readiness, erase, cleanup, and blank verification.
 
@@ -291,7 +393,15 @@ unchanged.
 
 Multi-ROM inputs are stable-sorted by descending file size. Equal-size ROMs
 retain their input order. The builder may reuse suitable trailing `0xFF`
-regions, but the resulting programmed extent must not exceed 32 MiB.
+regions and internal erased runs, but it must reject overlap with meaningful
+ROM bytes and the resulting programmed extent must not exceed 32 MiB.
+
+Single-ROM images use the capture-derived `0x660` loader. Multi-ROM images use
+the capture-derived `0x7080` loader and its relocation set, except that the
+capture-exact two-ROM extent is `0x6F80`. Four-or-more-ROM images apply the
+captured final 26-byte zero tail. The loader may be appended or embedded in a
+sufficiently large erased run; only physical/catalog ROM 1 is patched to branch
+to it.
 
 The minimum programmed extent is 64 KiB. A larger constructed extent is
 rounded up to a `0x100`-byte boundary.
@@ -314,6 +424,13 @@ Unsupported verification geometry must not cause the writer to invent a read
 mapping. It must perform status cleanup, report that full verification was
 skipped, and distinguish that outcome from verification success.
 
+New capture evidence exists for representative 12-, 20-, and 28-MiB partial
+higher-window verification using the simple global-linear prefix. Those modes
+are not yet selected by `VerificationPolicy`; until their transcript fixtures,
+implementation review, and hardware qualification are completed, the current
+writer continues to classify them as unsupported partial higher-window
+geometry. The existing tiny-tail exception remains unchanged.
+
 ## 9. Safety requirements
 
 1. Dry-run writer execution must not initialize libusb or access the device.
@@ -329,6 +446,10 @@ skipped, and distinguish that outcome from verification success.
 9. EEPROM map selection must remain explicit when map `4` versus `5` cannot be
    derived from evidence.
 10. Resource cleanup must occur on every return path through RAII.
+11. Official-ROM extraction must refuse an existing destination and must not
+    create the output until the complete read and read-session cleanup succeed.
+12. A successful USB read-back does not by itself prove correct catalog map,
+    menu launch, game behavior, or save behavior on a GBA.
 
 ## 10. Build contract
 
@@ -372,7 +493,15 @@ The test suite covers:
 - EZ3 catalog parsing, address decoding, plausibility, and bounds errors;
 - exact `0x92` command construction;
 - command/data transport ordering and timeout propagation;
-- every verification-policy boundary.
+- immediate, delayed, failed, and epilogue read-session transitions;
+- official-cartridge probe classification and the absence of later EZ3-only
+  operations after the official branch;
+- a synthetic 512-block official-ROM extraction through final word address
+  `0x00FF8000` using block-varying data;
+- every verification-policy boundary;
+- exact transcripts for partial-first-window, exact 8/16/24/32 MiB, and
+  tiny-tail-above-16-MiB verification;
+- writer option parsing, including multi-digit structural catalog slots.
 
 Writer dry-run regression comparisons should use the preserved pre-migration
 binary when available. Output and exit status must remain identical, excluding
@@ -391,10 +520,36 @@ Hardware testing is manual and must be performed at explicit checkpoints.
 Acceptance criteria:
 
 - interface claim succeeds;
-- initialization and read prime succeed;
+- initialization succeeds and the appropriate EZ3 or official-ROM branch is
+  selected;
+- the EZ3 manager read-prime succeeds when inspecting EZ3 flash;
 - catalog and GBA header information match the programmed card;
 - the process exits successfully;
 - no erase or programming operation occurs.
+
+For an official cartridge, acceptance additionally requires:
+
+- classification selects the official-ROM branch;
+- the displayed title, game code, maker code, version, and header checksum
+  match the cartridge;
+- no EZ3 loader/catalog interpretation or manager `0x95` prime occurs;
+- the three-poll/1000-ms read-session cleanup succeeds.
+
+### Official ROM extraction
+
+```sh
+./ezfadvanceIII_card_reader --extract /tmp/official-card.gba
+```
+
+Acceptance criteria:
+
+- the inserted cartridge is classified as an official GBA ROM;
+- exactly 512 sequential 64-KiB reads complete;
+- the output file is exactly `0x02000000` bytes;
+- populated ROM regions match a trusted dump or hash;
+- session cleanup succeeds before file creation;
+- an existing destination is not overwritten;
+- no erase, save write, or ROM programming operation occurs.
 
 ### Save extraction
 
@@ -452,3 +607,27 @@ alters the code path that interprets live cartridge bytes.
 
 Experimental behavior must remain separate from the mainline implementation
 until supported by captures and real-device evidence.
+
+## 14. Evidence and support status
+
+The current durable support boundary is:
+
+| Area | Capture | Transcript | Hardware |
+|---|---|---|---|
+| EZ3 inspection and catalog parsing | yes | partial/pure parsing | yes |
+| Official-ROM detection and header inspection | yes | yes | yes, Golden Sun on macOS |
+| Official 32-MiB raw extraction | yes | yes | pending dump/hash comparison |
+| Partial first-window verification | yes | yes | yes |
+| Exact 8/16/24/32-MiB verification | yes | yes | yes |
+| Tiny tail immediately above 16 MiB | yes | yes | yes |
+| Representative 12/20/28-MiB verification | yes | pending integration | pending |
+| Other arbitrary partial higher extents | no | no | no |
+| `SRAM_V111` 32-KiB save extraction | yes | protocol component coverage | yes |
+| EEPROM map-4/map-5 generic discriminator | incomplete | no | explicit override required |
+| More than 8 active menu entries | structural slots only | parser bound | pending |
+| Linux/BSD physical hardware operation | applicable | build target | pending |
+
+Known open boundaries include exact official-ROM size detection/trimming,
+general EZ3 density detection, multi-ROM save-bank switching, EEPROM map-4
+versus map-5 inference, FLASH1M-specific save-cycle validation, menu behavior
+above eight active entries, and Linux/BSD hardware qualification.

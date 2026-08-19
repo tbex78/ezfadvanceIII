@@ -1626,6 +1626,47 @@ For protocol experiments:
 
 Multi-digit slot numbers are supported. Overrides remain useful for protocol experiments and are currently required for EEPROM ROMs until the generic map-4/map-5 discriminator is understood.
 
+### 26.6 Official GBA cartridge inspection and extraction
+
+The read-only card reader now preserves the four bytes returned by the
+classification-relevant `0x91/sub2` probes. It explicitly distinguishes known
+EZ3 flash-ID behavior, unchanged official-ROM behavior, and unknown changed
+behavior. Known EZ3 IDs continue through the existing loader/catalog path. An
+official cartridge stops before the later EZ3-only window probes and before
+the manager `0x95` read-prime, then uses ordinary word-addressed
+`0x91/sub0` reads. Unknown behavior fails conservatively.
+
+Normal invocation reports the official cartridge's GBA header:
+
+```bash
+ezfadvanceIII_card_reader
+```
+
+The implementation has been hardware-confirmed on macOS with an official
+Golden Sun cartridge. It reported title `GOLDEN_SUN_A`, game code `AGSF`,
+maker code `01`, ROM version `0`, and a valid header checksum, then completed
+the three-poll/1000-ms read-session readiness transition. This proves official
+detection, header inspection, and cleanup on the tested device. Full ROM
+extraction remains to be hardware-qualified.
+
+Raw extraction is requested explicitly:
+
+```bash
+ezfadvanceIII_card_reader --extract OUTPUT.gba
+```
+
+This path is available only for a detected official cartridge. It reuses the
+capture-proven ordinary ROM-read primitive to read the complete 32-MiB GBA
+address space as 512 sequential 64-KiB blocks. Byte offsets are encoded as
+word addresses, ending with byte offset `0x01ff0000` / word address
+`0x00ff8000`. The file is written only after the ROM read and read-session
+cleanup succeed, and an existing destination is not overwritten.
+
+The result is intentionally an untrimmed `0x02000000`-byte raw dump. Current
+capture evidence proves the scan extent but not the original manager's exact
+logical-ROM-size algorithm. Automatic trimming, header-database size lookup,
+and title-specific rules remain out of scope.
+
 ---
 
 ## 27. Safety model
@@ -2816,6 +2857,10 @@ At shared toolset version **0.7.14**, the project has an object-oriented structu
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
 - native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;
+- official GBA cartridge classification, header inspection, and read-session
+  cleanup are transcript-tested and hardware-confirmed on macOS with Golden
+  Sun; full 32-MiB official-ROM extraction is transcript-tested and awaits a
+  hardware dump/hash comparison;
 - hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, 4-, 8-, exact 16-/32-MiB, and Fire-Emblem-style tiny-tail verification checkpoints, plus 6-ROM 24-/32-MiB and 16+8+8-MiB full-card images.
 
 The current refactored source additionally provides RAII device ownership, an

@@ -19,6 +19,7 @@
 #include <chrono>
 #include <cctype>
 #include <cstdint>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <optional>
@@ -197,6 +198,49 @@ static int inspect_official_cartridge(libusb_device_handle* h)
               << "Header check : " << (header.checksum_ok ? "OK" : "FAILED") << '\n';
     if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) return 2;
     std::cout << "\nNo erase or ROM programming operation was performed.\n";
+    return 0;
+}
+
+static int extract_official_cartridge(libusb_device_handle* h,
+                                      const std::string& output_path)
+{
+    constexpr std::size_t dump_size = CARD_IMAGE_LIMIT;
+    std::vector<std::uint8_t> image;
+    std::cout << "Reading the full 32-MiB GBA address space as "
+              << (dump_size / 0x10000) << " x 64-KiB blocks...\n";
+
+    const bool read_ok =
+        ezfadvance::ReadOnlyCartridge(h).read(0, image, dump_size);
+    const bool finish_ok = ezfadvance::ReadOnlyCartridge(h).finishSession();
+    if (!read_ok) {
+        std::cerr << "Official cartridge extraction failed during ROM read.\n";
+        if (!finish_ok)
+            std::cerr << "Read-session cleanup also failed.\n";
+        return 2;
+    }
+    if (!finish_ok) {
+        std::cerr << "ROM data was read, but read-session cleanup failed; "
+                     "no output file was written.\n";
+        return 2;
+    }
+
+    std::ofstream output(output_path, std::ios::binary | std::ios::out);
+    if (!output) {
+        std::cerr << "Could not create output file: " << output_path << '\n';
+        return 2;
+    }
+    output.write(reinterpret_cast<const char*>(image.data()),
+                 static_cast<std::streamsize>(image.size()));
+    output.close();
+    if (!output) {
+        std::cerr << "Failed while writing output file: " << output_path << '\n';
+        return 2;
+    }
+
+    std::cout << "Wrote " << image.size() << " bytes to " << output_path
+              << "\nThis is an untrimmed 32-MiB raw dump; exact ROM-size "
+                 "detection is not yet implemented.\n"
+              << "No erase or ROM programming operation was performed.\n";
     return 0;
 }
 
@@ -466,16 +510,37 @@ private:
 
 static void usage(const char* argv0)
 {
-    std::cout << "Usage: " << argv0 << "\n\n"
+    std::cout << "Usage:\n"
+              << "  " << argv0 << "\n"
+              << "  " << argv0 << " --extract OUTPUT.gba\n\n"
               << "Read-only EZF Advance III card inspector (" << host_platform_name() << ").\n"
-              << "Connect the EZF Advance III with the GBA card inserted, then run with no arguments.\n";
+              << "--extract writes an untrimmed 32-MiB raw dump of a detected "
+                 "official GBA cartridge.\n";
 }
 
 int main(int argc, char** argv)
 {
-    if (argc != 1) {
+    bool extract = false;
+    std::string output_path;
+    if (argc == 3 && std::string(argv[1]) == "--extract") {
+        extract = true;
+        output_path = argv[2];
+        if (output_path.empty()) {
+            usage(argv[0]);
+            return 1;
+        }
+    } else if (argc != 1) {
         usage(argv[0]);
         return 1;
+    }
+
+    if (extract) {
+        std::ifstream existing(output_path, std::ios::binary);
+        if (existing.good()) {
+            std::cerr << "Refusing to overwrite existing output file: "
+                      << output_path << '\n';
+            return 1;
+        }
     }
 
     ezfadvance::UsbDevice device;
@@ -500,8 +565,14 @@ int main(int argc, char** argv)
     int result = 2;
     ezfadvance::CartridgeKind kind = ezfadvance::CartridgeKind::unknown;
     if (initialize_read_session(h, kind)) {
-        if (kind == ezfadvance::CartridgeKind::official_gba_rom)
-            result = inspect_official_cartridge(h);
+        if (kind == ezfadvance::CartridgeKind::official_gba_rom) {
+            result = extract ? extract_official_cartridge(h, output_path)
+                             : inspect_official_cartridge(h);
+        } else if (extract) {
+            std::cerr << "--extract currently supports official GBA cartridges "
+                         "only; refusing to export an EZ3 flash image as .gba.\n";
+            result = ezfadvance::ReadOnlyCartridge(h).finishSession() ? 1 : 2;
+        }
         else {
             CardInspector inspector(h);
             result = inspector.run();
