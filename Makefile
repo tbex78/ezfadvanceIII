@@ -124,6 +124,8 @@ test: check
 	./build/protocol_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/read_session_transition_test.cpp src/read_session_transition.cpp -o build/read_session_transition_test
 	./build/read_session_transition_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/official_cartridge_read_test.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/official_cartridge_read_test
+	./build/official_cartridge_read_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/verification_policy_test.cpp src/verification_policy.cpp -o build/verification_policy_test
 	./build/verification_policy_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/verification_exact_8mib_test.cpp src/verification_session.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/verification_exact_8mib_test
@@ -153,6 +155,6 @@ print-config:
 	done
 
 clean:
-	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/protocol_test build/read_session_transition_test build/verification_exact_8mib_test build/verification_exact_16mib_test build/verification_tiny_tail_above_16mib_test build/verification_exact_24mib_test build/verification_exact_32mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test
+	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/protocol_test build/read_session_transition_test build/official_cartridge_read_test build/verification_exact_8mib_test build/verification_exact_16mib_test build/verification_tiny_tail_above_16mib_test build/verification_exact_24mib_test build/verification_exact_32mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test
 
 FORCE:

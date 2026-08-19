@@ -4,17 +4,35 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
+#include <chrono>
+#include <functional>
+#include <memory>
+#include <optional>
 #include <vector>
 
 namespace ezfadvance {
+
+enum class CartridgeKind {
+    unknown,
+    ez3_flash,
+    official_gba_rom
+};
 
 // Capture-derived, non-destructive manager read session shared by the card
 // inspector and save reader. It has no erase or program operation.
 class ReadOnlyCartridge final {
 public:
     explicit ReadOnlyCartridge(libusb_device_handle* handle) noexcept;
+    explicit ReadOnlyCartridge(
+        Transport& transport,
+        std::function<void(std::chrono::milliseconds)> sleep = {}) noexcept;
 
     bool initialize();
+    CartridgeKind kind() const noexcept { return kind_; }
+    static CartridgeKind classifyProbeBehavior(
+        const std::array<std::uint8_t, 4>& before_flash_id,
+        const std::array<std::uint8_t, 4>& after_flash_id) noexcept;
     bool read(std::uint32_t byte_address,
               std::uint8_t* destination,
               std::size_t length);
@@ -45,12 +63,15 @@ private:
     bool tx92TwoAt(std::uint32_t word_address,
                    std::uint8_t first, std::uint8_t second,
                    const char* label);
-    bool read91Sub2Four();
+    std::optional<std::array<std::uint8_t, 4>> read91Sub2Four();
     bool flashStatus();
     bool finishReadMapping(const char* prefix);
 
-    BulkTransport transport_;
+    std::unique_ptr<BulkTransport> owned_transport_;
+    Transport& transport_;
     Protocol protocol_;
+    std::function<void(std::chrono::milliseconds)> sleep_;
+    CartridgeKind kind_ = CartridgeKind::unknown;
 };
 
 } // namespace ezfadvance

@@ -38,8 +38,20 @@ void printHex(const std::uint8_t* bytes, std::size_t size)
 } // namespace
 
 ReadOnlyCartridge::ReadOnlyCartridge(libusb_device_handle* handle) noexcept
-    : transport_(handle), protocol_(transport_)
+    : owned_transport_(new BulkTransport(handle)),
+      transport_(*owned_transport_), protocol_(transport_),
+      sleep_([](std::chrono::milliseconds duration) {
+          std::this_thread::sleep_for(duration);
+      })
 {
+}
+
+ReadOnlyCartridge::ReadOnlyCartridge(
+    Transport& transport,
+    std::function<void(std::chrono::milliseconds)> sleep) noexcept
+    : transport_(transport), protocol_(transport), sleep_(std::move(sleep))
+{
+    if (!sleep_) sleep_ = [](std::chrono::milliseconds) {};
 }
 
 bool ReadOnlyCartridge::read(std::uint32_t byte_address,
@@ -83,9 +95,7 @@ bool ReadOnlyCartridge::startup()
         return false;
 
     ReadSessionTransition transition(
-        transport_, [](std::chrono::milliseconds duration) {
-            std::this_thread::sleep_for(duration);
-        });
+        transport_, sleep_);
     if (!transition.waitUntilReady()) {
         std::cerr << "GBA CARTRIDGE NOT DETECTED / NOT READY after bounded "
                      "readiness checks.\n";
@@ -117,7 +127,7 @@ bool ReadOnlyCartridge::probePrefix(std::uint8_t a0, std::uint8_t a1,
         !protocol_.tx92Two(a0,a1,"probe word 1") ||
         !protocol_.tx92Two(b0,b1,"probe word 2") ||
         !protocol_.tx92Two(c0,c1,"probe word 3")) return false;
-    std::this_thread::sleep_for(std::chrono::milliseconds(125));
+    sleep_(std::chrono::milliseconds(125));
     return !include_tail || probeUnlockTail();
 }
 
@@ -139,13 +149,15 @@ bool ReadOnlyCartridge::tx92TwoAt(std::uint32_t address,
     return protocol_.commandDataEcho(command, {first, second}, label);
 }
 
-bool ReadOnlyCartridge::read91Sub2Four()
+std::optional<std::array<std::uint8_t, 4>> ReadOnlyCartridge::read91Sub2Four()
 {
     const std::vector<std::uint8_t> command = {
         0x5A,0xA5,0x91,0x02, 0,0,0,0, 4,0,0,0,0};
     std::vector<std::uint8_t> response;
-    return transport_.out(command, timeout_ms) &&
-           transport_.inExact(response, 4, timeout_ms);
+    if (!transport_.out(command, timeout_ms) ||
+        !transport_.inExact(response, 4, timeout_ms)) return std::nullopt;
+    return std::array<std::uint8_t, 4>{
+        response[0], response[1], response[2], response[3]};
 }
 
 bool ReadOnlyCartridge::flashIdProbe(std::uint8_t a0, std::uint8_t a1,
@@ -154,20 +166,50 @@ bool ReadOnlyCartridge::flashIdProbe(std::uint8_t a0, std::uint8_t a1,
 {
     return probePrefix(a0,a1,b0,b1,c0,c1) &&
            protocol_.tx92Two(0x90,0,"probe 90/00") &&
-           read91Sub2Four() && probeReset(false);
+           read91Sub2Four().has_value() && probeReset(false);
+}
+
+CartridgeKind ReadOnlyCartridge::classifyProbeBehavior(
+    const std::array<std::uint8_t, 4>& before_flash_id,
+    const std::array<std::uint8_t, 4>& after_flash_id) noexcept
+{
+    const bool known_ez3_id =
+        after_flash_id == std::array<std::uint8_t, 4>{0x1C,0x00,0xB8,0x00} ||
+        after_flash_id == std::array<std::uint8_t, 4>{0x1C,0x00,0xB9,0x00};
+    if (known_ez3_id) return CartridgeKind::ez3_flash;
+    if (after_flash_id == before_flash_id)
+        return CartridgeKind::official_gba_rom;
+    return CartridgeKind::unknown;
 }
 
 bool ReadOnlyCartridge::initialize()
 {
+    kind_ = CartridgeKind::unknown;
     std::cout << "Initializing EZF Advance III/card using the capture-proven probe path...\n";
     if (!startup() || !probePrefix(0,0,0,0,0,0) ||
         !tx92TwoAt(0x555,0xAA,0,"probe @555 AA00") ||
         !tx92TwoAt(0x2AA,0x55,0,"probe @2AA 5500") ||
-        !tx92TwoAt(0x555,0x90,0,"probe @555 9000") ||
-        !read91Sub2Four() ||
+        !tx92TwoAt(0x555,0x90,0,"probe @555 9000")) return false;
+    const auto before_flash_id = read91Sub2Four();
+    if (!before_flash_id ||
         !protocol_.tx92Two(0x90,0,"probe post-initial 90/00") ||
         !probeReset(true) ||
-        !flashIdProbe(0,0,0,0,0,0) ||
+        !probePrefix(0,0,0,0,0,0) ||
+        !protocol_.tx92Two(0x90,0,"probe 90/00")) return false;
+    const auto after_flash_id = read91Sub2Four();
+    if (!after_flash_id || !probeReset(false)) return false;
+
+    kind_ = classifyProbeBehavior(*before_flash_id, *after_flash_id);
+    if (kind_ == CartridgeKind::official_gba_rom) {
+        std::cout << "Official GBA ROM detected; using ordinary ROM reads.\n";
+        return true;
+    }
+    if (kind_ != CartridgeKind::ez3_flash) {
+        std::cerr << "Unknown cartridge probe behavior; refusing EZ3-only initialization.\n";
+        return false;
+    }
+
+    if (
         !flashIdProbe(2,0,0,0x40,0,0) ||
         !flashIdProbe(2,0,0,0x80,0,0) ||
         !flashIdProbe(2,0,0,0xC0,0,0) ||
@@ -191,9 +233,7 @@ bool ReadOnlyCartridge::finishSession()
 {
     std::cout << "Finishing read session readiness transition: 3 x 0x98 polls...\n";
     ReadSessionTransition transition(
-        transport_, [](std::chrono::milliseconds duration) {
-            std::this_thread::sleep_for(duration);
-        });
+        transport_, sleep_);
     if (!transition.finishReadinessTransition()) {
         std::cerr << "Read-session readiness transition failed.\n";
         return false;

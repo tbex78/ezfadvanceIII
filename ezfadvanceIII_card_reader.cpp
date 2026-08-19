@@ -142,9 +142,13 @@ static bool read_card(libusb_device_handle* h,
     return ezfadvance::ReadOnlyCartridge(h).read(byte_address, out, length);
 }
 
-static bool original_manager_read_prime(libusb_device_handle* h)
+static bool initialize_read_session(libusb_device_handle* h,
+                                    ezfadvance::CartridgeKind& kind)
 {
-    return ezfadvance::ReadOnlyCartridge(h).initialize();
+    ezfadvance::ReadOnlyCartridge cartridge(h);
+    const bool initialized = cartridge.initialize();
+    kind = cartridge.kind();
+    return initialized;
 }
 
 static bool prepare_linear_16m_read(libusb_device_handle* h)
@@ -174,6 +178,26 @@ static GbaHeader read_gba_header(libusb_device_handle* h, uint32_t start)
     std::vector<uint8_t> b;
     if (!read_card(h,start,b,0xC0)) return {};
     return GbaHeader::parse(b);
+}
+
+static int inspect_official_cartridge(libusb_device_handle* h)
+{
+    const GbaHeader header = read_gba_header(h, 0);
+    if (!header.readable) {
+        std::cerr << "Official GBA cartridge was detected, but its header could not be parsed.\n";
+        return 3;
+    }
+    std::cout << "\n========================================\n"
+              << "OFFICIAL GBA CARTRIDGE\n"
+              << "========================================\n"
+              << "GBA title    : " << (header.title.empty() ? "(blank)" : header.title) << '\n'
+              << "Game code    : " << (header.game_code.empty() ? "(blank)" : header.game_code) << '\n'
+              << "Maker code   : " << (header.maker_code.empty() ? "(blank)" : header.maker_code) << '\n'
+              << "ROM version  : " << static_cast<unsigned>(header.version) << '\n'
+              << "Header check : " << (header.checksum_ok ? "OK" : "FAILED") << '\n';
+    if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) return 2;
+    std::cout << "\nNo erase or ROM programming operation was performed.\n";
+    return 0;
 }
 
 using CatalogEntry = ezfadvance::CatalogEntry;
@@ -474,12 +498,17 @@ int main(int argc, char** argv)
               << "; interface 0 claimed.\n";
 
     int result = 2;
-    if (original_manager_read_prime(h)) {
-        CardInspector inspector(h);
-        result = inspector.run();
+    ezfadvance::CartridgeKind kind = ezfadvance::CartridgeKind::unknown;
+    if (initialize_read_session(h, kind)) {
+        if (kind == ezfadvance::CartridgeKind::official_gba_rom)
+            result = inspect_official_cartridge(h);
+        else {
+            CardInspector inspector(h);
+            result = inspector.run();
+        }
     }
     else
-        std::cerr << "Card initialization/read-prime failed.\n";
+        std::cerr << "Card initialization/classification failed.\n";
 
     return result;
 }
