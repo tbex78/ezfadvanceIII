@@ -465,6 +465,14 @@ without a preliminary full-card wipe, completed all 320 reads through
 test completed all 448 reads through `0x01BF0000`, booted the menu, and
 launched all three games. The existing tiny-tail exception remains unchanged.
 
+The 2-MiB source-ROM checkpoint has two independent single-ROM hardware runs.
+Each source is exactly `0x200000` bytes, but the appended loader makes the
+constructed/programmed image `0x200700` bytes. Partial-first-window verification
+rounds that image to `0x210000`, performs 33 64-KiB reads, and finishes with the
+block at `0x200000`; both images booted on real GBA hardware. This evidence
+must not be described as an exactly 2-MiB constructed image or as proof of
+physical 2-MiB official-cartridge extraction.
+
 ## 9. Safety requirements
 
 1. Dry-run writer execution must not initialize libusb or access the device.

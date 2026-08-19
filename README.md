@@ -109,6 +109,13 @@ Capture-supported verification currently covers:
 - explicit partial 12, 20, and 28 MiB, all hardware-proven;
 - the dedicated tiny-tail case immediately above 16 MiB.
 
+The 2-MiB checkpoint is independently confirmed with two exactly 2-MiB
+single-ROM sources. Each produced a `0x200700` constructed image, programmed
+the `0x700` loader tail at `0x200000`, verified 33 padded 64-KiB blocks through
+exclusive end `0x210000`, and booted on a real GBA. This is 2-MiB source-ROM
+evidence, not an exactly 2-MiB constructed image or an official-cartridge
+extraction result.
+
 Other partial higher-window extents are programmed normally but full readback
 verification is skipped rather than using an inferred selector.
 

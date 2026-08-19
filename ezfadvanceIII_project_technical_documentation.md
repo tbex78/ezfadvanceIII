@@ -490,6 +490,24 @@ Bytes in the final verification block beyond the programmed image are expected t
 
 The short gaps visible between status cleanup and the first `0x91` read differ between captures in 15.625-ms USBPcap timestamp quanta, so the current writer does not impose a fixed synthetic delay there.
 
+Two independent exactly 2-MiB single-ROM sources additionally close the
+2-MiB source-ROM hardware checkpoint. In both runs:
+
+```text
+source ROM size          0x00200000
+loader start             0x00200000
+constructed image        0x00200700
+verification extent      0x00210000
+verification blocks      33
+final block start        0x00200000
+```
+
+The final block verifies the `0x700` loader fragment followed by expected
+erased `FF` padding. Both runs completed full readback and booted on a real
+GBA. This proves exactly 2-MiB source-ROM handling; it is not an exact-2-MiB
+constructed-image test and does not qualify physical official-cartridge
+extraction at 2 MiB.
+
 ### 11.2 Exact 8-MiB verify transition
 
 An exact 8-MiB / 64-Mbit image uses a distinct capture-proven transition containing selector `0x0040` before linear readback. This is independently visible in the single 8-MiB Advance Wars capture and `4MiB-4MiB.pcap`.
@@ -2994,6 +3012,7 @@ At shared toolset version **0.7.23**, the project has an object-oriented structu
 - the explicit 12-MiB partial higher-window path is capture-, transcript-, and hardware-proven through all 192 reads, menu boot, and successful launch of both games;
 - the explicit 20-MiB partial higher-window path is capture-, transcript-, and hardware-proven through a no-pre-wipe write, all 320 reads, menu boot, and successful launch of both games;
 - the explicit 28-MiB partial higher-window path is capture-, transcript-, and hardware-proven through all 448 reads, menu boot, and successful launch of all three games;
+- the 2-MiB source-ROM checkpoint is independently hardware-proven with two single-ROM inputs, each producing a `0x200700` image, verifying 33 padded blocks through `0x210000`, and booting on real GBA hardware;
 - official-ROM extraction recognizes 1/2/4/8/16/32-MiB extents through a generic trailing-`FF` heuristic; only the Golden Sun 8-MiB extraction size is hardware-qualified;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;

@@ -158,7 +158,13 @@ exact 32 MiB
 Fire-Emblem-style tiny tail immediately above 16 MiB
 ```
 
-The sub-8-MiB rule is supported by a single 1-MiB capture, a two-1-MiB / ~2-MiB image capture, and a single 4-MiB capture. Real hardware then validated 1-MiB, ~2-MiB, 4-MiB, ~5-MiB, and ~6-MiB layouts.
+The sub-8-MiB rule is supported by a single 1-MiB capture, a two-1-MiB /
+~2-MiB image capture, and a single 4-MiB capture. Real hardware validated
+1-MiB, 4-MiB, ~5-MiB, and ~6-MiB layouts. It also validated two independent
+exactly 2-MiB single-ROM sources. Each 2-MiB source produced a `0x200700`
+constructed image, programmed the `0x700` loader tail at `0x200000`, verified
+33 padded blocks through exclusive end `0x210000`, and booted successfully.
+This proves 2-MiB source-ROM handling, not an exactly 2-MiB constructed image.
 
 For partial first-window images:
 
@@ -1132,6 +1138,7 @@ At shared version **0.7.23**, the project has an object-oriented structural mode
 - 0.7.21 adds 1 MiB to the generic official-ROM trailing-`FF` sizing table; physical 1-MiB official-cartridge extraction remains hardware-pending;
 - 0.7.22 adds the explicit capture-, transcript-, and hardware-proven 20-MiB partial higher-window verification checkpoint, including a successful no-pre-wipe write, menu boot, and launch of both games;
 - 0.7.23 adds the explicit capture-, transcript-, and hardware-proven 28-MiB partial higher-window verification checkpoint, including menu boot and successful launch of all three games;
+- two independent exactly 2-MiB single-ROM sources are hardware-proven through `0x200700` construction/programming, 33-block padded verification to `0x210000`, and real-GBA boot; physical 2-MiB official-cartridge extraction remains a separate pending gate;
 - official Golden Sun extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot; other heuristic trim sizes are not yet hardware-generalized;
 - partial first-window verification, including explicit 1-/2-/4-MiB checkpoints, and exact 8-/16-/24-/32-MiB verification are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
