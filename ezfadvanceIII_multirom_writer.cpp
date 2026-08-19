@@ -173,7 +173,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.19 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.20 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -2939,6 +2939,26 @@ public:
                 }
             });
     }
+    bool verifyPartial12MiB(const std::vector<uint8_t>& image) {
+        std::cout
+            << "\nPreparing capture-proven partial 12-MiB linear "
+               "read/verify state...\n"
+            << "\n========================================\n"
+            << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
+            << "========================================\n";
+        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        return verification_.verifyPartial12MiB(
+            image,
+            [&](size_t offset, size_t length) {
+                if (verbose_) {
+                    std::cout << "verified card byte 0x" << std::hex
+                              << std::setw(8) << std::setfill('0') << offset
+                              << " length 0x" << length << std::dec << '\n';
+                } else {
+                    progress.update(offset + length);
+                }
+            });
+    }
     bool verifyTinyTailAbove16MiB(const std::vector<uint8_t>& image) {
         const size_t verify_size =
             ezfadvance::VerificationSession::tinyTailAbove16MiBExtent(
@@ -3259,6 +3279,12 @@ int main(int argc, char** argv)
                 ok = card_writer.verifyExact16MiB(image);
                 full_verify_completed = ok;
                 break;
+            case ezfadvance::VerificationMode::partial_12_mib:
+                // 8_4MB.pcap proves the explicit 12-MiB partial higher-window
+                // transcript without an exact-size selector/reset tail.
+                ok = card_writer.verifyPartial12MiB(image);
+                full_verify_completed = ok;
+                break;
             case ezfadvance::VerificationMode::exact_8_mib:
                 // Exact 8 MiB is independently capture-proven by both the
                 // single-ROM Advance Wars capture and 4MiB-4MiB.pcap.
@@ -3293,7 +3319,8 @@ int main(int argc, char** argv)
                         << " is a partial higher-window geometry with no "
                            "capture-proven linear read mapping yet.\n"
                         << "Capture-proven full verification currently covers "
-                           "all images below 8 MiB, exact 8/16/24/32 MiB, and "
+                           "all images below 8 MiB, exact 8/16/24/32 MiB, "
+                           "partial 12 MiB, and "
                            "the dedicated tiny-tail-above-16-MiB case.\n"
                         << "Programming completed; no experimental verification "
                            "window selection was sent.\n";

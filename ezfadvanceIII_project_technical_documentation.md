@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.19`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.19`<br>
+**Current project/toolset version:** `0.7.20`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.20`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.19 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.20 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, explicit partial 12-MiB, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. Linux/BSD validation remains pending.
 
 ---
 
@@ -73,7 +73,9 @@ The principal shared components are:
 - `CartridgeFormat`, `GbaHeader`, and `CatalogEntry`, which model and validate binary cartridge metadata;
 - `SaveMemoryReader`, which owns capture-proven save-bank reads;
 - `VerificationPolicy`, which selects only capture-supported verification geometries;
-- `VerificationSession`, which owns the transport-injectable partial first-window and exact 8-MiB verification transcripts;
+- `VerificationSession`, which owns the transport-injectable partial
+  first-window, explicit partial 12-MiB, exact 8-/16-/24-/32-MiB, and
+  tiny-tail verification transcripts;
 - `WriterOptions`, which separates command-line parsing from image and device operations.
 
 The application workflows are represented by `CartridgeImageBuilder`,
@@ -541,7 +543,8 @@ The current evidence-backed policy is:
 ```text
 0 < image < 8 MiB          full read-back verification
 image == 8 MiB             full read-back verification
-8 MiB < image < 16 MiB     verification skipped
+image == 12 MiB            capture/transcript/hardware-proven
+other 8 MiB < image < 16 MiB verification skipped
 image == 16 MiB            full read-back verification
 captured tiny >16-MiB tail full read-back verification
 16 MiB < image < 24 MiB    verification skipped
@@ -2476,6 +2479,22 @@ the confirmed official-cartridge report unless the header validation passes.
 Failure attempts the normal read-session cleanup. No classification command,
 EZ3 probe, extraction block count, or word address changed.
 
+### 36.41 0.7.20 — explicit 12-MiB partial verification transcript
+
+The writer now recognizes exactly `0x00C00000` bytes as the capture-proven
+12-MiB partial higher-window checkpoint from `8_4MB.pcap`. Its dedicated
+`VerificationSession` operation emits the standard status sequence followed by
+`55AA` and three `0000` writes, then performs 192 global-linear 64-KiB `0x91`
+reads. The final read begins at `0x00BF0000` and ends at `0x00C00000`.
+
+The transcript test asserts every callback offset and length, block-varying
+payload data, no delay, and the absence of `0200`, `0020`, `0040`, `0080`,
+`00C0`, `AA55`, and the `AA/55/06` selector tail. No other partial size is
+enabled, and all existing exact-size and tiny-tail paths remain unchanged.
+Hardware testing completed all 192 reads through final offset `0x00BF0000`.
+The two-ROM menu booted on a real GBA, and both Advance Wars and F-Zero
+launched successfully.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2487,7 +2506,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.19 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon; the new confirmation gate awaits rerun
+macOS       supported target; current 0.7.20 baseline compiled and transcript-tested, with partial-12-/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2908,7 +2927,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.19**, the project has an object-oriented structural model:
+At shared toolset version **0.7.20**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;
@@ -2921,6 +2940,7 @@ At shared toolset version **0.7.19**, the project has an object-oriented structu
 - catalog map uses values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` alone does not distinguish them;
 - map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven for the tested layouts;
+- the explicit 12-MiB partial higher-window path is capture-, transcript-, and hardware-proven through all 192 reads, menu boot, and successful launch of both games;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
 - native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;

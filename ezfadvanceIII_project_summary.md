@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.19**.
+Current shared project/toolset version covered by this summary: **0.7.20**.
 
 All mainline utilities carry this same version:
 
@@ -143,6 +143,9 @@ partial first window (<8 MiB):
     then linear 0x91 reads
 exact 8 MiB:
     separate 0x0040 transition
+partial 12 MiB:
+    FFFF / 04 / 00 / 00 / 55AA / 0000 / 0000 / 0000
+    then 192 linear 0x91 reads; hardware-proven
 exact 16 MiB
 exact 24 MiB
 exact 32 MiB
@@ -158,7 +161,9 @@ program extent -> 0x100-byte alignment
 verify extent  -> 0x10000-byte / 64-KiB alignment
 ```
 
-Arbitrary other partial images in the higher 16–32 MiB region are programmed normally, but full verification is skipped unless a capture-proven read mapping exists.
+Other partial higher-window images are programmed normally, but full
+verification is skipped unless an explicit capture-proven checkpoint has been
+integrated.
 
 This avoids false failures caused by invented window-selection rules.
 
@@ -167,7 +172,8 @@ Current boundary:
 ```text
 < 8 MiB                 verify
 = 8 MiB                 verify
-8–16 MiB partial        skip
+= 12 MiB                verify; hardware-proven
+other 8–16 MiB partial  skip
 = 16 MiB                verify
 captured tiny >16 MiB   verify
 16–24 MiB partial       skip
@@ -776,7 +782,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.19 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.20 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1037,9 +1043,21 @@ confirmed official-cartridge report. A rejected header still receives the
 normal read-session cleanup. USB classification, EZ3 probing, extraction read
 count, and word-address progression are unchanged.
 
+## 0.7.20 release changes
+
+**0.7.20** adds only the capture-proven 12-MiB partial higher-window
+verification checkpoint from `8_4MB.pcap`. Its explicit transcript emits the
+existing status sequence, `55AA`, and three `0000` writes, followed by 192
+global-linear 64-KiB reads through final offset `0x00BF0000`. It emits no
+`0200`, size selector, `AA55`, selector tail, or inferred delay. Exact-size,
+tiny-tail, erase, program, startup, and read-only paths are unchanged. Offline
+transcript coverage is complete. Hardware testing completed all 192 reads
+through final offset `0x00BF0000`; the menu booted and both Advance Wars and
+F-Zero launched successfully on a real GBA.
+
 ## Current project status
 
-At shared version **0.7.19**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.20**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -1058,6 +1076,7 @@ At shared version **0.7.19**, the project has an object-oriented structural mode
 - 0.7.17 guards extraction with header validation and restores the EZ3-only save-reader boundary;
 - 0.7.18 applies a generic trailing-`FF` heuristic that trims the completed official-ROM scan to the smallest supported 2/4/8/16/32-MiB extent containing all non-`FF` data;
 - 0.7.19 requires valid GBA fixed-byte/checksum confirmation for ordinary official-cartridge inspection;
+- 0.7.20 adds the explicit capture-, transcript-, and hardware-proven 12-MiB partial higher-window verification checkpoint, including menu boot and successful launch of both games;
 - official Golden Sun extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot; other heuristic trim sizes are not yet hardware-generalized;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
@@ -1089,4 +1108,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.19 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.20 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

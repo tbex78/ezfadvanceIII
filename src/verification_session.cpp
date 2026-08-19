@@ -188,6 +188,24 @@ bool VerificationSession::verifyExact16MiB(
     return verifyLinear(image, image.size(), block_verified);
 }
 
+bool VerificationSession::verifyPartial12MiB(
+    const std::vector<std::uint8_t>& image,
+    const BlockVerifiedCallback& block_verified) const
+{
+    constexpr std::size_t image_size = 0xC00000;
+    if (image.size() != image_size)
+        throw std::invalid_argument(
+            "partial 12-MiB verification requires a 12-MiB image");
+
+    if (!statusSequence()) return false;
+    if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY96READ 55AA")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY96READ 0000 A")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY96READ 0000 B")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY96READ 0000 C")) return false;
+
+    return verifyLinear(image, image.size(), block_verified);
+}
+
 bool VerificationSession::verifyTinyTailAbove16MiB(
     const std::vector<std::uint8_t>& image,
     const BlockVerifiedCallback& block_verified) const
