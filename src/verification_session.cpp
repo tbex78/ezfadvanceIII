@@ -307,6 +307,24 @@ bool VerificationSession::verifyExact32MiB(
     return verifyLinear(image, image.size(), block_verified);
 }
 
+bool VerificationSession::verifyPartial28MiB(
+    const std::vector<std::uint8_t>& image,
+    const BlockVerifiedCallback& block_verified) const
+{
+    constexpr std::size_t image_size = 0x1C00000;
+    if (image.size() != image_size)
+        throw std::invalid_argument(
+            "partial 28-MiB verification requires a 28-MiB image");
+
+    if (!statusSequence()) return false;
+    if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY224READ 55AA")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY224READ 0000 A")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY224READ 0000 B")) return false;
+    if (!protocol_.tx92Two(0x00, 0x00, "VERIFY224READ 0000 C")) return false;
+
+    return verifyLinear(image, image.size(), block_verified);
+}
+
 bool VerificationSession::verifyLinear(
     const std::vector<std::uint8_t>& image,
     std::size_t verify_size,

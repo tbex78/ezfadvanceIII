@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.22`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.22`<br>
+**Current project/toolset version:** `0.7.23`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.23`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.22 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, explicit partial 12-/20-MiB, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.23 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD validation remains pending.
 
 ---
 
@@ -74,7 +74,7 @@ The principal shared components are:
 - `SaveMemoryReader`, which owns capture-proven save-bank reads;
 - `VerificationPolicy`, which selects only capture-supported verification geometries;
 - `VerificationSession`, which owns the transport-injectable partial
-  first-window, explicit partial 12-/20-MiB, exact 8-/16-/24-/32-MiB, and
+  first-window, explicit partial 12-/20-/28-MiB, exact 8-/16-/24-/32-MiB, and
   tiny-tail verification transcripts;
 - `WriterOptions`, which separates command-line parsing from image and device operations.
 
@@ -550,7 +550,8 @@ captured tiny >16-MiB tail full read-back verification
 image == 20 MiB            capture/transcript/hardware-proven
 other 16 MiB < image < 24 MiB verification skipped
 image == 24 MiB            full read-back verification
-24 MiB < image < 32 MiB    verification skipped
+image == 28 MiB            capture/transcript/hardware-proven
+other 24 MiB < image < 32 MiB verification skipped
 image == 32 MiB            full read-back verification
 ```
 
@@ -2529,6 +2530,22 @@ unchanged. Hardware testing without a preliminary full-card wipe completed all
 320 reads through final offset `0x013F0000`. The menu booted on a real GBA,
 and both Tales of Phantasia and F-Zero launched successfully.
 
+### 36.44 0.7.23 — explicit 28-MiB partial verification transcript
+
+The writer now recognizes exactly `0x01C00000` bytes as the capture-proven
+28-MiB partial higher-window checkpoint from `4_8_16MB.pcap`. Its dedicated
+`VerificationSession` operation emits the standard status sequence followed by
+`55AA` and three `0000` writes, then performs 448 global-linear 64-KiB `0x91`
+reads. The final read begins at `0x01BF0000` and ends at `0x01C00000`.
+
+The transcript test asserts every callback offset and length, block-varying
+payload data, no delay, and the absence of `0200`, `0020`, `0040`, `0080`,
+`00C0`, `AA55`, and the `AA/55/06` selector tail. No other size in the
+24–32-MiB partial range is enabled, and all existing verification paths remain
+unchanged. Hardware testing completed all 448 reads through final offset
+`0x01BF0000`. The menu booted on a real GBA, and Tales of Phantasia, Advance
+Wars, and F-Zero all launched successfully.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2540,7 +2557,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.22 baseline compiled and transcript-tested, with partial-12-/20-/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.7.23 baseline compiled and transcript-tested, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2961,7 +2978,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.22**, the project has an object-oriented structural model:
+At shared toolset version **0.7.23**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;
@@ -2973,9 +2990,10 @@ At shared toolset version **0.7.22**, the project has an object-oriented structu
 - catalog type is ROM-size based;
 - catalog map uses values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` alone does not distinguish them;
 - map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
-- partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven for the tested layouts;
+- partial-first-window verification, including explicit 1-/2-/4-MiB checkpoints, and exact 8-/16-/24-/32-MiB verification are capture-, transcript-, and hardware-proven for the tested layouts;
 - the explicit 12-MiB partial higher-window path is capture-, transcript-, and hardware-proven through all 192 reads, menu boot, and successful launch of both games;
 - the explicit 20-MiB partial higher-window path is capture-, transcript-, and hardware-proven through a no-pre-wipe write, all 320 reads, menu boot, and successful launch of both games;
+- the explicit 28-MiB partial higher-window path is capture-, transcript-, and hardware-proven through all 448 reads, menu boot, and successful launch of all three games;
 - official-ROM extraction recognizes 1/2/4/8/16/32-MiB extents through a generic trailing-`FF` heuristic; only the Golden Sun 8-MiB extraction size is hardware-qualified;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
@@ -2985,7 +3003,7 @@ At shared toolset version **0.7.22**, the project has an object-oriented structu
   Sun; guarded full-address-space extraction, correct 8-MiB trimming, trusted
   SHA-256 equality, and extracted-file boot are also hardware-confirmed, while
   the other generic trim sizes are not yet hardware-generalized;
-- hardware validation now includes map-4 singles, map-4 multi-ROM, mixed map-3/map-4 menus, 4-, 8-, exact 16-/32-MiB, and Fire-Emblem-style tiny-tail verification checkpoints, plus 6-ROM 24-/32-MiB and 16+8+8-MiB full-card images.
+- hardware validation now includes 1-/2-/4-MiB partial-first-window checkpoints, exact 8-/16-/24-/32-MiB paths, explicit partial 12-/20-/28-MiB paths, and the Fire-Emblem-style tiny-tail checkpoint, plus the documented map and multi-ROM layouts.
 
 The current refactored source additionally provides RAII device ownership, an
 injectable USB transport, shared protocol and read-state objects, domain models

@@ -12,6 +12,7 @@ enum class VerificationMode {
     tiny_tail_above_16_mib,
     partial_20_mib,
     exact_24_mib,
+    partial_28_mib,
     exact_32_mib,
     unsupported_partial_higher_window
 };
@@ -24,6 +25,7 @@ public:
     static constexpr std::size_t size_16_mib = 0x1000000;
     static constexpr std::size_t size_20_mib = 0x1400000;
     static constexpr std::size_t size_24_mib = 0x1800000;
+    static constexpr std::size_t size_28_mib = 0x1C00000;
     static constexpr std::size_t size_32_mib = 0x2000000;
 
     VerificationMode modeFor(std::size_t image_size) const noexcept;

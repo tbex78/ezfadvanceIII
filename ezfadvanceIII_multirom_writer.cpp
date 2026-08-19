@@ -173,7 +173,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.22 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.23 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -3025,6 +3025,26 @@ public:
                 }
             });
     }
+    bool verifyPartial28MiB(const std::vector<uint8_t>& image) {
+        std::cout
+            << "\nPreparing capture-proven partial 28-MiB linear "
+               "read/verify state...\n"
+            << "\n========================================\n"
+            << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
+            << "========================================\n";
+        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        return verification_.verifyPartial28MiB(
+            image,
+            [&](size_t offset, size_t length) {
+                if (verbose_) {
+                    std::cout << "verified card byte 0x" << std::hex
+                              << std::setw(8) << std::setfill('0') << offset
+                              << " length 0x" << length << std::dec << '\n';
+                } else {
+                    progress.update(offset + length);
+                }
+            });
+    }
     bool verifyExact32MiB(const std::vector<uint8_t>& image) {
         std::cout
             << "\nPreparing 256-Mbit / 32-MiB linear read/verify mapping...\n"
@@ -3291,6 +3311,12 @@ int main(int argc, char** argv)
                 ok = card_writer.verifyExact32MiB(image);
                 full_verify_completed = ok;
                 break;
+            case ezfadvance::VerificationMode::partial_28_mib:
+                // 4_8_16MB.pcap proves the explicit 28-MiB transcript
+                // without an exact-size selector/reset tail.
+                ok = card_writer.verifyPartial28MiB(image);
+                full_verify_completed = ok;
+                break;
             case ezfadvance::VerificationMode::exact_24_mib:
                 ok = card_writer.verifyExact24MiB(image);
                 full_verify_completed = ok;
@@ -3346,7 +3372,7 @@ int main(int argc, char** argv)
                            "capture-proven linear read mapping yet.\n"
                         << "Capture-proven full verification currently covers "
                            "all images below 8 MiB, exact 8/16/24/32 MiB, "
-                           "partial 12/20 MiB, and "
+                           "partial 12/20/28 MiB, and "
                            "the dedicated tiny-tail-above-16-MiB case.\n"
                         << "Programming completed; no experimental verification "
                            "window selection was sent.\n";

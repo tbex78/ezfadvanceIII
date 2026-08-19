@@ -70,6 +70,12 @@ public:
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 
+    // 4_8_16MB.pcap: status/reset followed by 55AA + three 0000 writes, then
+    // 448 global-linear reads. No selector tail or delay is emitted.
+    bool verifyPartial28MiB(
+        const std::vector<std::uint8_t>& image,
+        const BlockVerifiedCallback& block_verified = {}) const;
+
     // 256MBits-rom.pcap: transition from the already-selected 0x00C0 program
     // window without emitting another window selector, then 512 linear reads.
     bool verifyExact32MiB(

@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.22` toolset, including the guarded
+**Specification baseline:** shared `0.7.23` toolset, including the guarded
 official-cartridge detection and raw-extraction increment of 2026-08-19.
 
 This specification distinguishes capture evidence, deterministic transcript
@@ -379,11 +379,13 @@ USB traffic.
 
 Owns transport-injectable post-program verification operations without choosing
 the verification geometry. The partial first-window operation emits only the
-capture-proven status sequence and global-linear `0x91` reads. The exact 8-MiB
-operation preserves its explicit `0x0040` mapping transition and captured
-125-ms delay. Exact 16-, 24-, and 32-MiB and tiny-tail-above-16-MiB operations
-remain explicit capture-derived state machines. Every currently selected mode
-has a deterministic transcript fixture.
+capture-proven status sequence and global-linear `0x91` reads; its 1-, 2-, and
+4-MiB checkpoints are hardware-proven. The exact 8-MiB operation preserves its
+explicit `0x0040` mapping transition and captured 125-ms delay. Exact 16-,
+24-, and 32-MiB, explicit partial 12-/20-/28-MiB, and
+tiny-tail-above-16-MiB operations remain explicit capture-derived state
+machines. Every currently selected mode has a deterministic transcript
+fixture.
 
 #### `WriterOptions`
 
@@ -444,7 +446,8 @@ rounded up to a `0x100`-byte boundary.
 | Exactly 20 MiB | Capture-, transcript-, and hardware-proven partial higher-window verification |
 | Other partial 16–24 MiB | Skip as unsupported |
 | Exactly 24 MiB | Full verification |
-| Partial 24–32 MiB | Skip as unsupported |
+| Exactly 28 MiB | Capture-, transcript-, and hardware-proven partial higher-window verification |
+| Other partial 24–32 MiB | Skip as unsupported |
 | Exactly 32 MiB | Full verification |
 
 Unsupported verification geometry must not cause the writer to invent a read
@@ -453,14 +456,14 @@ skipped, and distinguish that outcome from verification success.
 
 New capture evidence exists for representative 12-, 20-, and 28-MiB partial
 higher-window verification using the simple global-linear prefix. Versions
-0.7.20 and 0.7.22 select only the explicit 12- and 20-MiB
+0.7.20, 0.7.22, and 0.7.23 select only the explicit 12-, 20-, and 28-MiB
 checkpoints, each backed by a deterministic transcript fixture. The 12-MiB
 hardware test completed all 192 reads through final offset `0x00BF0000`,
 booted the menu, and launched both games. The 20-MiB hardware test, performed
 without a preliminary full-card wipe, completed all 320 reads through
-`0x013F0000`, booted the menu, and launched both games. The 28-MiB checkpoint
-remains unsupported until its separate implementation increment. The existing
-tiny-tail exception remains unchanged.
+`0x013F0000`, booted the menu, and launched both games. The 28-MiB hardware
+test completed all 448 reads through `0x01BF0000`, booted the menu, and
+launched all three games. The existing tiny-tail exception remains unchanged.
 
 ## 9. Safety requirements
 
@@ -530,7 +533,8 @@ The test suite covers:
 - a synthetic 512-block official-ROM extraction through final word address
   `0x00FF8000` using block-varying data;
 - every verification-policy boundary;
-- exact transcripts for partial-first-window, exact 8/16/24/32 MiB, and
+- exact transcripts for partial-first-window (including the 1/2/4-MiB
+  checkpoints), explicit partial 12/20/28 MiB, exact 8/16/24/32 MiB, and
   tiny-tail-above-16-MiB verification;
 - writer option parsing, including multi-digit structural catalog slots.
 
@@ -650,10 +654,10 @@ The current durable support boundary is:
 | EZ3 inspection and catalog parsing | yes | partial/pure parsing | yes |
 | Official-ROM detection and header inspection | yes | yes | yes, Golden Sun on macOS |
 | Official full scan with 1/2/4/8/16/32-MiB trailing-`FF` sizing | scan yes / generic sizing heuristic | yes | 8 MiB only: Golden Sun trim/hash/boot on macOS; 1/2/4/16/32-MiB sizing not yet hardware-generalized |
-| Partial first-window verification | yes | yes | yes |
+| Partial first-window verification, including 1/2/4-MiB checkpoints | yes | yes | yes |
 | Exact 8/16/24/32-MiB verification | yes | yes | yes |
 | Tiny tail immediately above 16 MiB | yes | yes | yes |
-| Representative 12/20/28-MiB verification | yes | 12/20 MiB yes; 28 MiB pending integration | 12/20 MiB yes; 28 MiB pending |
+| Representative 12/20/28-MiB verification | yes | yes | yes |
 | Other arbitrary partial higher extents | no | no | no |
 | `SRAM_V111` 32-KiB save extraction | yes | protocol component coverage | yes |
 | EEPROM map-4/map-5 generic discriminator | incomplete | no | explicit override required |

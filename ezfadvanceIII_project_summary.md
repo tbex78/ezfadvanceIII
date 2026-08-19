@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.22**.
+Current shared project/toolset version covered by this summary: **0.7.23**.
 
 All mainline utilities carry this same version:
 
@@ -149,6 +149,9 @@ partial 12 MiB:
 partial 20 MiB:
     FFFF / 04 / 00 / 00 / 55AA / 0000 / 0000 / 0000
     then 320 linear 0x91 reads; hardware-proven
+partial 28 MiB:
+    FFFF / 04 / 00 / 00 / 55AA / 0000 / 0000 / 0000
+    then 448 linear 0x91 reads; hardware-proven
 exact 16 MiB
 exact 24 MiB
 exact 32 MiB
@@ -182,7 +185,8 @@ captured tiny >16 MiB   verify
 = 20 MiB                verify; hardware-proven
 other 16–24 MiB partial skip
 = 24 MiB                verify
-24–32 MiB partial       skip
+= 28 MiB                verify; hardware-proven
+other 24–32 MiB partial skip
 = 32 MiB                verify
 ```
 
@@ -740,9 +744,13 @@ fixed both games and led to the generic size-class plus signature-associated map
 
 Original-manager captures now prove 1 through 8 active catalog entries. The loader contains 120 structural 28-byte slots, but menu/runtime behavior above 8 entries remains unproven.
 
-### Other partial 16–32 MiB readback geometries
+### Other partial higher-window readback geometries
 
-Exact 16-, 24-, and 32-MiB verification mappings are capture-proven, plus the tiny Fire-Emblem-style tail immediately above 16 MiB. Other arbitrary partial higher-window extents remain deliberately unproven.
+Exact 8-, 16-, 24-, and 32-MiB verification mappings, explicit partial 12-,
+20-, and 28-MiB checkpoints, and the tiny Fire-Emblem-style tail immediately
+above 16 MiB are capture-proven. The partial first-window path includes
+hardware-proven 1-, 2-, and 4-MiB checkpoints. Other arbitrary partial
+higher-window extents remain deliberately unproven.
 
 ### FLASH1M
 
@@ -786,7 +794,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.22 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.23 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1086,9 +1094,22 @@ coverage is complete. Hardware testing without a preliminary full-card wipe
 completed all 320 reads through final offset `0x013F0000`; the menu booted and
 both Tales of Phantasia and F-Zero launched successfully on a real GBA.
 
+## 0.7.23 release changes
+
+**0.7.23** adds only the capture-proven 28-MiB partial higher-window
+verification checkpoint from `4_8_16MB.pcap`. Its explicit transcript emits
+the existing status sequence, `55AA`, and three `0000` writes, followed by 448
+global-linear 64-KiB reads through final offset `0x01BF0000`. It emits no
+`0200`, size selector, `AA55`, selector tail, or inferred delay. Existing
+exact-size, 12-/20-MiB, tiny-tail, erase, program, extraction, and startup paths
+are unchanged. Offline transcript coverage is complete. Hardware testing
+completed all 448 reads through final offset `0x01BF0000`; the menu booted and
+Tales of Phantasia, Advance Wars, and F-Zero all launched successfully on a
+real GBA.
+
 ## Current project status
 
-At shared version **0.7.22**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.23**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -1110,13 +1131,14 @@ At shared version **0.7.22**, the project has an object-oriented structural mode
 - 0.7.20 adds the explicit capture-, transcript-, and hardware-proven 12-MiB partial higher-window verification checkpoint, including menu boot and successful launch of both games;
 - 0.7.21 adds 1 MiB to the generic official-ROM trailing-`FF` sizing table; physical 1-MiB official-cartridge extraction remains hardware-pending;
 - 0.7.22 adds the explicit capture-, transcript-, and hardware-proven 20-MiB partial higher-window verification checkpoint, including a successful no-pre-wipe write, menu boot, and launch of both games;
+- 0.7.23 adds the explicit capture-, transcript-, and hardware-proven 28-MiB partial higher-window verification checkpoint, including menu boot and successful launch of all three games;
 - official Golden Sun extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot; other heuristic trim sizes are not yet hardware-generalized;
-- partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts;
+- partial first-window verification, including explicit 1-/2-/4-MiB checkpoints, and exact 8-/16-/24-/32-MiB verification are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;
 - paired FFTA evidence proves that non-SRAM save-library signatures may survive SRAM patching while runtime save code changes;
 - native scope is macOS/Linux/BSD through libusb; Windows users should use a Linux VM with USB passthrough;
-- real hardware now validates map-4 single/multi cases, mixed map-3/map-4 menus, 4-, 8-, exact 16-/32-MiB, and Fire-Emblem-style tiny-tail verification checkpoints, plus 6-ROM 24-/32-MiB and 16+8+8-MiB full-card images.
+- real hardware now validates 1-/2-/4-MiB partial-first-window checkpoints, exact 8-/16-/24-/32-MiB paths, explicit partial 12-/20-/28-MiB paths, and the Fire-Emblem-style tiny-tail checkpoint, plus the documented map and multi-ROM layouts.
 
 The remaining work is primarily **expanding evidence coverage**, especially the EEPROM map-4/map-5 discriminator, 9+ menu counts, save-bank behavior, and Linux/BSD hardware validation.
 
@@ -1141,4 +1163,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.22 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.23 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

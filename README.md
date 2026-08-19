@@ -1,12 +1,15 @@
-# EZF Advance III opensource alternative software
+# EZF Advance III open-source alternative software
 
 ![EZF Advance III](ezadvanceIII_image1.jpg) ![EZF Advance III](ezadvanceIII_image2.jpg)
 
-Please look at 
-[Project Summary](ezfadvanceIII_project_summary.md) 
-and 
-[Detailed documentation](ezfadvanceIII_project_technical_documentation.md) 
-to learn more
+This repository provides four native C++17/libusb command-line tools for the
+32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
+version is **0.7.23**.
+
+See the [project summary](ezfadvanceIII_project_summary.md),
+[software specification](SOFTWARE_SPECIFICATION.md), and
+[technical documentation](ezfadvanceIII_project_technical_documentation.md)
+for the evidence history and protocol details.
 
 ## Build and test
 
@@ -23,6 +26,12 @@ cartridge:
 make test
 ```
 
+The native source/build targets are macOS, Linux, FreeBSD, OpenBSD, NetBSD,
+and DragonFly BSD. macOS on Apple Silicon is the current compile and physical
+hardware validation baseline. Linux and BSD hardware qualification remains
+pending. Native Windows builds are unsupported; use a Linux virtual machine
+with USB passthrough if required.
+
 The code is organized in layers:
 
 - `UsbDevice` owns the libusb context, device handle, and claimed interface.
@@ -31,15 +40,96 @@ The code is organized in layers:
 - `ReadOnlyCartridge` owns the capture-derived initialization and ROM-read state machine.
 - `GbaHeader`, `CatalogEntry`, and `CartridgeFormat` model cartridge metadata.
 - `SaveMemoryReader` owns capture-proven save-bank reads.
-- `VerificationSession` owns all capture-supported post-program verification paths: partial first-window, explicit partial 12/20 MiB, exact 8/16/24/32 MiB, and tiny-tail-above-16-MiB.
+- `VerificationSession` owns all capture-supported post-program verification paths: partial first-window, explicit partial 12/20/28 MiB, exact 8/16/24/32 MiB, and tiny-tail-above-16-MiB.
 - `CartridgeImageBuilder`, `CardWriter`, `CardInspector`, `SaveExtractor`, and `CardEraser` implement the four application workflows.
+
+## Command-line tools
+
+### Inspect a cartridge
+
+```sh
+./ezfadvanceIII_card_reader
+```
+
+The reader distinguishes capture-supported EZ3 flash behavior from an ordinary
+official GBA cartridge. An official cartridge is reported as confirmed only
+when its GBA fixed header byte and complement checksum are valid.
+
+### Extract an official GBA cartridge
+
+```sh
+./ezfadvanceIII_card_reader --extract OUTPUT.gba
+```
+
+Add `--verbose` for per-block addresses, timing, and throughput. Extraction is
+read-only: it performs a guarded full 32-MiB scan using 512 global-linear
+64-KiB reads, completes read-session cleanup, and then writes the smallest
+1/2/4/8/16/32-MiB extent containing all non-`FF` data. This trailing-`FF`
+sizing is a generic heuristic, not a recovered original-manager algorithm.
+
+A Golden Sun 8-MiB extraction is hardware-proven by trusted SHA-256 equality
+and real-hardware boot. Other extraction sizes, including the new 1-MiB
+extent, still require equivalent physical-cartridge dump/hash qualification.
+
+### Read an EZ3 save
+
+```sh
+./ezfadvanceIII_save_reader --output OUTPUT.sav
+```
+
+Save/catalog processing is restricted to a cartridge positively classified as
+EZ3 flash. The currently capture-proven save path is 32-KiB `SRAM_V111`; use
+`--rom N` to choose a catalog entry when automatic selection is insufficient.
+
+### Build or write a multi-ROM image
+
+Dry-run layout inspection does not access USB:
+
+```sh
+./ezfadvanceIII_multirom_writer ROM1.gba [ROM2.gba ...]
+```
+
+Erase, program, and verify the constructed image:
+
+```sh
+./ezfadvanceIII_multirom_writer --yes-really-write ROM1.gba [ROM2.gba ...]
+```
+
+The default destructive-write display uses progress bars. Add `--verbose` for
+per-sector and per-block diagnostics. `--skip-verify` deliberately omits ROM
+readback comparison but still performs status/reset cleanup. EEPROM images may
+require an evidence-backed `--mapN=4` or `--mapN=5` override; the writer does
+not patch save routines automatically.
+
+Capture-supported verification currently covers:
+
+- every constructed extent below 8 MiB, with 1-, 2-, and 4-MiB checkpoints
+  explicitly hardware-proven;
+- exact 8, 16, 24, and 32 MiB, all hardware-proven;
+- explicit partial 12, 20, and 28 MiB, all hardware-proven;
+- the dedicated tiny-tail case immediately above 16 MiB.
+
+Other partial higher-window extents are programmed normally but full readback
+verification is skipped rather than using an inferred selector.
+
+### Wipe an EZ3 cartridge
+
+```sh
+./ezfadvanceIII_wipe_card --yes-really-wipe
+```
+
+This is a destructive full-card erase followed by capture-derived blank
+verification. A preventive wipe before a large write is optional and is never
+performed automatically.
 
 ## Project status
 
 This project is a working community-developed alternative for EZF Advance III
 hardware. Its core workflows are covered by offline tests, and supported write
 and read-back verification paths have been exercised successfully on real
-hardware. Development and reverse engineering are still ongoing, so hardware
+hardware. The representative 12-/20-/28-MiB partial higher-window checkpoints
+are capture-, transcript-, and hardware-proven. Development and reverse
+engineering are still ongoing, so hardware
 and cartridge configurations outside the documented and tested paths may not
 behave as expected.
 
@@ -67,16 +157,16 @@ We hope that someone with the necessary technical knowledge and interest will **
 
 This software and project are provided **“AS IS” and “AS AVAILABLE,” without warranty of any kind**, express or implied.
 
-This project remains under active development and may contain bugs, incomplete features, incorrect assumptions, or unexpected behavior, particularly on hardware and configurations that have not yet been tested. Use of this software may cause data loss, corruption, malfunction, permanent damage, or otherwise render an **EZF Avance III Device partially or completely unusable (“bricked”)**.
+This project remains under active development and may contain bugs, incomplete features, incorrect assumptions, or unexpected behavior, particularly on hardware and configurations that have not yet been tested. Use of this software may cause data loss, corruption, malfunction, permanent damage, or otherwise render an **EZF Advance III device partially or completely unusable (“bricked”)**.
 
-A substantial portion of this project was created through **“vibe coding,” reverse engineering, experimentation, and the use of AI-assisted development tools, including ChatGPT**. As a result, the code may contain errors, inaccurate implementations, undocumented behavior, or functionality that has not been thoroughly tested or independently verified.
+A substantial portion of this project was created through **“vibe coding,” reverse engineering, experimentation, and the use of AI-assisted development tools, including ChatGPT and Codex**. As a result, the code may contain errors, inaccurate implementations, undocumented behavior, or functionality that has not been thoroughly tested or independently verified.
 
-The owner of this Git repository **does not claim to possess the technical expertise, engineering qualifications, or detailed knowledge necessary to guarantee the correctness or safety of the software**. The repository owner may also be unable to provide technical support, debugging assistance, device recovery assistance, repair instructions, or further development support if the software causes problems or damages an EZF Avance III Device.
+The owner of this Git repository **does not claim to possess the technical expertise, engineering qualifications, or detailed knowledge necessary to guarantee the correctness or safety of the software**. The repository owner may also be unable to provide technical support, debugging assistance, device recovery assistance, repair instructions, or further development support if the software causes problems or damages an EZF Advance III device.
 
 By downloading, installing, modifying, executing, flashing, or otherwise using this software, you acknowledge and accept that you do so **entirely at your own risk**.
 
-To the maximum extent permitted by applicable law, the author(s), contributor(s), and maintainer(s) of this project shall not be liable for any direct, indirect, incidental, special, consequential, or other damages arising from or related to the use or inability to use this software, including, without limitation, damage to hardware, loss or corruption of data, loss of functionality, device failure, or the permanent bricking of an EZF Avance III Device.
+To the maximum extent permitted by applicable law, the author(s), contributor(s), and maintainer(s) of this project shall not be liable for any direct, indirect, incidental, special, consequential, or other damages arising from or related to the use or inability to use this software, including, without limitation, damage to hardware, loss or corruption of data, loss of functionality, device failure, or the permanent bricking of an EZF Advance III device.
 
-**You are solely responsible for understanding the risks, making appropriate backups where possible, verifying the software before use, and determining whether you are willing to accept the possibility of permanently damaging your EZF Avance III Device.**
+**You are solely responsible for understanding the risks, making appropriate backups where possible, verifying the software before use, and determining whether you are willing to accept the possibility of permanently damaging your EZF Advance III device.**
 
 Do not use this software on any device that you are not prepared to potentially damage or lose. Use this project only if you fully understand and accept these risks.
