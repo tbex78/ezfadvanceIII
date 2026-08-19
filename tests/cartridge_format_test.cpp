@@ -25,6 +25,7 @@ int main()
     for (std::size_t i = 0; i < 12; ++i) header[0xA0 + i] = title[i];
     for (std::size_t i = 0; i < 4; ++i) header[0xAC + i] = game[i];
     for (std::size_t i = 0; i < 2; ++i) header[0xB0 + i] = maker[i];
+    header[0xB2] = 0x96;
     header[0xBC] = 7;
     std::uint8_t checksum = 0;
     for (std::size_t i = 0xA0; i <= 0xBC; ++i)
@@ -38,6 +39,16 @@ int main()
     assert(parsed_header.game_code == "TEST");
     assert(parsed_header.maker_code == "01");
     assert(parsed_header.version == 7);
+    assert(CartridgeFormat::validGbaRomHeader(header));
+
+    auto invalid_fixed_value = header;
+    invalid_fixed_value[0xB2] = 0;
+    assert(!CartridgeFormat::validGbaRomHeader(invalid_fixed_value));
+    auto invalid_checksum = header;
+    invalid_checksum[0xBD] ^= 1;
+    assert(!CartridgeFormat::validGbaRomHeader(invalid_checksum));
+    assert(!CartridgeFormat::validGbaRomHeader(
+        std::vector<std::uint8_t>(0xBF, 0)));
 
     std::vector<std::uint8_t> loader(28, 0);
     const char name[] = "CATALOG";

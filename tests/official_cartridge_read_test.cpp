@@ -98,6 +98,10 @@ void testProbeClassification()
     const Probe another_rom = {0x00,0x00,0xA0,0xE1};
     assert(ezfadvance::ReadOnlyCartridge::classifyProbeBehavior(
                another_rom, another_rom) == CartridgeKind::official_gba_rom);
+
+    assert(ezfadvance::hasEz3Catalog(CartridgeKind::ez3_flash));
+    assert(!ezfadvance::hasEz3Catalog(CartridgeKind::official_gba_rom));
+    assert(!ezfadvance::hasEz3Catalog(CartridgeKind::unknown));
 }
 
 void testOfficialDetectionStopsEz3Path()

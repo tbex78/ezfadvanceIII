@@ -27,6 +27,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "ezfadvance/usb_device.hpp"
@@ -34,7 +35,7 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 
-// EZF Advance III card reader 0.7.14, read-only inspector.
+// EZF Advance III card reader 0.7.17, read-only inspector.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Card-read protocol behavior remains unchanged from 0.5.13.
 //
@@ -113,6 +114,88 @@ static constexpr size_t MULTI_CATALOG_MAX_ENTRIES =
     (MULTI_CATALOG_END_OFF - MULTI_ENTRY_OFF) / CATALOG_ENTRY_SIZE;
 static constexpr size_t CAPTURE_PROVEN_MAX_ROMS = 8;
 static constexpr size_t LOADER_READ_SIZE = 0x7080;
+
+static std::string progress_duration(double seconds)
+{
+    if (seconds < 0.0) seconds = 0.0;
+    const uint64_t total_seconds = static_cast<uint64_t>(seconds + 0.5);
+    const uint64_t hours = total_seconds / 3600;
+    const uint64_t minutes = (total_seconds % 3600) / 60;
+    const uint64_t secs = total_seconds % 60;
+    std::ostringstream output;
+    if (hours != 0) {
+        output << hours << ':' << std::setw(2) << std::setfill('0') << minutes
+               << ':' << std::setw(2) << secs;
+    } else {
+        output << minutes << ':' << std::setw(2) << std::setfill('0') << secs;
+    }
+    return output.str();
+}
+
+class ProgressBar final {
+public:
+    ProgressBar(std::string label, std::size_t total)
+        : label_(std::move(label)), total_(total),
+          started_(std::chrono::steady_clock::now())
+    {
+    }
+
+    ~ProgressBar()
+    {
+        if (drew_ && !finished_) std::cout << '\n';
+    }
+
+    void update(std::size_t completed)
+    {
+        completed = std::min(completed, total_);
+        const double elapsed = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - started_).count();
+        const double ratio = total_ == 0 ? 1.0 :
+            static_cast<double>(completed) / static_cast<double>(total_);
+        static constexpr std::size_t width = 32;
+        const std::size_t filled = std::min<std::size_t>(
+            static_cast<std::size_t>(ratio * width), width);
+
+        std::ostringstream output;
+        output << label_ << " [";
+        for (std::size_t i = 0; i < width; ++i)
+            output << (i < filled ? '=' :
+                       (i == filled && completed < total_ ? '>' : ' '));
+        output << "] " << std::fixed << std::setprecision(1)
+               << ratio * 100.0 << "%  " << std::setprecision(2)
+               << static_cast<double>(completed) / (1024.0 * 1024.0) << '/'
+               << static_cast<double>(total_) / (1024.0 * 1024.0) << " MiB";
+
+        if (elapsed > 0.0 && completed != 0) {
+            const double rate = static_cast<double>(completed) / elapsed;
+            const double remaining = rate > 0.0 ?
+                static_cast<double>(total_ - completed) / rate : 0.0;
+            output << "  " << std::setprecision(1) << rate / 1024.0
+                   << " KiB/s  elapsed " << progress_duration(elapsed)
+                   << "  ETA " << progress_duration(remaining);
+        }
+
+        const std::string line = output.str();
+        std::cout << '\r' << line;
+        if (last_width_ > line.size())
+            std::cout << std::string(last_width_ - line.size(), ' ');
+        std::cout << std::flush;
+        last_width_ = line.size();
+        drew_ = true;
+        if (completed == total_) {
+            std::cout << '\n';
+            finished_ = true;
+        }
+    }
+
+private:
+    std::string label_;
+    std::size_t total_;
+    bool drew_ = false;
+    bool finished_ = false;
+    std::size_t last_width_ = 0;
+    std::chrono::steady_clock::time_point started_;
+};
 
 static_assert(MULTI_ENTRY_OFF +
               MULTI_CATALOG_MAX_ENTRIES * CATALOG_ENTRY_SIZE ==
@@ -202,16 +285,78 @@ static int inspect_official_cartridge(libusb_device_handle* h)
 }
 
 static int extract_official_cartridge(libusb_device_handle* h,
-                                      const std::string& output_path)
+                                      const std::string& output_path,
+                                      bool verbose)
 {
     constexpr std::size_t dump_size = CARD_IMAGE_LIMIT;
-    std::vector<std::uint8_t> image;
+    constexpr std::size_t block_size = 0x10000;
+    std::vector<std::uint8_t> image(dump_size);
     std::cout << "Reading the full 32-MiB GBA address space as "
-              << (dump_size / 0x10000) << " x 64-KiB blocks...\n";
+              << (dump_size / block_size) << " x 64-KiB blocks...\n";
 
-    const bool read_ok =
-        ezfadvance::ReadOnlyCartridge(h).read(0, image, dump_size);
+    bool read_ok = true;
+    bool header_checked = false;
+    bool header_ok = false;
+    ezfadvance::ReadOnlyCartridge cartridge(h);
+    const auto extraction_started = std::chrono::steady_clock::now();
+    {
+        ProgressBar progress("Extract", dump_size);
+        if (!verbose) progress.update(0);
+        for (std::size_t offset = 0; offset < dump_size && read_ok;
+             offset += block_size) {
+            const auto block_started = std::chrono::steady_clock::now();
+            read_ok = cartridge.read(static_cast<std::uint32_t>(offset),
+                                     image.data() + offset, block_size);
+            if (!read_ok) continue;
+            if (offset == 0) {
+                header_checked = true;
+                std::vector<std::uint8_t> first_block(
+                    image.begin(), image.begin() + block_size);
+                header_ok = ezfadvance::CartridgeFormat::validGbaRomHeader(
+                    first_block);
+                if (!header_ok) {
+                    read_ok = false;
+                    continue;
+                }
+                if (verbose)
+                    std::cout << "Validated GBA header checksum and fixed "
+                                 "value 0x96 before full extraction.\n";
+            }
+            if (verbose) {
+                const double seconds = std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - block_started).count();
+                const double kib_per_second = seconds > 0.0 ?
+                    (static_cast<double>(block_size) / 1024.0) / seconds : 0.0;
+                std::cout << "read card byte 0x" << std::hex
+                          << std::setw(8) << std::setfill('0') << offset
+                          << " length 0x" << block_size << std::dec
+                          << std::setfill(' ') << ": " << std::fixed
+                          << std::setprecision(3) << seconds << " s, "
+                          << std::setprecision(1) << kib_per_second
+                          << " KiB/s\n";
+            } else {
+                progress.update(offset + block_size);
+            }
+        }
+    }
+    if (verbose && read_ok) {
+        const double seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - extraction_started).count();
+        const double mib_per_second = seconds > 0.0 ?
+            (static_cast<double>(dump_size) / (1024.0 * 1024.0)) / seconds : 0.0;
+        std::cout << "ROM read complete: " << dump_size << " bytes in "
+                  << std::fixed << std::setprecision(3) << seconds << " s ("
+                  << std::setprecision(2) << mib_per_second << " MiB/s).\n";
+    }
     const bool finish_ok = ezfadvance::ReadOnlyCartridge(h).finishSession();
+    if (header_checked && !header_ok) {
+        std::cerr << "Official cartridge classification was not sufficient: "
+                     "the GBA header checksum/fixed value is invalid. "
+                     "Extraction was refused.\n";
+        if (!finish_ok)
+            std::cerr << "Read-session cleanup also failed.\n";
+        return 3;
+    }
     if (!read_ok) {
         std::cerr << "Official cartridge extraction failed during ROM read.\n";
         if (!finish_ok)
@@ -512,24 +657,45 @@ static void usage(const char* argv0)
 {
     std::cout << "Usage:\n"
               << "  " << argv0 << "\n"
-              << "  " << argv0 << " --extract OUTPUT.gba\n\n"
+              << "  " << argv0 << " --extract OUTPUT.gba [--verbose]\n\n"
               << "Read-only EZF Advance III card inspector (" << host_platform_name() << ").\n"
               << "--extract writes an untrimmed 32-MiB raw dump of a detected "
-                 "official GBA cartridge.\n";
+                 "official GBA cartridge.\n"
+              << "--verbose replaces the extraction progress bar with per-block "
+                 "address and timing diagnostics.\n";
 }
 
 int main(int argc, char** argv)
 {
     bool extract = false;
+    bool verbose = false;
     std::string output_path;
-    if (argc == 3 && std::string(argv[1]) == "--extract") {
-        extract = true;
-        output_path = argv[2];
-        if (output_path.empty()) {
+    for (int i = 1; i < argc; ++i) {
+        const std::string argument = argv[i];
+        if (argument == "--extract") {
+            if (extract || i + 1 >= argc) {
+                usage(argv[0]);
+                return 1;
+            }
+            extract = true;
+            output_path = argv[++i];
+            if (output_path.empty()) {
+                usage(argv[0]);
+                return 1;
+            }
+        } else if (argument == "--verbose") {
+            verbose = true;
+        } else if (argument == "--help" || argument == "-h") {
+            usage(argv[0]);
+            return 0;
+        } else {
+            std::cerr << "Unknown option: " << argument << '\n';
             usage(argv[0]);
             return 1;
         }
-    } else if (argc != 1) {
+    }
+    if (verbose && !extract) {
+        std::cerr << "--verbose is currently available with --extract only.\n";
         usage(argv[0]);
         return 1;
     }
@@ -566,7 +732,8 @@ int main(int argc, char** argv)
     ezfadvance::CartridgeKind kind = ezfadvance::CartridgeKind::unknown;
     if (initialize_read_session(h, kind)) {
         if (kind == ezfadvance::CartridgeKind::official_gba_rom) {
-            result = extract ? extract_official_cartridge(h, output_path)
+            result = extract ? extract_official_cartridge(h, output_path,
+                                                          verbose)
                              : inspect_official_cartridge(h);
         } else if (extract) {
             std::cerr << "--extract currently supports official GBA cartridges "

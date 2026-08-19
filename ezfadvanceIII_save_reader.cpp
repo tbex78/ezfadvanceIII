@@ -36,7 +36,7 @@
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"
 
-// EZF Advance III save reader 0.7.14, read-only dumper.
+// EZF Advance III save reader 0.7.17, read-only dumper.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Save-read protocol behavior remains unchanged from 0.5.10.
 //
@@ -127,9 +127,18 @@ static bool read_card(libusb_device_handle* h,
     return ezfadvance::ReadOnlyCartridge(h).read(byte_address, out, length);
 }
 
-static bool original_manager_read_prime(libusb_device_handle* h)
+static bool initialize_ez3_read_session(libusb_device_handle* h)
 {
-    return ezfadvance::ReadOnlyCartridge(h).initialize();
+    ezfadvance::ReadOnlyCartridge cartridge(h);
+    if (!cartridge.initialize()) return false;
+    if (ezfadvance::hasEz3Catalog(cartridge.kind())) return true;
+
+    std::cerr << "Save extraction requires an EZ3 flash cartridge; refusing "
+                 "EZ3 catalog/save processing for an official or unknown "
+                 "cartridge.\n";
+    if (!cartridge.finishSession())
+        std::cerr << "Read-session cleanup after cartridge rejection failed.\n";
+    return false;
 }
 
 static bool prepare_linear_16m_read(libusb_device_handle* h)
@@ -570,7 +579,7 @@ int main(int argc, char** argv)
               << "; interface 0 claimed.\n";
 
     int result = 2;
-    if (original_manager_read_prime(h)) {
+    if (initialize_ez3_read_session(h)) {
         SaveExtractor extractor(h, output, requested_rom);
         result = extractor.run();
         if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
@@ -581,7 +590,7 @@ int main(int argc, char** argv)
         }
     }
     else
-        std::cerr << "Card initialization/read-prime failed.\n";
+        std::cerr << "EZ3 card initialization/read-prime failed.\n";
 
     return result;
 }

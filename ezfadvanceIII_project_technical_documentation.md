@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.14`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.14`<br>
+**Current project/toolset version:** `0.7.17`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.17`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.14 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.17 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection and header inspection are hardware-confirmed; full raw extraction/hash comparison remains pending. Linux/BSD validation remains pending.
 
 ---
 
@@ -1652,20 +1652,37 @@ extraction remains to be hardware-qualified.
 Raw extraction is requested explicitly:
 
 ```bash
-ezfadvanceIII_card_reader --extract OUTPUT.gba
+ezfadvanceIII_card_reader --extract OUTPUT.gba [--verbose]
 ```
 
 This path is available only for a detected official cartridge. It reuses the
 capture-proven ordinary ROM-read primitive to read the complete 32-MiB GBA
 address space as 512 sequential 64-KiB blocks. Byte offsets are encoded as
 word addresses, ending with byte offset `0x01ff0000` / word address
-`0x00ff8000`. The file is written only after the ROM read and read-session
-cleanup succeed, and an existing destination is not overwritten.
+`0x00ff8000`. During the read, an in-place progress bar reports percentage,
+completed/total MiB, average throughput, elapsed time, and ETA. The file is
+written only after the ROM read and read-session cleanup succeed, and an
+existing destination is not overwritten.
+
+Passing `--verbose` replaces the live extraction bar with per-block diagnostics
+showing each 64-KiB byte address, transfer length, duration, and throughput,
+then prints the total read duration and average MiB/s. As with the writer,
+verbose mode is intended for protocol and performance diagnosis; it does not
+change the USB transcript or output bytes. The option is rejected unless
+`--extract` is also present.
 
 The result is intentionally an untrimmed `0x02000000`-byte raw dump. Current
 capture evidence proves the scan extent but not the original manager's exact
 logical-ROM-size algorithm. Automatic trimming, header-database size lookup,
 and title-specific rules remain out of scope.
+
+Extraction authorization is deliberately stronger than classification. The
+first 64-KiB block must contain the GBA fixed header byte `0x96` at offset
+`0xB2` and pass the complement checksum before any later block is requested.
+Failure stops extraction, attempts normal read-session cleanup, and creates no
+output file. The save reader independently requires
+`CartridgeKind::ez3_flash` before EZ3 loader/catalog/save processing; an
+official or unknown cartridge is rejected after cleanup.
 
 ---
 
@@ -2409,6 +2426,31 @@ startup before destructive work. Together these tests hardware-confirm the
 0.7.14 ownership rule: the read-only epilogue is a readiness transition only,
 while every destructive workflow establishes its own complete bridge state.
 
+### 36.36 0.7.15 — official cartridge detection and inspection
+
+The shared read-only initializer exposes explicit EZ3, official-ROM, and
+unknown classification while preserving the established EZ3 probe and mapping
+path. The card reader applies GBA-header semantics to official cartridges.
+Golden Sun detection and header inspection are hardware-confirmed on macOS.
+
+### 36.37 0.7.16 — official cartridge raw extraction
+
+The card reader adds a fixed 32-MiB raw extraction using 512 global-linear
+64-KiB reads, with a live progress display or verbose per-block timing. The
+software specification documents the fixed untrimmed output boundary and the
+remaining hardware qualification requirement.
+
+### 36.38 0.7.17 — guarded extraction and save-reader policy repair
+
+Block zero must pass the GBA fixed-value and header-checksum validation before
+the remaining 511 blocks are requested. Unchanged probe behavior alone is no
+longer sufficient to authorize a complete dump.
+
+The save reader requires EZ3 classification before parsing a loader or catalog
+or selecting save memory, preventing official-ROM initialization from falling
+through into EZ3-only semantics. Full extraction and trusted populated-region
+hash comparison remain pending, so the feature is not hardware-complete.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2420,7 +2462,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.14 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-/32-MiB/tiny-tail hardware confirmation on Apple Silicon
+macOS       supported target; current 0.7.17 baseline compiled and transcript-tested, with partial/exact-8-/16-/24-/32-MiB/tiny-tail and official-header hardware confirmation on Apple Silicon
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2841,7 +2883,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.14**, the project has an object-oriented structural model:
+At shared toolset version **0.7.17**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

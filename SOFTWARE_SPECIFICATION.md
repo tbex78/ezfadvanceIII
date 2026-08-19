@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.14` sources plus the working-tree
+**Specification baseline:** shared `0.7.17` toolset, including the guarded
 official-cartridge detection and raw-extraction increment of 2026-08-19.
 
 This specification distinguishes capture evidence, deterministic transcript
@@ -116,24 +116,38 @@ remaining EZ3-only `0040`, `0080`, `00C0`, and `0200` probes and before the
 EZ3 manager `0x95` read-prime. Unknown changed probe behavior must fail
 conservatively.
 
+Classification alone does not authorize extraction. The first returned block
+must contain the GBA fixed header byte `0x96` at offset `0xB2` and pass the
+header complement checksum before extraction proceeds beyond that block.
+
 The extraction interface is:
 
 ```sh
-ezfadvanceIII_card_reader --extract OUTPUT.gba
+ezfadvanceIII_card_reader --extract OUTPUT.gba [--verbose]
 ```
 
 It is restricted to a detected official GBA cartridge and must:
 
 - refuse to overwrite an existing output file;
 - issue 512 sequential `0x91/sub0` reads of 64 KiB each;
+- validate the GBA fixed header value and complement checksum from block zero
+  before requesting any later block;
 - encode each command address as `byte_offset / 2`;
 - read through final byte offset `0x01FF0000` and exclusive end
   `0x02000000`;
+- display an in-place progress bar with percentage, completed/total MiB,
+  throughput, elapsed time, and ETA;
 - complete the read-session readiness transition before writing the file;
 - write exactly 32 MiB and identify it as an untrimmed raw dump.
 
 Exact logical ROM-size detection and automatic trailing-data trimming are not
 specified because the original manager's size algorithm is not yet proven.
+
+With `--verbose`, extraction replaces the live progress bar with one diagnostic
+line per 64-KiB block containing the byte address, transfer length, elapsed
+seconds, and throughput, followed by total duration and average throughput.
+`--verbose` without `--extract` is invalid because ordinary header/catalog
+inspection has no long-running block operation to report.
 
 ### 3.3 Save reader
 
@@ -153,6 +167,9 @@ save-slot configurations because no general hardware save-slot switch has been
 proven.
 
 The save reader must not write save memory, erase flash, or program ROM data.
+It must require `CartridgeKind::ez3_flash` after shared initialization and
+before EZ3 loader, catalog, ROM-allocation, or save-bank processing. Official
+and unknown cartridges must be rejected and read-session cleanup attempted.
 
 Supported invocations are:
 

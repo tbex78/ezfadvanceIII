@@ -19,6 +19,11 @@ enum class CartridgeKind {
     official_gba_rom
 };
 
+constexpr bool hasEz3Catalog(CartridgeKind kind) noexcept
+{
+    return kind == CartridgeKind::ez3_flash;
+}
+
 // Capture-derived, non-destructive manager read session shared by the card
 // inspector and save reader. It has no erase or program operation.
 class ReadOnlyCartridge final {

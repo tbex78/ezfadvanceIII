@@ -46,6 +46,16 @@ bool CartridgeFormat::gbaHeaderChecksumValid(
     return checksum == bytes[0xBD];
 }
 
+bool CartridgeFormat::validGbaRomHeader(
+    const std::vector<std::uint8_t>& bytes) noexcept
+{
+    // 0xB2 is the fixed header value required by the GBA cartridge format.
+    // Pair it with the header checksum so unchanged probe behavior alone can
+    // never authorize a full official-ROM extraction.
+    return bytes.size() >= 0xC0 && bytes[0xB2] == 0x96 &&
+           gbaHeaderChecksumValid(bytes);
+}
+
 std::optional<std::uint32_t> CartridgeFormat::armBranchTarget(
     std::uint32_t instruction) noexcept
 {
