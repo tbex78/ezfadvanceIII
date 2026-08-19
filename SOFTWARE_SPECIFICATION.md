@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.20` toolset, including the guarded
+**Specification baseline:** shared `0.7.21` toolset, including the guarded
 official-cartridge detection and raw-extraction increment of 2026-08-19.
 
 This specification distinguishes capture evidence, deterministic transcript
@@ -142,7 +142,7 @@ It is restricted to a detected official GBA cartridge and must:
   throughput, elapsed time, and ETA;
 - complete the read-session readiness transition before writing the file;
 - locate the final byte that is not `0xFF` after the complete read;
-- choose the smallest supported output extent—2, 4, 8, 16, or 32 MiB—that
+- choose the smallest supported output extent—1, 2, 4, 8, 16, or 32 MiB—that
   contains that byte;
 - remove only trailing `0xFF` address-space padding beyond the selected extent;
 - preserve every byte within the selected output extent unchanged.
@@ -645,7 +645,7 @@ The current durable support boundary is:
 |---|---|---|---|
 | EZ3 inspection and catalog parsing | yes | partial/pure parsing | yes |
 | Official-ROM detection and header inspection | yes | yes | yes, Golden Sun on macOS |
-| Official full scan with 2/4/8/16/32-MiB trailing-`FF` sizing | scan yes / generic sizing heuristic | yes | 8 MiB only: Golden Sun trim/hash/boot on macOS; 2/4/16/32-MiB sizing not yet hardware-generalized |
+| Official full scan with 1/2/4/8/16/32-MiB trailing-`FF` sizing | scan yes / generic sizing heuristic | yes | 8 MiB only: Golden Sun trim/hash/boot on macOS; 1/2/4/16/32-MiB sizing not yet hardware-generalized |
 | Partial first-window verification | yes | yes | yes |
 | Exact 8/16/24/32-MiB verification | yes | yes | yes |
 | Tiny tail immediately above 16 MiB | yes | yes | yes |

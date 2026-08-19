@@ -53,6 +53,10 @@ int main()
     std::vector<std::uint8_t> raw_rom(0x2000000, 0xFF);
     assert(!CartridgeFormat::trimmedGbaRomSize(raw_rom));
     raw_rom[0] = 0;
+    assert(CartridgeFormat::trimmedGbaRomSize(raw_rom) == 0x100000);
+    raw_rom[0x0FFFFF] = 0;
+    assert(CartridgeFormat::trimmedGbaRomSize(raw_rom) == 0x100000);
+    raw_rom[0x100000] = 0;
     assert(CartridgeFormat::trimmedGbaRomSize(raw_rom) == 0x200000);
     raw_rom[0x200000] = 0;
     assert(CartridgeFormat::trimmedGbaRomSize(raw_rom) == 0x400000);

@@ -35,7 +35,7 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 
-// EZF Advance III card reader 0.7.20, read-only inspector.
+// EZF Advance III card reader 0.7.21, read-only inspector.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Card-read protocol behavior remains unchanged from 0.5.13.
 //
@@ -383,7 +383,7 @@ static int extract_official_cartridge(libusb_device_handle* h,
     const auto output_size =
         ezfadvance::CartridgeFormat::trimmedGbaRomSize(image);
     if (!output_size) {
-        std::cerr << "Could not derive a supported 2/4/8/16/32-MiB ROM size "
+        std::cerr << "Could not derive a supported 1/2/4/8/16/32-MiB ROM size "
                      "from the trailing 0xFF region; no output was written.\n";
         return 3;
     }
@@ -408,7 +408,7 @@ static int extract_official_cartridge(libusb_device_handle* h,
 
     std::cout << "Wrote " << image.size() << " bytes to " << output_path
               << "\nThe output was rounded up to the smallest supported "
-                 "2/4/8/16/32-MiB size containing all non-0xFF data.\n"
+                 "1/2/4/8/16/32-MiB size containing all non-0xFF data.\n"
               << "No erase or ROM programming operation was performed.\n";
     return 0;
 }

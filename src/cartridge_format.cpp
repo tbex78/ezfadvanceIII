@@ -66,8 +66,9 @@ std::optional<std::size_t> CartridgeFormat::trimmedGbaRomSize(
     if (meaningful_end == 0)
         return std::nullopt;
 
-    constexpr std::array<std::size_t, 5> supported_sizes = {
-        0x00200000, 0x00400000, 0x00800000, 0x01000000, 0x02000000};
+    constexpr std::array<std::size_t, 6> supported_sizes = {
+        0x00100000, 0x00200000, 0x00400000,
+        0x00800000, 0x01000000, 0x02000000};
     for (const std::size_t size : supported_sizes) {
         if (meaningful_end <= size && size <= bytes.size())
             return size;

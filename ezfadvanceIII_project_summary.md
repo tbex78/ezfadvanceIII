@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.20**.
+Current shared project/toolset version covered by this summary: **0.7.21**.
 
 All mainline utilities carry this same version:
 
@@ -782,7 +782,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.20 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.21 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1055,9 +1055,23 @@ transcript coverage is complete. Hardware testing completed all 192 reads
 through final offset `0x00BF0000`; the menu booted and both Advance Wars and
 F-Zero launched successfully on a real GBA.
 
+## 0.7.21 release changes
+
+**0.7.21** corrects the generic official-ROM trailing-`FF` sizing table by
+adding the standard 1-MiB extent. A final meaningful byte at or below
+`0x000FFFFF` now produces a `0x00100000`-byte file; a meaningful byte at
+`0x00100000` selects 2 MiB. The full 32-MiB scan, extraction addressing,
+official-header confirmation, read-session cleanup, and all EZ3 writer paths
+are unchanged.
+
+The project already has hardware evidence for building, programming,
+verifying, and booting 1-MiB Classic NES ROM images on EZ3. That evidence does
+not qualify physical official-cartridge extraction at 1 MiB, which remains
+pending a trusted dump/hash comparison.
+
 ## Current project status
 
-At shared version **0.7.20**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.21**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -1077,6 +1091,7 @@ At shared version **0.7.20**, the project has an object-oriented structural mode
 - 0.7.18 applies a generic trailing-`FF` heuristic that trims the completed official-ROM scan to the smallest supported 2/4/8/16/32-MiB extent containing all non-`FF` data;
 - 0.7.19 requires valid GBA fixed-byte/checksum confirmation for ordinary official-cartridge inspection;
 - 0.7.20 adds the explicit capture-, transcript-, and hardware-proven 12-MiB partial higher-window verification checkpoint, including menu boot and successful launch of both games;
+- 0.7.21 adds 1 MiB to the generic official-ROM trailing-`FF` sizing table; physical 1-MiB official-cartridge extraction remains hardware-pending;
 - official Golden Sun extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot; other heuristic trim sizes are not yet hardware-generalized;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
@@ -1108,4 +1123,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.20 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.21 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

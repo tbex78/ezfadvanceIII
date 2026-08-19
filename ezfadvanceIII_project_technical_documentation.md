@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.20`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.20`<br>
+**Current project/toolset version:** `0.7.21`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.21`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.20 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, explicit partial 12-MiB, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.21 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The extracted partial first-window, explicit partial 12-MiB, exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD validation remains pending.
 
 ---
 
@@ -1675,7 +1675,7 @@ change the USB transcript or output bytes. The option is rejected unless
 `--extract` is also present.
 
 After the complete scan and session cleanup, the reader finds the last byte
-that is not `0xFF` and writes the smallest standard extent—2, 4, 8, 16, or
+that is not `0xFF` and writes the smallest standard extent—1, 2, 4, 8, 16, or
 32 MiB—that contains it. Bytes inside that extent remain unchanged; only the
 trailing erased address-space padding is omitted. This is a generic,
 deterministic heuristic and is not claimed to reproduce the original manager's
@@ -2495,6 +2495,21 @@ Hardware testing completed all 192 reads through final offset `0x00BF0000`.
 The two-ROM menu booted on a real GBA, and both Advance Wars and F-Zero
 launched successfully.
 
+### 36.42 0.7.21 — 1-MiB official-ROM sizing correction
+
+The generic official-ROM trailing-`FF` sizing table now includes the standard
+1-MiB extent. The boundary tests require a final meaningful byte at
+`0x000FFFFF` to select `0x00100000` bytes and a meaningful byte at
+`0x00100000` to select 2 MiB, while preserving all existing higher-size
+transitions and all-`FF` rejection.
+
+This is a size-policy correction only. The full 32-MiB / 512-block scan,
+word-address encoding, official-cartridge classification, header validation,
+read-session cleanup, and EZ3 writer verification mappings are unchanged.
+Existing real-hardware tests prove 1-MiB Classic NES images on the EZ3
+build/program/verify/boot path; physical official-cartridge extraction at
+1 MiB remains pending a trusted dump/hash comparison.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2506,7 +2521,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.20 baseline compiled and transcript-tested, with partial-12-/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon
+macOS       supported target; current 0.7.21 baseline compiled and transcript-tested, with partial-12-/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2927,7 +2942,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.20**, the project has an object-oriented structural model:
+At shared toolset version **0.7.21**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;
@@ -2941,6 +2956,7 @@ At shared toolset version **0.7.20**, the project has an object-oriented structu
 - map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
 - partial first-window, extracted exact 8-/16-/24-/32-MiB, and tiny-tail verification paths are capture-, transcript-, and hardware-proven for the tested layouts;
 - the explicit 12-MiB partial higher-window path is capture-, transcript-, and hardware-proven through all 192 reads, menu boot, and successful launch of both games;
+- official-ROM extraction recognizes 1/2/4/8/16/32-MiB extents through a generic trailing-`FF` heuristic; only the Golden Sun 8-MiB extraction size is hardware-qualified;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
 - native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;
