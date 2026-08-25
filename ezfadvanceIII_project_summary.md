@@ -1143,6 +1143,7 @@ At shared version **0.7.23**, the project has an object-oriented structural mode
 - 0.7.23 adds the explicit capture-, transcript-, and hardware-proven 28-MiB partial higher-window verification checkpoint, including menu boot and successful launch of all three games;
 - two independent exactly 2-MiB single-ROM sources are hardware-proven through `0x200700` construction/programming, 33-block padded verification to `0x210000`, and real-GBA boot; physical 2-MiB official-cartridge extraction remains a separate pending gate;
 - official Golden Sun extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot; other heuristic trim sizes are not yet hardware-generalized;
+- EZ3 catalogued-ROM extraction is hardware-proven on a two-ROM card: reconstructed ROM 1 and unchanged-entry ROM 2 both match their original files by SHA-256; separate single-ROM-layout qualification remains pending;
 - partial first-window verification, including explicit 1-/2-/4-MiB checkpoints, and exact 8-/16-/24-/32-MiB verification are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;

@@ -680,6 +680,7 @@ The current durable support boundary is:
 | Area | Capture | Transcript | Hardware |
 |---|---|---|---|
 | EZ3 inspection and catalog parsing | yes | partial/pure parsing | yes |
+| EZ3 catalogued-ROM extraction | manager/builder layout evidence | entry reconstruction unit test | yes, ROM 1 and ROM 2 from a two-ROM card matched their originals by SHA-256 on macOS |
 | Official-ROM detection and header inspection | yes | yes | yes, Golden Sun on macOS |
 | Official full scan with 1/2/4/8/16/32-MiB trailing-`FF` sizing | scan yes / generic sizing heuristic | yes | 8 MiB only: Golden Sun trim/hash/boot on macOS; 1/2/4/16/32-MiB sizing not yet hardware-generalized |
 | Partial first-window verification, including 1/2/4-MiB checkpoints | yes | yes | yes |

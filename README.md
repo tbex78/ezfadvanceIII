@@ -82,7 +82,9 @@ catalog size-class extent, restores any overlapping loader area to `0xFF`, and
 validates the reconstructed GBA header before writing. EZ3Manager replaces the
 first instruction of physical ROM 1 with a loader branch, so extraction
 reconstructs that instruction from `Orig. entry`. ROM 2 and later are not
-modified. This new path requires real-cartridge dump/hash qualification.
+modified. ROM 1 and ROM 2 extraction from a tested two-ROM card are
+hardware-qualified by SHA-256 equality with both original files. A separate
+single-ROM-layout extraction remains to be qualified.
 
 ### Read an EZ3 save
 

@@ -1741,9 +1741,11 @@ file creation. The workflow sends no erase or program operation.
 
 This produces the catalog-sized ROM image. It does not claim recovery of an
 original nonstandard file length that was rounded into a catalog size class.
-The implementation is offline-tested; trusted hash comparison on a physical
-single-ROM card is the next hardware qualification gate, followed by ROM 1
-and a later ROM from a multi-ROM card.
+The implementation is offline-tested and hardware-qualified on a physical
+two-ROM card. Extracted ROM 1, including reconstructed entry bytes, matched
+the original file's SHA-256 checksum. Extracted ROM 2, whose entry bytes were
+left unchanged, also matched its original file's SHA-256 checksum. A separate
+single-ROM-layout extraction remains the next qualification gate.
 
 ---
 
