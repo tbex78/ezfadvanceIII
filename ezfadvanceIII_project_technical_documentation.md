@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.27`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.27 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.27 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -2644,7 +2644,7 @@ Native project scope:
 
 ```text
 macOS       supported target; current 0.7.27 baseline compiled and transcript-tested, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
-Linux       supported target; validation pending
+Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
 NetBSD      supported target; validation pending
@@ -3085,6 +3085,7 @@ At shared toolset version **0.7.27**, the project has an object-oriented structu
 - the explicit 28-MiB partial higher-window path is capture-, transcript-, and hardware-proven through all 448 reads, menu boot, and successful launch of all three games;
 - the 2-MiB source-ROM checkpoint is independently hardware-proven with two single-ROM inputs, each producing a `0x200700` image, verifying 33 padded blocks through `0x210000`, and booting on real GBA hardware;
 - official-ROM extraction recognizes 1/2/4/8/16/32-MiB extents through a generic trailing-`FF` heuristic; only the Golden Sun 8-MiB extraction size is hardware-qualified;
+- EZ3 catalogued-ROM extraction is hardware-qualified on a two-ROM layout: ROM 1 matches its original after entry-branch reconstruction, and ROM 2 matches with its entry bytes unchanged;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
 - native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;

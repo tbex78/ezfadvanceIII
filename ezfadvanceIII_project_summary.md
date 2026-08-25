@@ -804,7 +804,7 @@ Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platfo
 
 ```text
 macOS       target; current 0.7.27 baseline derives from code compiled on Apple Silicon/Homebrew
-Linux       target; compile/hardware validation pending
+Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
 NetBSD      target; validation pending

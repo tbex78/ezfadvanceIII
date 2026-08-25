@@ -11,6 +11,11 @@ See the [project summary](ezfadvanceIII_project_summary.md),
 [technical documentation](ezfadvanceIII_project_technical_documentation.md)
 for the evidence history and protocol details.
 
+Markdown files named for older releases, reviews, recommendations, or test
+plans are retained as historical snapshots. Their words such as “current,”
+“pending,” and “next” describe the named review point, not the present 0.7.27
+support boundary.
+
 ## Build and test
 
 The command-line tools require a C++17 compiler and libusb 1.0:
