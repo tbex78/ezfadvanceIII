@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.23**.
+Current shared project/toolset version covered by this summary: **0.7.27**.
 
 All mainline utilities carry this same version:
 
@@ -803,7 +803,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.23 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.27 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; compile/hardware validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1116,9 +1116,33 @@ completed all 448 reads through final offset `0x01BF0000`; the menu booted and
 Tales of Phantasia, Advance Wars, and F-Zero all launched successfully on a
 real GBA.
 
+## 0.7.24 release changes
+
+**0.7.24** adds read-only extraction of a catalogued ROM from an EZ3 flash
+cartridge. It reads the catalog size-class extent, restores overlapping loader
+space to `0xFF`, and reconstructs only physical ROM 1's original ARM entry
+branch. ROM 2 and later retain their stored entry bytes. Both ROMs from a
+two-ROM cartridge matched their original files by SHA-256 on real hardware.
+
+## 0.7.25 release changes
+
+**0.7.25** unifies official and EZ3 extraction under `--extract` and adds the
+same progress-bar and verbose per-block reporting to EZ3 extraction.
+
+## 0.7.26 release changes
+
+**0.7.26** fixes numbered EZ3 extraction routing so the parsed catalog number
+reaches the EZ3 extractor instead of the official-cartridge refusal path.
+
+## 0.7.27 release changes
+
+**0.7.27** makes an unnumbered EZ3 `--extract OUTPUT.gba` request default to
+catalog ROM 1. The numbered form remains available for later ROMs, while the
+unnumbered form retains its existing behavior for official cartridges.
+
 ## Current project status
 
-At shared version **0.7.23**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.27**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
@@ -1176,4 +1200,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.23 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.27 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

@@ -36,7 +36,7 @@
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"
 
-// EZF Advance III save reader 0.7.23, read-only dumper.
+// EZF Advance III save reader 0.7.27, read-only dumper.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Save-read protocol behavior remains unchanged from 0.5.10.
 //

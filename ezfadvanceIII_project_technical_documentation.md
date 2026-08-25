@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.23`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.23`<br>
+**Current project/toolset version:** `0.7.27`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.27`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.23 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.27 toolset has been compiled and transcript-tested on macOS / Apple Silicon. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD validation remains pending.
 
 ---
 
@@ -2606,6 +2606,32 @@ unchanged. Hardware testing completed all 448 reads through final offset
 `0x01BF0000`. The menu booted on a real GBA, and Tales of Phantasia, Advance
 Wars, and F-Zero all launched successfully.
 
+### 36.45 0.7.24 — EZ3 catalogued-ROM extraction
+
+The reader adds catalog-size-class extraction from recognized EZ3 layouts.
+It restores overlapping loader bytes to `0xFF`, reconstructs the original ARM
+branch for physical ROM 1 only, validates the resulting GBA header, and writes
+only after read-session cleanup. ROM 1 and ROM 2 from a physical two-ROM card
+both matched their original files by SHA-256.
+
+### 36.46 0.7.25 — unified extraction and progress reporting
+
+Official and EZ3 extraction now share the `--extract` interface. EZ3 reads use
+the same default progress display and optional verbose per-block diagnostics as
+official-cartridge extraction.
+
+### 36.47 0.7.26 — numbered EZ3 extraction routing fix
+
+The numbered form now bypasses the obsolete official-only refusal branch and
+reaches the selected EZ3 catalog entry. Hardware retesting confirmed matching
+ROM 1 and ROM 2 checksums.
+
+### 36.48 0.7.27 — default EZ3 ROM selection
+
+When an EZ3 extraction omits the catalog number, the reader now selects ROM 1.
+Numbered EZ3 extraction and unnumbered official-cartridge extraction retain
+their existing behavior.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2617,7 +2643,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.23 baseline compiled and transcript-tested, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail and captured official-header bytes confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.7.27 baseline compiled and transcript-tested, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3041,7 +3067,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.23**, the project has an object-oriented structural model:
+At shared toolset version **0.7.27**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

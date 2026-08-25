@@ -1,7 +1,8 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.23` toolset, including the guarded
-official-cartridge detection and raw-extraction increment of 2026-08-19.
+**Specification baseline:** shared `0.7.27` toolset, including guarded
+official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
+extraction.
 
 This specification distinguishes capture evidence, deterministic transcript
 coverage, and physical-hardware confirmation. A behavior is not described as
