@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.27` toolset, including guarded
+**Specification baseline:** shared `0.7.28` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -421,6 +421,12 @@ fixture.
 Parses writer authorization, verification, verbosity, catalog overrides, and
 ROM paths independently from image construction and device access.
 
+#### `CardReaderOptions`
+
+Parses the reader's inspection, numbered/default extraction, output, and
+verbosity forms independently from device access. Its cartridge/action
+decision keeps official extraction distinct from EZ3 ROM selection.
+
 ### 6.3 Application services
 
 - `CartridgeImageBuilder` constructs and aligns writer images.
@@ -562,6 +568,10 @@ The test suite covers:
 - ARM branch-target decoding;
 - GBA header parsing and checksum validation;
 - EZ3 catalog parsing, address decoding, plausibility, and bounds errors;
+- EZ3 stored extents, loader-overlap blanking, ROM-1 entry reconstruction, and
+  8/16/24/32-MiB linear-read mapping thresholds;
+- card-reader option parsing and official/EZ3 extraction routing, including
+  unnumbered EZ3 default selection and numbered extraction;
 - exact `0x92` command construction;
 - command/data transport ordering and timeout propagation;
 - immediate, delayed, failed, and epilogue read-session transitions;
@@ -569,6 +579,7 @@ The test suite covers:
   operations after the official branch;
 - a synthetic 512-block official-ROM extraction through final word address
   `0x00FF8000` using block-varying data;
+- official-ROM reads whose final transfer is shorter than 64 KiB;
 - every verification-policy boundary;
 - exact transcripts for partial-first-window (including the 1/2/4-MiB
   checkpoints), explicit partial 12/20/28 MiB, exact 8/16/24/32 MiB, and

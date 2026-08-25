@@ -32,6 +32,8 @@ struct CatalogEntry {
                               bool first);
 
     bool plausible(std::uint32_t image_limit, bool first) const noexcept;
+    std::optional<std::uint32_t> storedEnd(
+        std::uint32_t image_limit) const noexcept;
 };
 
 class CartridgeFormat final {
@@ -55,6 +57,14 @@ public:
     static bool restoreEz3Entry(std::vector<std::uint8_t>& rom,
                                 const CatalogEntry& entry,
                                 bool first) noexcept;
+    static bool reconstructEz3Rom(std::vector<std::uint8_t>& rom,
+                                  const CatalogEntry& entry,
+                                  bool first,
+                                  std::uint32_t rom_start,
+                                  std::uint32_t loader_start,
+                                  std::size_t loader_length) noexcept;
+    static std::optional<std::uint32_t> requiredLinearReadLimit(
+        std::uint32_t inclusive_end) noexcept;
 };
 
 } // namespace ezfadvance

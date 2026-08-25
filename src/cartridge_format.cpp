@@ -1,5 +1,6 @@
 #include "ezfadvance/cartridge_format.hpp"
 
+#include <algorithm>
 #include <array>
 #include <stdexcept>
 
@@ -126,6 +127,43 @@ bool CartridgeFormat::restoreEz3Entry(std::vector<std::uint8_t>& rom,
     }
 }
 
+bool CartridgeFormat::reconstructEz3Rom(
+    std::vector<std::uint8_t>& rom,
+    const CatalogEntry& entry,
+    bool first,
+    std::uint32_t rom_start,
+    std::uint32_t loader_start,
+    std::size_t loader_length) noexcept
+{
+    const std::uint64_t rom_begin = rom_start;
+    const std::uint64_t rom_end = rom_begin + rom.size();
+    const std::uint64_t loader_begin = loader_start;
+    const std::uint64_t loader_end = loader_begin + loader_length;
+    const std::uint64_t overlap_begin =
+        std::max(rom_begin, loader_begin);
+    const std::uint64_t overlap_end = std::min(rom_end, loader_end);
+    if (overlap_begin < overlap_end) {
+        std::fill(rom.begin() + static_cast<std::ptrdiff_t>(overlap_begin - rom_begin),
+                  rom.begin() + static_cast<std::ptrdiff_t>(overlap_end - rom_begin),
+                  0xFF);
+    }
+    return restoreEz3Entry(rom, entry, first);
+}
+
+std::optional<std::uint32_t> CartridgeFormat::requiredLinearReadLimit(
+    std::uint32_t inclusive_end) noexcept
+{
+    constexpr std::uint32_t limit8 = 0x00800000u;
+    constexpr std::uint32_t limit16 = 0x01000000u;
+    constexpr std::uint32_t limit24 = 0x01800000u;
+    constexpr std::uint32_t limit32 = 0x02000000u;
+    if (inclusive_end < limit8) return limit8;
+    if (inclusive_end < limit16) return limit16;
+    if (inclusive_end < limit24) return limit24;
+    if (inclusive_end < limit32) return limit32;
+    return std::nullopt;
+}
+
 GbaHeader GbaHeader::parse(const std::vector<std::uint8_t>& bytes)
 {
     GbaHeader header;
@@ -164,6 +202,20 @@ bool CatalogEntry::plausible(std::uint32_t image_limit, bool first) const noexce
     if (name.empty() || start >= image_limit)
         return false;
     return first || (start & 0xFFFFu) == 0;
+}
+
+std::optional<std::uint32_t> CatalogEntry::storedEnd(
+    std::uint32_t image_limit) const noexcept
+{
+    if (type > 9)
+        return std::nullopt;
+    const std::uint64_t size_class =
+        static_cast<std::uint64_t>(image_limit) >> type;
+    const std::uint64_t end =
+        static_cast<std::uint64_t>(start) + size_class - 1;
+    if (end >= image_limit)
+        return std::nullopt;
+    return static_cast<std::uint32_t>(end);
 }
 
 } // namespace ezfadvance

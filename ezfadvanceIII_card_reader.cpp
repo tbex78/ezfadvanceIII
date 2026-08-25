@@ -33,9 +33,10 @@
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/cartridge_format.hpp"
+#include "ezfadvance/card_reader_options.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 
-// EZF Advance III card reader 0.7.27, read-only inspector.
+// EZF Advance III card reader 0.7.28, read-only inspector.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Card-read protocol behavior remains unchanged from 0.5.13.
 //
@@ -454,15 +455,7 @@ static std::string hex32(uint32_t v)
 
 static std::optional<uint32_t> stored_end(const CatalogEntry& entry)
 {
-    if (entry.type > 9)
-        return std::nullopt;
-    const uint64_t size_class =
-        static_cast<uint64_t>(CARD_IMAGE_LIMIT) >> entry.type;
-    const uint64_t end =
-        static_cast<uint64_t>(entry.start) + size_class - 1;
-    if (end >= CARD_IMAGE_LIMIT)
-        return std::nullopt;
-    return static_cast<uint32_t>(end);
+    return entry.storedEnd(CARD_IMAGE_LIMIT);
 }
 
 struct Ez3ExtractionRequest {
@@ -522,11 +515,15 @@ static int extract_ez3_rom(libusb_device_handle* h,
 
     // Inspection selects a mapping from loader/header addresses. Extraction
     // must additionally cover the selected ROM's complete stored extent.
-    if (*inclusive_end >= LINEAR24_LIMIT) {
+    const auto required_limit =
+        ezfadvance::CartridgeFormat::requiredLinearReadLimit(*inclusive_end);
+    if (!required_limit)
+        return fail_after_cleanup(3);
+    if (*required_limit == CARD_IMAGE_LIMIT) {
         if (!prepare_linear_32m_read(h)) return fail_after_cleanup(2);
-    } else if (*inclusive_end >= LINEAR16_LIMIT) {
+    } else if (*required_limit == LINEAR24_LIMIT) {
         if (!prepare_linear_24m_read(h)) return fail_after_cleanup(2);
-    } else if (*inclusive_end >= FLASH_WINDOW_SIZE) {
+    } else if (*required_limit == LINEAR16_LIMIT) {
         if (!prepare_linear_16m_read(h)) return fail_after_cleanup(2);
     }
 
@@ -591,17 +588,15 @@ static int extract_ez3_rom(libusb_device_handle* h,
     const std::uint64_t overlap_begin = std::max(rom_begin, loader_begin);
     const std::uint64_t overlap_end = std::min(rom_end, loader_end);
     if (overlap_begin < overlap_end) {
-        std::fill(image.begin() + static_cast<std::ptrdiff_t>(overlap_begin - rom_begin),
-                  image.begin() + static_cast<std::ptrdiff_t>(overlap_end - rom_begin),
-                  0xFF);
         std::cout << "Restored overlapping loader area "
                   << hex32(static_cast<uint32_t>(overlap_begin)) << ".."
                   << hex32(static_cast<uint32_t>(overlap_end - 1))
                   << " to 0xFF.\n";
     }
 
-    if (!ezfadvance::CartridgeFormat::restoreEz3Entry(
-            image, entry, index == 0)) {
+    if (!ezfadvance::CartridgeFormat::reconstructEz3Rom(
+            image, entry, index == 0, entry.start, loader_start,
+            loader_length)) {
         std::cerr << "Could not reconstruct ROM 1's original entry branch.\n";
         return fail_after_cleanup(3);
     }
@@ -868,65 +863,25 @@ static void usage(const char* argv0)
 
 int main(int argc, char** argv)
 {
-    bool extract = false;
-    bool verbose = false;
-    std::optional<Ez3ExtractionRequest> ez3_extraction;
-    std::string output_path;
-    for (int i = 1; i < argc; ++i) {
-        const std::string argument = argv[i];
-        if (argument == "--extract") {
-            if (extract || ez3_extraction || i + 1 >= argc) {
-                usage(argv[0]);
-                return 1;
-            }
-            extract = true;
-            const std::string first_value = argv[++i];
-            if (i + 1 < argc && std::string(argv[i + 1]).rfind("--", 0) != 0) {
-                try {
-                    std::size_t consumed = 0;
-                    const unsigned long parsed =
-                        std::stoul(first_value, &consumed, 10);
-                    if (consumed != first_value.size() || parsed == 0)
-                        throw std::invalid_argument("bad ROM number");
-                    output_path = argv[++i];
-                    ez3_extraction = Ez3ExtractionRequest{
-                        static_cast<std::size_t>(parsed), output_path};
-                } catch (const std::exception&) {
-                    std::cerr << "Bad ROM number for EZ3 --extract.\n";
-                    usage(argv[0]);
-                    return 1;
-                }
-            } else {
-                output_path = first_value;
-            }
-            if (output_path.empty()) {
-                usage(argv[0]);
-                return 1;
-            }
-        } else if (argument == "--verbose") {
-            verbose = true;
-        } else if (argument == "--help" || argument == "-h") {
-            usage(argv[0]);
-            return 0;
-        } else {
-            std::cerr << "Unknown option: " << argument << '\n';
-            usage(argv[0]);
-            return 1;
-        }
+    std::vector<std::string> arguments;
+    for (int i = 1; i < argc; ++i) arguments.emplace_back(argv[i]);
+    ezfadvance::CardReaderOptions options;
+    const auto parse_status = ezfadvance::parseCardReaderOptions(
+        arguments, options, std::cerr);
+    if (parse_status == ezfadvance::CardReaderParseStatus::help) {
+        usage(argv[0]);
+        return 0;
     }
-    if (verbose && !extract) {
-        std::cerr << "--verbose is currently available with --extract only.\n";
+    if (parse_status == ezfadvance::CardReaderParseStatus::error) {
         usage(argv[0]);
         return 1;
     }
 
-    if (extract || ez3_extraction) {
-        const std::string& destination = extract ? output_path
-                                                  : ez3_extraction->output_path;
-        std::ifstream existing(destination, std::ios::binary);
+    if (options.extract) {
+        std::ifstream existing(options.output_path, std::ios::binary);
         if (existing.good()) {
             std::cerr << "Refusing to overwrite existing output file: "
-                      << destination << '\n';
+                      << options.output_path << '\n';
             return 1;
         }
     }
@@ -953,22 +908,36 @@ int main(int argc, char** argv)
     int result = 2;
     ezfadvance::CartridgeKind kind = ezfadvance::CartridgeKind::unknown;
     if (initialize_read_session(h, kind)) {
-        if (kind == ezfadvance::CartridgeKind::official_gba_rom) {
-            if (ez3_extraction) {
-                std::cerr << "Numbered --extract requires an EZ3 flash cartridge.\n";
-                result = ezfadvance::ReadOnlyCartridge(h).finishSession() ? 1 : 2;
-            } else
-            result = extract ? extract_official_cartridge(h, output_path,
-                                                          verbose)
-                             : inspect_official_cartridge(h);
-        } else {
-            if (extract && !ez3_extraction) {
+        const auto decision = ezfadvance::decideCardReaderAction(kind, options);
+        switch (decision.action) {
+        case ezfadvance::CardReaderAction::inspect_official:
+            result = inspect_official_cartridge(h);
+            break;
+        case ezfadvance::CardReaderAction::extract_official:
+            result = extract_official_cartridge(
+                h, options.output_path, options.verbose);
+            break;
+        case ezfadvance::CardReaderAction::inspect_ez3: {
+            CardInspector inspector(h, std::nullopt, options.verbose);
+            result = inspector.run();
+            break;
+        }
+        case ezfadvance::CardReaderAction::extract_ez3: {
+            if (!options.rom_number) {
                 std::cout << "No EZ3 ROM number specified; defaulting to "
                              "catalog ROM 1.\n";
-                ez3_extraction = Ez3ExtractionRequest{1, output_path};
             }
-            CardInspector inspector(h, ez3_extraction, verbose);
+            CardInspector inspector(
+                h, Ez3ExtractionRequest{decision.rom_number,
+                                        options.output_path},
+                options.verbose);
             result = inspector.run();
+            break;
+        }
+        case ezfadvance::CardReaderAction::reject:
+            std::cerr << decision.error << '\n';
+            result = ezfadvance::ReadOnlyCartridge(h).finishSession() ? 1 : 2;
+            break;
         }
     }
     else

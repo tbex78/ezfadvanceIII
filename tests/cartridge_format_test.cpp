@@ -86,6 +86,7 @@ int main()
     assert(first.start == 0);
     assert(first.target_or_start == 0xD4);
     assert(first.plausible(0x02000000u, true));
+    assert(first.storedEnd(0x02000000u) == 0x000FFFFFu);
 
     const CatalogEntry later = CatalogEntry::parse(loader, 0, false);
     assert(later.start == 0x100000u);
@@ -99,6 +100,52 @@ int main()
     std::vector<std::uint8_t> later_rom = {0x11, 0x22, 0x33, 0x44};
     assert(CartridgeFormat::restoreEz3Entry(later_rom, later, false));
     assert(CartridgeFormat::readLe32(later_rom.data()) == 0x44332211u);
+
+    std::vector<std::uint8_t> reconstructed(0x200, 0x5A);
+    assert(CartridgeFormat::reconstructEz3Rom(
+        reconstructed, first, true, 0, 0x100, 0x20));
+    assert(CartridgeFormat::readLe32(reconstructed.data()) ==
+           CartridgeFormat::makeArmBranch(0xD4));
+    for (std::size_t i = 0x100; i < 0x120; ++i)
+        assert(reconstructed[i] == 0xFF);
+    assert(reconstructed[0xFF] == 0x5A);
+    assert(reconstructed[0x120] == 0x5A);
+
+    std::vector<std::uint8_t> reconstructed_later(0x100, 0x66);
+    reconstructed_later[0] = 0x11;
+    reconstructed_later[1] = 0x22;
+    reconstructed_later[2] = 0x33;
+    reconstructed_later[3] = 0x44;
+    assert(CartridgeFormat::reconstructEz3Rom(
+        reconstructed_later, later, false, 0x100000, 0x100040, 0x10));
+    assert(CartridgeFormat::readLe32(reconstructed_later.data()) ==
+           0x44332211u);
+    for (std::size_t i = 0x40; i < 0x50; ++i)
+        assert(reconstructed_later[i] == 0xFF);
+
+    CatalogEntry invalid_type = later;
+    invalid_type.type = 10;
+    assert(!invalid_type.storedEnd(0x02000000u));
+    CatalogEntry overflowing = first;
+    overflowing.type = 0;
+    overflowing.start = 0x10000;
+    assert(!overflowing.storedEnd(0x02000000u));
+
+    assert(CartridgeFormat::requiredLinearReadLimit(0x007FFFFFu) ==
+           0x00800000u);
+    assert(CartridgeFormat::requiredLinearReadLimit(0x00800000u) ==
+           0x01000000u);
+    assert(CartridgeFormat::requiredLinearReadLimit(0x00FFFFFFu) ==
+           0x01000000u);
+    assert(CartridgeFormat::requiredLinearReadLimit(0x01000000u) ==
+           0x01800000u);
+    assert(CartridgeFormat::requiredLinearReadLimit(0x017FFFFFu) ==
+           0x01800000u);
+    assert(CartridgeFormat::requiredLinearReadLimit(0x01800000u) ==
+           0x02000000u);
+    assert(CartridgeFormat::requiredLinearReadLimit(0x01FFFFFFu) ==
+           0x02000000u);
+    assert(!CartridgeFormat::requiredLinearReadLimit(0x02000000u));
 
     bool threw = false;
     try {

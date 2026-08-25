@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.27`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.27`<br>
+**Current project/toolset version:** `0.7.28`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.28`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.27 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.28 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -2632,6 +2632,14 @@ When an EZ3 extraction omits the catalog number, the reader now selects ROM 1.
 Numbered EZ3 extraction and unnumbered official-cartridge extraction retain
 their existing behavior.
 
+### 36.49 0.7.28 — extraction regression coverage
+
+Card-reader CLI parsing and official/EZ3 action selection now live in a small,
+device-independent component. The offline suite locks down the numbered EZ3
+routing fix, unnumbered ROM-1 default, invalid forms, stored catalog extents,
+loader-overlap blanking, first-ROM-only entry reconstruction, mapping
+thresholds, and a final official-ROM transfer shorter than 64 KiB.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2643,7 +2651,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.27 baseline compiled and transcript-tested, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.7.28 baseline compiled and transcript-tested, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -2667,8 +2675,9 @@ make test
 
 The offline tests do not initialize libusb or access a cartridge. They cover
 binary-format parsing, GBA checksums, catalog decoding, ARM branch decoding,
-`0x92` command construction, recorded transport ordering/timeouts, and every
-verification-policy boundary.
+card-reader CLI/action routing, EZ3 extraction reconstruction and mapping
+thresholds, partial official-ROM reads, `0x92` command construction, recorded
+transport ordering/timeouts, and every verification-policy boundary.
 
 Warnings-enabled development check:
 
@@ -3067,7 +3076,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.27**, the project has an object-oriented structural model:
+At shared toolset version **0.7.28**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;

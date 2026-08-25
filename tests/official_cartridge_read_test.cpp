@@ -171,6 +171,34 @@ void testFull32MiBExtractionTranscript()
     assert(writes.back()[7] == 0x00);
 }
 
+void testReadUsesFinalPartialBlock()
+{
+    ezfadvance::test::TranscriptTransport transcript;
+    const std::uint32_t start = 0x00100000u;
+    std::vector<std::uint8_t> first_command = {
+        0x5A,0xA5,0x91,0x00, 0,0,0,0,
+        0x00,0x00,0x01,0x00, 0x00};
+    writeLe32(first_command, 4, start / 2);
+    std::vector<std::uint8_t> final_command = {
+        0x5A,0xA5,0x91,0x00, 0,0,0,0,
+        0x02,0x00,0x00,0x00, 0x00};
+    writeLe32(final_command, 4, (start + block_size) / 2);
+    transcript.expectOut(first_command, timeout_ms)
+              .expectInExact(std::vector<std::uint8_t>(block_size, 0xA5),
+                             block_size, timeout_ms)
+              .expectOut(final_command, timeout_ms)
+              .expectInExact({0x12, 0x34}, 2, timeout_ms);
+
+    ezfadvance::ReadOnlyCartridge cartridge(transcript);
+    std::vector<std::uint8_t> image;
+    assert(cartridge.read(start, image, block_size + 2));
+    assert(image.size() == block_size + 2);
+    assert(image.front() == 0xA5);
+    assert(image[block_size] == 0x12);
+    assert(image[block_size + 1] == 0x34);
+    assert(transcript.complete());
+}
+
 } // namespace
 
 int main()
@@ -178,4 +206,5 @@ int main()
     testProbeClassification();
     testOfficialDetectionStopsEz3Path();
     testFull32MiBExtractionTranscript();
+    testReadUsesFinalPartialBlock();
 }
