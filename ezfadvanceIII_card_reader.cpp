@@ -960,12 +960,7 @@ int main(int argc, char** argv)
             result = extract ? extract_official_cartridge(h, output_path,
                                                           verbose)
                              : inspect_official_cartridge(h);
-        } else if (extract) {
-            std::cerr << "--extract currently supports official GBA cartridges "
-                         "only; refusing to export an EZ3 flash image as .gba.\n";
-            result = ezfadvance::ReadOnlyCartridge(h).finishSession() ? 1 : 2;
-        }
-        else {
+        } else {
             if (extract && !ez3_extraction) {
                 std::cerr << "EZ3 extraction requires a catalog ROM number: "
                              "--extract N OUTPUT.gba\n";
