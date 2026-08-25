@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.28`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.28`<br>
+**Current project/toolset version:** `0.7.29`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.29`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.28 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.29 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -40,7 +40,10 @@ The version is bumped when the code of **at least one** of these programs change
 
 Therefore the version number identifies a synchronized EZF Advance III toolset release, not a per-file change counter.
 
-Beginning with **0.6.2**, the project version is **not hard-coded into runtime banners**. Version identity is carried by release/source filenames, source comments, packaged artifacts, tags, and documentation. Runtime banners identify the utility and host platform only. This avoids stale or duplicated version strings inside binaries.
+Beginning with **0.6.2**, the project version is **not hard-coded into normal
+runtime banners**. From 0.7.29, standalone `--version` reads a single shared
+constant and reports it without USB access. Normal banners continue to identify
+the utility and host platform only.
 
 The GBA header field reported as `ROM version` is unrelated to the toolset release number and remains displayed where applicable.
 
@@ -2640,6 +2643,12 @@ routing fix, unnumbered ROM-1 default, invalid forms, stored catalog extents,
 loader-overlap blanking, first-ROM-only entry reconstruction, mapping
 thresholds, and a final official-ROM transfer shorter than 64 KiB.
 
+### 36.50 0.7.29 — shared version reporting
+
+All four applications accept standalone `--version` without initializing
+libusb. They print their stable executable name and the version owned by the
+shared `version.hpp` header, preventing per-program version drift.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2651,7 +2660,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.28 baseline compiled and transcript-tested, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.7.29 baseline compiled and transcript-tested, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3076,10 +3085,11 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.28**, the project has an object-oriented structural model:
+At shared toolset version **0.7.29**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
-- runtime banners no longer embed the project version; version identity is external to program output from 0.6.2 onward;
+- normal runtime banners do not embed the project version; from 0.7.29,
+  standalone `--version` reports the shared version constant;
 - cartridge geometry is four 8-MiB program/erase windows;
 - 1-8 active catalog entries are capture-proven; 120 structural slots remain a safety bound rather than a proven menu limit;
 - total ROM bytes may reach the full 32-MiB / 256-Mbit capacity when packing and loader placement fit;

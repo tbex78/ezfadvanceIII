@@ -35,8 +35,9 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"
+#include "ezfadvance/version.hpp"
 
-// EZF Advance III save reader 0.7.28, read-only dumper.
+// EZF Advance III save reader 0.7.29, read-only dumper.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Save-read protocol behavior remains unchanged from 0.5.10.
 //
@@ -516,6 +517,7 @@ static void usage(const char* argv0)
 {
     std::cout << "Usage:\n"
               << "  " << argv0 << "\n"
+              << "  " << argv0 << " --version\n"
               << "  " << argv0 << " --output file.sav\n"
               << "  " << argv0 << " --rom N [--output file.sav]\n\n"
               << "Read-only EZF Advance III save dumper (" << host_platform_name() << ").\n"
@@ -527,6 +529,11 @@ static void usage(const char* argv0)
 
 int main(int argc, char** argv)
 {
+    if (ezfadvance::isVersionRequest(argc, argv)) {
+        ezfadvance::printVersion(std::cout, "ezfadvanceIII_save_reader");
+        return 0;
+    }
+
     std::optional<std::string> output;
     std::optional<size_t> requested_rom;
 

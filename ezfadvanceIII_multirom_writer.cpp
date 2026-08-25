@@ -36,6 +36,7 @@
 #include "ezfadvance/verification_session.hpp"
 #include "ezfadvance/writer_options.hpp"
 #include "ezfadvance/verification_policy.hpp"
+#include "ezfadvance/version.hpp"
 
 static constexpr size_t PROGRAM_BLOCK = 0x10000; // 64 KiB
 static constexpr size_t FLASH_WINDOW_SIZE = 0x800000; // 8 MiB local program window
@@ -173,7 +174,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.28 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.7.29 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -3077,6 +3078,8 @@ static void usage(const char* argv0)
 {
     std::cerr
         << "ezfadvanceIII manager-primed ROM writer (" << host_platform_name() << ")\n\n"
+        << "Version:\n"
+        << "  " << argv0 << " --version\n\n"
         << "Dry run / inspect layout only:\n"
         << "  " << argv0 << " rom1.gba [rom2.gba ...]\n\n"
         << "Build in memory + erase/program/verify:\n"
@@ -3120,6 +3123,11 @@ static void usage(const char* argv0)
 
 int main(int argc, char** argv)
 {
+    if (ezfadvance::isVersionRequest(argc, argv)) {
+        ezfadvance::printVersion(std::cout, "ezfadvanceIII_multirom_writer");
+        return 0;
+    }
+
     try {
         ezfadvance::WriterOptions options;
         const auto parse_result = ezfadvance::WriterOptions::parse(

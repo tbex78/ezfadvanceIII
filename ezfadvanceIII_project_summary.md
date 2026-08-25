@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.28**.
+Current shared project/toolset version covered by this summary: **0.7.29**.
 
 All mainline utilities carry this same version:
 
@@ -25,7 +25,10 @@ ezfadvanceIII_wipe_card
 
 Beginning with 0.6.0, a code change to **any one** of these utilities bumps the shared version for **all four**, even when some utilities have no functional change in that release.
 
-Beginning with **0.6.2**, runtime banners do not contain a hard-coded project version. Release identity is carried by filenames, source comments, tags/releases, packaged artifacts, and documentation. The GBA header's `ROM version` field is unrelated and remains part of ROM inspection output.
+Beginning with **0.6.2**, normal runtime banners do not contain a hard-coded
+project version. From 0.7.29, standalone `--version` reports the shared version
+constant. The GBA header's `ROM version` field is unrelated and remains part of
+ROM inspection output.
 
 ---
 
@@ -803,7 +806,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.28 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.7.29 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1147,12 +1150,18 @@ into a testable component. Regression tests now cover official versus EZ3
 extraction dispatch, numbered and default-ROM forms, loader-overlap blanking,
 first-ROM entry restoration, mapping thresholds, and final partial USB reads.
 
+## 0.7.29 release changes
+
+**0.7.29** adds a shared, USB-independent `--version` argument to all four
+applications. A single header owns the synchronized version string.
+
 ## Current project status
 
-At shared version **0.7.28**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.7.29**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
-- from 0.6.2, runtime banners intentionally omit the project version to avoid hard-coded duplicate version strings;
+- normal runtime banners omit the project version; standalone `--version`
+  reports the shared version constant from 0.7.29;
 - tested cartridge geometry is four 8-MiB windows / 32 MiB total;
 - there is no small fixed ROM-count limit; 1–8 active entries are capture-proven and the loader exposes 120 structural catalog slots as a safety bound;
 - total input ROM bytes may be up to and including 32 MiB / 256 Mbit, provided packing and loader placement still fit;
@@ -1207,4 +1216,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.28 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.7.29 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

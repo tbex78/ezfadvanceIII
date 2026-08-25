@@ -35,8 +35,9 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/card_reader_options.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
+#include "ezfadvance/version.hpp"
 
-// EZF Advance III card reader 0.7.28, read-only inspector.
+// EZF Advance III card reader 0.7.29, read-only inspector.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Card-read protocol behavior remains unchanged from 0.5.13.
 //
@@ -849,6 +850,7 @@ static void usage(const char* argv0)
 {
     std::cout << "Usage:\n"
               << "  " << argv0 << "\n"
+              << "  " << argv0 << " --version\n"
               << "  " << argv0 << " --extract OUTPUT.gba [--verbose]\n"
               << "  " << argv0 << " --extract N OUTPUT.gba [--verbose]\n\n"
               << "Read-only EZF Advance III card inspector (" << host_platform_name() << ").\n"
@@ -863,6 +865,11 @@ static void usage(const char* argv0)
 
 int main(int argc, char** argv)
 {
+    if (ezfadvance::isVersionRequest(argc, argv)) {
+        ezfadvance::printVersion(std::cout, "ezfadvanceIII_card_reader");
+        return 0;
+    }
+
     std::vector<std::string> arguments;
     for (int i = 1; i < argc; ++i) arguments.emplace_back(argv[i]);
     ezfadvance::CardReaderOptions options;

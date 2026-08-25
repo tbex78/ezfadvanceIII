@@ -25,6 +25,7 @@
 
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/protocol.hpp"
+#include "ezfadvance/version.hpp"
 
 static constexpr const char* host_platform_name()
 {
@@ -48,7 +49,7 @@ static constexpr const char* host_platform_name()
 static constexpr unsigned READINESS_ATTEMPTS = 5;
 static constexpr auto READINESS_RETRY_DELAY = std::chrono::milliseconds(100);
 
-// ezfadvanceIII wipe utility 0.7.28.
+// ezfadvanceIII wipe utility 0.7.29.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Erase protocol/timing behavior remains unchanged from 0.5.10.
 //
@@ -486,6 +487,11 @@ private:
 
 int main(int argc, char** argv)
 {
+    if (ezfadvance::isVersionRequest(argc, argv)) {
+        ezfadvance::printVersion(std::cout, "ezfadvanceIII_wipe_card");
+        return 0;
+    }
+
     if (argc != 2 || std::string(argv[1]) != "--yes-really-wipe") {
         std::cerr
             << "EZF Advance III card wipe utility (" << host_platform_name() << ")\n\n"
@@ -493,7 +499,8 @@ int main(int argc, char** argv)
             << "RECOMMENDED BEFORE USE:\n"
             << "  Unplug the EZF Advance III USB device, then plug it back in before running\n"
             << "  this wipe utility. This gives the wipe a fresh USB/bridge session.\n\n"
-            << "Usage: " << argv[0] << " --yes-really-wipe\n";
+            << "Usage: " << argv[0] << " --yes-really-wipe\n"
+            << "       " << argv[0] << " --version\n";
         return 1;
     }
 

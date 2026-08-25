@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.28` toolset, including guarded
+**Specification baseline:** shared `0.7.29` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -584,7 +584,8 @@ The test suite covers:
 - exact transcripts for partial-first-window (including the 1/2/4-MiB
   checkpoints), explicit partial 12/20/28 MiB, exact 8/16/24/32 MiB, and
   tiny-tail-above-16-MiB verification;
-- writer option parsing, including multi-digit structural catalog slots.
+- writer option parsing, including multi-digit structural catalog slots;
+- the shared `--version` request and stable version-output format.
 
 Writer dry-run regression comparisons should use the preserved pre-migration
 binary when available. Output and exit status must remain identical, excluding
