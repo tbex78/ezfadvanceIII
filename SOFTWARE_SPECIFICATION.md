@@ -161,7 +161,7 @@ inspection has no long-running block operation to report.
 EZ3 ROM extraction uses:
 
 ```sh
-ezfadvanceIII_card_reader --extract-rom N OUTPUT.gba
+ezfadvanceIII_card_reader --extract N OUTPUT.gba [--verbose]
 ```
 
 The one-based ROM number must exist in the parsed catalog. The reader must
@@ -176,6 +176,11 @@ header checksum must validate before session cleanup and file creation.
 The command must refuse an existing destination. This path is read-only and
 does not claim exact recovery of an input file whose discarded trailing bytes
 cannot be represented by the catalog size class.
+
+Default EZ3 extraction reporting must use the same progress-bar presentation
+as official-cartridge extraction. `--verbose` must replace it with per-block
+address, timing, and throughput diagnostics without changing transferred or
+written bytes.
 
 ### 3.3 Save reader
 

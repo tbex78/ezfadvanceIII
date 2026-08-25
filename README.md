@@ -74,7 +74,7 @@ extent, still require equivalent physical-cartridge dump/hash qualification.
 ### Extract a ROM stored on an EZ3 cartridge
 
 ```sh
-./ezfadvanceIII_card_reader --extract-rom N OUTPUT.gba
+./ezfadvanceIII_card_reader --extract N OUTPUT.gba [--verbose]
 ```
 
 `N` is the displayed one-based catalog number. The reader exports the ROM's
@@ -85,6 +85,8 @@ reconstructs that instruction from `Orig. entry`. ROM 2 and later are not
 modified. ROM 1 and ROM 2 extraction from a tested two-ROM card are
 hardware-qualified by SHA-256 equality with both original files. A separate
 single-ROM-layout extraction remains to be qualified.
+The default display uses the same progress bar as official-cartridge
+extraction; `--verbose` selects per-block timing and throughput diagnostics.
 
 ### Read an EZ3 save
 

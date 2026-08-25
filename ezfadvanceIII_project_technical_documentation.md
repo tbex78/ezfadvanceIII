@@ -1716,7 +1716,7 @@ The card reader can extract one ROM from a recognized EZ3 single- or multi-ROM
 catalog:
 
 ```bash
-ezfadvanceIII_card_reader --extract-rom N OUTPUT.gba
+ezfadvanceIII_card_reader --extract N OUTPUT.gba [--verbose]
 ```
 
 `N` is the one-based number printed by normal inspection. The catalog type
@@ -1746,6 +1746,9 @@ two-ROM card. Extracted ROM 1, including reconstructed entry bytes, matched
 the original file's SHA-256 checksum. Extracted ROM 2, whose entry bytes were
 left unchanged, also matched its original file's SHA-256 checksum. A separate
 single-ROM-layout extraction remains the next qualification gate.
+Default reporting uses the same progress bar as official-cartridge extraction.
+`--verbose` instead prints each block address, length, duration, and throughput,
+followed by total duration and average throughput.
 
 ---
 
