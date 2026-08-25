@@ -106,6 +106,26 @@ std::uint32_t CartridgeFormat::makeArmBranch(std::uint32_t target)
            (static_cast<std::uint32_t>(immediate) & 0x00FFFFFFu);
 }
 
+bool CartridgeFormat::restoreEz3Entry(std::vector<std::uint8_t>& rom,
+                                      const CatalogEntry& entry,
+                                      bool first) noexcept
+{
+    if (!first)
+        return true;
+    if (rom.size() < 4)
+        return false;
+    try {
+        const std::uint32_t instruction = makeArmBranch(entry.target_or_start);
+        rom[0] = static_cast<std::uint8_t>(instruction);
+        rom[1] = static_cast<std::uint8_t>(instruction >> 8);
+        rom[2] = static_cast<std::uint8_t>(instruction >> 16);
+        rom[3] = static_cast<std::uint8_t>(instruction >> 24);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 GbaHeader GbaHeader::parse(const std::vector<std::uint8_t>& bytes)
 {
     GbaHeader header;

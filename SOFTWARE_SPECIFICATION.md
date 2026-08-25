@@ -104,7 +104,8 @@ Responsibilities:
 - read and validate GBA headers;
 - report catalog and ROM metadata;
 - optionally extract the complete 32-MiB GBA address space from a detected
-  official cartridge to a local `.gba` file.
+  official cartridge to a local `.gba` file;
+- optionally extract one catalogued ROM from an EZ3 flash cartridge.
 
 The inspector is read-only. It must not send flash erase commands or ROM
 program payloads.
@@ -156,6 +157,25 @@ line per 64-KiB block containing the byte address, transfer length, elapsed
 seconds, and throughput, followed by total duration and average throughput.
 `--verbose` without `--extract` is invalid because ordinary header/catalog
 inspection has no long-running block operation to report.
+
+EZ3 ROM extraction uses:
+
+```sh
+ezfadvanceIII_card_reader --extract-rom N OUTPUT.gba
+```
+
+The one-based ROM number must exist in the parsed catalog. The reader must
+derive the inclusive stored end from the catalog type (`32 MiB >> type`), read
+that complete extent, and select a proven linear mapping covering its final
+address. Any intersection with the known loader extent is reconstructed as
+erased `0xFF` bytes. Only physical ROM 1 has bytes 0..3 reconstructed, using
+an ARM branch to its catalogued original entry target. ROM 2 and later must
+retain their first four bytes unchanged. The reconstructed GBA fixed byte and
+header checksum must validate before session cleanup and file creation.
+
+The command must refuse an existing destination. This path is read-only and
+does not claim exact recovery of an input file whose discarded trailing bytes
+cannot be represented by the catalog size class.
 
 ### 3.3 Save reader
 

@@ -1710,6 +1710,41 @@ output file. The save reader independently requires
 `CartridgeKind::ez3_flash` before EZ3 loader/catalog/save processing; an
 official or unknown cartridge is rejected after cleanup.
 
+### 26.7 EZ3 catalogued-ROM extraction
+
+The card reader can extract one ROM from a recognized EZ3 single- or multi-ROM
+catalog:
+
+```bash
+ezfadvanceIII_card_reader --extract-rom N OUTPUT.gba
+```
+
+`N` is the one-based number printed by normal inspection. The catalog type
+defines the stored size class as `32 MiB >> type`; its inclusive end is
+`start + size - 1`. Extraction selects the smallest capture-proven linear read
+mapping covering that end and reads the complete stored extent.
+
+Physical ROM 1 begins at card byte zero. EZ3Manager replaces its original
+four-byte ARM branch with a branch to the loader/menu and saves the original
+branch target in the first catalog entry. The extractor reconstructs those
+four bytes with `CartridgeFormat::makeArmBranch(target_or_start)`. Later
+catalog entries store their card start in that field and their first
+instruction was not patched, so ROM 2 and later are deliberately left
+unchanged.
+
+When a loader extent intersects the selected ROM size-class range, the reader
+restores that intersection to erased `0xFF`. This mirrors the manager/builder
+rule that permits loader placement only in erased ROM space. The reconstructed
+fixed header byte and complement checksum must validate before the output is
+created. Existing destinations are refused, and cleanup must complete before
+file creation. The workflow sends no erase or program operation.
+
+This produces the catalog-sized ROM image. It does not claim recovery of an
+original nonstandard file length that was rounded into a catalog size class.
+The implementation is offline-tested; trusted hash comparison on a physical
+single-ROM card is the next hardware qualification gate, followed by ROM 1
+and a later ROM from a multi-ROM card.
+
 ---
 
 ## 27. Safety model

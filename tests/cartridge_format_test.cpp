@@ -91,6 +91,15 @@ int main()
     assert(later.start == 0x100000u);
     assert(later.plausible(0x02000000u, false));
 
+    std::vector<std::uint8_t> first_rom = {0xAA, 0xBB, 0xCC, 0xDD};
+    assert(CartridgeFormat::restoreEz3Entry(first_rom, first, true));
+    assert(CartridgeFormat::readLe32(first_rom.data()) ==
+           CartridgeFormat::makeArmBranch(0xD4));
+
+    std::vector<std::uint8_t> later_rom = {0x11, 0x22, 0x33, 0x44};
+    assert(CartridgeFormat::restoreEz3Entry(later_rom, later, false));
+    assert(CartridgeFormat::readLe32(later_rom.data()) == 0x44332211u);
+
     bool threw = false;
     try {
         CatalogEntry::parse(loader, 1, false);

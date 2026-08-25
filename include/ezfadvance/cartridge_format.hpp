@@ -48,6 +48,13 @@ public:
     static std::optional<std::uint32_t> armBranchTarget(
         std::uint32_t instruction) noexcept;
     static std::uint32_t makeArmBranch(std::uint32_t target);
+
+    // EZ3Manager replaces only physical ROM #1's first instruction with a
+    // branch to its loader. Reconstruct that instruction from the first
+    // catalog entry; later ROMs must remain byte-for-byte unchanged.
+    static bool restoreEz3Entry(std::vector<std::uint8_t>& rom,
+                                const CatalogEntry& entry,
+                                bool first) noexcept;
 };
 
 } // namespace ezfadvance

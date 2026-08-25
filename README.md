@@ -71,6 +71,19 @@ A Golden Sun 8-MiB extraction is hardware-proven by trusted SHA-256 equality
 and real-hardware boot. Other extraction sizes, including the new 1-MiB
 extent, still require equivalent physical-cartridge dump/hash qualification.
 
+### Extract a ROM stored on an EZ3 cartridge
+
+```sh
+./ezfadvanceIII_card_reader --extract-rom N OUTPUT.gba
+```
+
+`N` is the displayed one-based catalog number. The reader exports the ROM's
+catalog size-class extent, restores any overlapping loader area to `0xFF`, and
+validates the reconstructed GBA header before writing. EZ3Manager replaces the
+first instruction of physical ROM 1 with a loader branch, so extraction
+reconstructs that instruction from `Orig. entry`. ROM 2 and later are not
+modified. This new path requires real-cartridge dump/hash qualification.
+
 ### Read an EZ3 save
 
 ```sh
