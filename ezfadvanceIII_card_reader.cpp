@@ -861,8 +861,9 @@ static void usage(const char* argv0)
                  "official GBA cartridge.\n"
               << "--verbose replaces the extraction progress bar with per-block "
                  "address and timing diagnostics.\n";
-    std::cout << "For EZ3 flash, --extract N OUTPUT.gba reads the displayed "
-                 "catalog ROM number and reconstructs ROM 1's original entry.\n";
+    std::cout << "For EZ3 flash, --extract defaults to catalog ROM 1; adding "
+                 "N selects another displayed ROM number. ROM 1's original "
+                 "entry is reconstructed.\n";
 }
 
 int main(int argc, char** argv)
@@ -962,13 +963,12 @@ int main(int argc, char** argv)
                              : inspect_official_cartridge(h);
         } else {
             if (extract && !ez3_extraction) {
-                std::cerr << "EZ3 extraction requires a catalog ROM number: "
-                             "--extract N OUTPUT.gba\n";
-                result = ezfadvance::ReadOnlyCartridge(h).finishSession() ? 1 : 2;
-            } else {
-                CardInspector inspector(h, ez3_extraction, verbose);
-                result = inspector.run();
+                std::cout << "No EZ3 ROM number specified; defaulting to "
+                             "catalog ROM 1.\n";
+                ez3_extraction = Ez3ExtractionRequest{1, output_path};
             }
+            CardInspector inspector(h, ez3_extraction, verbose);
+            result = inspector.run();
         }
     }
     else

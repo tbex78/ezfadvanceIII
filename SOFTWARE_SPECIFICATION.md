@@ -164,7 +164,10 @@ EZ3 ROM extraction uses:
 ezfadvanceIII_card_reader --extract N OUTPUT.gba [--verbose]
 ```
 
-The one-based ROM number must exist in the parsed catalog. The reader must
+The one-based ROM number must exist in the parsed catalog. When the command is
+invoked as `--extract OUTPUT.gba` and the detected cartridge is EZ3 flash, the
+reader must select catalog ROM 1. On an official cartridge, that same form
+retains the official full-address-space extraction behavior. The reader must
 derive the inclusive stored end from the catalog type (`32 MiB >> type`), read
 that complete extent, and select a proven linear mapping covering its final
 address. Any intersection with the known loader extent is reconstructed as

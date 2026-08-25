@@ -77,7 +77,8 @@ extent, still require equivalent physical-cartridge dump/hash qualification.
 ./ezfadvanceIII_card_reader --extract N OUTPUT.gba [--verbose]
 ```
 
-`N` is the displayed one-based catalog number. The reader exports the ROM's
+`N` is the displayed one-based catalog number. If it is omitted on an EZ3
+cartridge, the reader extracts catalog ROM 1. The reader exports the ROM's
 catalog size-class extent, restores any overlapping loader area to `0xFF`, and
 validates the reconstructed GBA header before writing. EZ3Manager replaces the
 first instruction of physical ROM 1 with a loader branch, so extraction

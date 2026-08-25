@@ -1719,8 +1719,10 @@ catalog:
 ezfadvanceIII_card_reader --extract N OUTPUT.gba [--verbose]
 ```
 
-`N` is the one-based number printed by normal inspection. The catalog type
-defines the stored size class as `32 MiB >> type`; its inclusive end is
+`N` is the one-based number printed by normal inspection. When it is omitted,
+an EZ3 cartridge defaults to catalog ROM 1; the same unnumbered syntax retains
+its existing official-cartridge behavior when an official ROM is detected.
+The catalog type defines the stored size class as `32 MiB >> type`; its inclusive end is
 `start + size - 1`. Extraction selects the smallest capture-proven linear read
 mapping covering that end and reads the complete stored extent.
 
