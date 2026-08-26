@@ -33,11 +33,12 @@
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/cartridge_format.hpp"
+#include "ezfadvance/ez3_catalog.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"
 #include "ezfadvance/version.hpp"
 
-// EZF Advance III save reader 0.7.29, read-only dumper.
+// EZF Advance III save reader 0.7.30, read-only dumper.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Save-read protocol behavior remains unchanged from 0.5.10.
 //
@@ -96,21 +97,7 @@ static constexpr const char* host_platform_name()
 static constexpr uint32_t FLASH_WINDOW_SIZE = 0x00800000u; // 8 MiB
 static constexpr uint32_t CAPTURE_LINEAR_LIMIT  = 0x01000000u; // 16 MiB
 
-static constexpr size_t SINGLE_HEADER_OFF = 0x4E8;
-static constexpr size_t SINGLE_HEADER_COUNT2_OFF = 0x4F6;
-static constexpr size_t SINGLE_ENTRY_OFF = 0x4F8;
-
-static constexpr size_t MULTI_HEADER_OFF = 0x475E;
-static constexpr size_t MULTI_ENTRY_OFF = 0x476E;
-static constexpr size_t CATALOG_ENTRY_SIZE = 28;
 static constexpr size_t MAX_CAPTURED_ROMS = 3;
-static constexpr size_t LOADER_READ_SIZE = 0x7080;
-
-static uint16_t read_le16(const uint8_t* p)
-{
-    return static_cast<uint16_t>(p[0]) |
-           static_cast<uint16_t>(static_cast<uint16_t>(p[1]) << 8);
-}
 
 static uint32_t read_le32(const uint8_t* p)
 {
@@ -162,18 +149,6 @@ static GbaHeader read_gba_header(libusb_device_handle* h, uint32_t start)
 }
 
 using CatalogEntry = ezfadvance::CatalogEntry;
-
-static CatalogEntry parse_catalog_entry(const std::vector<uint8_t>& loader,
-                                        size_t off,
-                                        bool first)
-{
-    return CatalogEntry::parse(loader, off, first);
-}
-
-static bool plausible_entry(const CatalogEntry& e, bool first)
-{
-    return e.plausible(CAPTURE_LINEAR_LIMIT, first);
-}
 
 static std::string hex32(uint32_t v)
 {
@@ -292,51 +267,20 @@ static int inspect_and_dump_save(libusb_device_handle* h,
     }
 
     const size_t loader_read_len = std::min<size_t>(
-        LOADER_READ_SIZE, static_cast<size_t>(CAPTURE_LINEAR_LIMIT-loader_start));
+        ezfadvance::Ez3CatalogParser::loader_read_size,
+        static_cast<size_t>(CAPTURE_LINEAR_LIMIT-loader_start));
     std::vector<uint8_t> loader;
     if (!read_card(h,loader_start,loader,loader_read_len)) return 2;
 
-    bool is_single = false;
-    size_t rom_count = 0;
-    size_t entry_off = 0;
-
-    if (loader.size() >= SINGLE_ENTRY_OFF+CATALOG_ENTRY_SIZE) {
-        const uint16_t a = read_le16(loader.data()+SINGLE_HEADER_OFF);
-        const uint16_t b = read_le16(loader.data()+SINGLE_HEADER_COUNT2_OFF);
-        if (a == 1 && b == 1) {
-            const CatalogEntry e =
-                parse_catalog_entry(loader,SINGLE_ENTRY_OFF,true);
-            if (plausible_entry(e,true)) {
-                is_single = true;
-                rom_count = 1;
-                entry_off = SINGLE_ENTRY_OFF;
-            }
-        }
-    }
-
-    if (!is_single && loader.size() >=
-        MULTI_ENTRY_OFF+MAX_CAPTURED_ROMS*CATALOG_ENTRY_SIZE) {
-        const uint16_t a = read_le16(loader.data()+MULTI_HEADER_OFF);
-        const uint16_t b = read_le16(loader.data()+MULTI_HEADER_OFF+14);
-        if (a >= 2 && a <= MAX_CAPTURED_ROMS && a == b) {
-            bool all_ok = true;
-            for (size_t i=0;i<a;++i) {
-                const CatalogEntry e = parse_catalog_entry(
-                    loader,MULTI_ENTRY_OFF+i*CATALOG_ENTRY_SIZE,i==0);
-                if (!plausible_entry(e,i==0)) all_ok = false;
-            }
-            if (all_ok) {
-                rom_count = a;
-                entry_off = MULTI_ENTRY_OFF;
-            }
-        }
-    }
-
-    if (rom_count == 0) {
+    const auto catalog =
+        ezfadvance::Ez3CatalogParser::parse(loader, CAPTURE_LINEAR_LIMIT);
+    if (!catalog || catalog->entries.size() > MAX_CAPTURED_ROMS) {
         std::cerr << "Found loader branch at " << hex32(loader_start)
                   << " but no recognized EZ3 catalog.\n";
         return 3;
     }
+    const bool is_single = catalog->isSingle();
+    const std::size_t rom_count = catalog->entries.size();
 
     struct DetectedRom {
         CatalogEntry e;
@@ -349,10 +293,10 @@ static int inspect_and_dump_save(libusb_device_handle* h,
 
     for (size_t i=0;i<rom_count;++i) {
         DetectedRom r;
-        r.e = parse_catalog_entry(loader,entry_off+i*CATALOG_ENTRY_SIZE,i==0);
+        r.e = catalog->entries[i];
         r.g = read_gba_header(h,r.e.start);
         const uint32_t end = (i+1 < rom_count)
-            ? parse_catalog_entry(loader,entry_off+(i+1)*CATALOG_ENTRY_SIZE,false).start
+            ? catalog->entries[i + 1].start
             : loader_start;
         r.span = (end > r.e.start) ? end-r.e.start : 0;
         if (r.span)

@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.29` toolset, including guarded
+**Specification baseline:** shared `0.7.30` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -384,6 +384,14 @@ operation.
 Provides pure binary-format operations, including little-endian decoding,
 ASCII cleanup, GBA header checksum validation, and ARM branch-target decoding.
 
+#### `Ez3CatalogParser`
+
+Purely interprets the capture-derived single- and multi-ROM loader catalog
+structures into `Ez3CatalogLayout` and `CatalogEntry` values. It accepts an
+image bound from its caller but does not authorize tool-specific evidence
+policy. The card reader and save reader apply their different supported-count
+and address policies after parsing.
+
 #### `GbaHeader`
 
 Models parsed GBA title, game code, maker code, ROM version, readability, and
@@ -568,6 +576,8 @@ The test suite covers:
 - ARM branch-target decoding;
 - GBA header parsing and checksum validation;
 - EZ3 catalog parsing, address decoding, plausibility, and bounds errors;
+- shared single-ROM and 2/3/8/120-entry catalog layouts, duplicated-count
+  validation, truncation, alignment, packed-start, and address-bound failures;
 - EZ3 stored extents, loader-overlap blanking, ROM-1 entry reconstruction, and
   8/16/24/32-MiB linear-read mapping thresholds;
 - card-reader option parsing and official/EZ3 extraction routing, including

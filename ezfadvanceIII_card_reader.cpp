@@ -34,10 +34,11 @@
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/card_reader_options.hpp"
+#include "ezfadvance/ez3_catalog.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/version.hpp"
 
-// EZF Advance III card reader 0.7.29, read-only inspector.
+// EZF Advance III card reader 0.7.30, read-only inspector.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Card-read protocol behavior remains unchanged from 0.5.13.
 //
@@ -104,18 +105,7 @@ static constexpr uint32_t LINEAR16_LIMIT     = 0x01000000u; // 16 MiB
 static constexpr uint32_t LINEAR24_LIMIT     = 0x01800000u; // 24 MiB / 192 Mbit
 static constexpr uint32_t CARD_IMAGE_LIMIT   = 0x02000000u; // 32 MiB / 256 Mbit
 
-static constexpr size_t SINGLE_HEADER_OFF = 0x4E8;
-static constexpr size_t SINGLE_HEADER_COUNT2_OFF = 0x4F6;
-static constexpr size_t SINGLE_ENTRY_OFF = 0x4F8;
-
-static constexpr size_t MULTI_HEADER_OFF = 0x475E;
-static constexpr size_t MULTI_ENTRY_OFF = 0x476E;
-static constexpr size_t CATALOG_ENTRY_SIZE = 28;
-static constexpr size_t MULTI_CATALOG_END_OFF = 0x548E;
-static constexpr size_t MULTI_CATALOG_MAX_ENTRIES =
-    (MULTI_CATALOG_END_OFF - MULTI_ENTRY_OFF) / CATALOG_ENTRY_SIZE;
 static constexpr size_t CAPTURE_PROVEN_MAX_ROMS = 8;
-static constexpr size_t LOADER_READ_SIZE = 0x7080;
 
 static std::string progress_duration(double seconds)
 {
@@ -198,19 +188,6 @@ private:
     std::size_t last_width_ = 0;
     std::chrono::steady_clock::time_point started_;
 };
-
-static_assert(MULTI_ENTRY_OFF +
-              MULTI_CATALOG_MAX_ENTRIES * CATALOG_ENTRY_SIZE ==
-              MULTI_CATALOG_END_OFF,
-              "multi-ROM catalog region must contain whole 28-byte entries");
-static_assert(MULTI_CATALOG_MAX_ENTRIES == 120,
-              "unexpected multi-ROM catalog structural slot count");
-
-static uint16_t read_le16(const uint8_t* p)
-{
-    return static_cast<uint16_t>(p[0]) |
-           static_cast<uint16_t>(static_cast<uint16_t>(p[1]) << 8);
-}
 
 static uint32_t read_le32(const uint8_t* p)
 {
@@ -435,18 +412,6 @@ static const char* mapping_mode_name(ReadMappingMode mode)
     return "unknown";
 }
 
-static CatalogEntry parse_catalog_entry(const std::vector<uint8_t>& loader,
-                                        size_t off,
-                                        bool first)
-{
-    return CatalogEntry::parse(loader, off, first);
-}
-
-static bool plausible_entry(const CatalogEntry& e, bool first)
-{
-    return e.plausible(CARD_IMAGE_LIMIT, first);
-}
-
 static std::string hex32(uint32_t v)
 {
     std::ostringstream s;
@@ -581,7 +546,8 @@ static int extract_ez3_rom(libusb_device_handle* h,
     // Reconstruct that overlap as erased bytes rather than exporting loader
     // code as part of the game. The known single loader is 0x660 bytes; the
     // maximum capture-derived multi loader extent is 0x7080 bytes.
-    const std::size_t loader_length = is_single ? 0x660u : LOADER_READ_SIZE;
+    const std::size_t loader_length = is_single ? 0x660u :
+        ezfadvance::Ez3CatalogParser::loader_read_size;
     const std::uint64_t rom_begin = entry.start;
     const std::uint64_t rom_end = rom_begin + image.size();
     const std::uint64_t loader_begin = loader_start;
@@ -711,59 +677,21 @@ static int inspect_card(libusb_device_handle* h,
     }
 
     const size_t loader_read_len = std::min<size_t>(
-        LOADER_READ_SIZE, static_cast<size_t>(CARD_IMAGE_LIMIT - loader_start));
+        ezfadvance::Ez3CatalogParser::loader_read_size,
+        static_cast<size_t>(CARD_IMAGE_LIMIT - loader_start));
     std::vector<uint8_t> loader;
     if (!read_card(h,loader_start,loader,loader_read_len)) return 2;
 
-    bool is_single = false;
-    size_t rom_count = 0;
-    size_t entry_off = 0;
-
-    if (loader.size() >= SINGLE_ENTRY_OFF + CATALOG_ENTRY_SIZE) {
-        const uint16_t a = read_le16(loader.data()+SINGLE_HEADER_OFF);
-        const uint16_t b = read_le16(loader.data()+SINGLE_HEADER_COUNT2_OFF);
-        if (a == 1 && b == 1) {
-            const CatalogEntry e = parse_catalog_entry(loader,SINGLE_ENTRY_OFF,true);
-            if (plausible_entry(e,true)) {
-                is_single = true;
-                rom_count = 1;
-                entry_off = SINGLE_ENTRY_OFF;
-            }
-        }
-    }
-
-    if (loader.size() >= MULTI_HEADER_OFF + 16) {
-        const uint16_t a = read_le16(loader.data()+MULTI_HEADER_OFF);
-        const uint16_t b = read_le16(loader.data()+MULTI_HEADER_OFF+14);
-        if (a >= 2 && a <= MULTI_CATALOG_MAX_ENTRIES && a == b) {
-            const size_t required =
-                MULTI_ENTRY_OFF + static_cast<size_t>(a) * CATALOG_ENTRY_SIZE;
-            if (required <= loader.size()) {
-                bool all_ok = true;
-                for (size_t i=0;i<a;++i) {
-                    const CatalogEntry e = parse_catalog_entry(
-                        loader,MULTI_ENTRY_OFF+i*CATALOG_ENTRY_SIZE,i==0);
-                    if (!plausible_entry(e,i==0)) all_ok = false;
-                }
-                if (all_ok) {
-                    is_single = false;
-                    rom_count = a;
-                    entry_off = MULTI_ENTRY_OFF;
-                }
-            }
-        }
-    }
-
-    if (rom_count == 0) {
+    const auto catalog =
+        ezfadvance::Ez3CatalogParser::parse(loader, CARD_IMAGE_LIMIT);
+    if (!catalog) {
         std::cerr << "Found loader branch at " << hex32(loader_start)
                   << " but no recognized capture-derived single/multi-ROM catalog.\n";
         return 3;
     }
-
-    std::vector<CatalogEntry> entries;
-    for (size_t i=0;i<rom_count;++i)
-        entries.push_back(parse_catalog_entry(
-            loader,entry_off+i*CATALOG_ENTRY_SIZE,i==0));
+    const bool is_single = catalog->isSingle();
+    const std::size_t rom_count = catalog->entries.size();
+    const std::vector<CatalogEntry>& entries = catalog->entries;
 
     // If any cataloged ROM header lies beyond the currently selected read
     // window, upgrade to the smallest capture-proven linear mapping that covers
