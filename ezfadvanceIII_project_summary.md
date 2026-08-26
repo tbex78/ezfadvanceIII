@@ -1206,6 +1206,9 @@ handling, image construction, device opening, and result presentation; a
 factory supplies the concrete `WriterBackend` to `CardWriter`. USB commands,
 delays, erase/program geometry, progress reporting, and explicit verification
 paths are mechanically preserved.
+The extracted backend is hardware-qualified with the established two-ROM
+F-Zero/Mario Kart image: programming and full read-back verification succeeded,
+the EZ3 menu booted, and both games launched on a real GBA.
 
 At shared version **0.9.0**, the project has an object-oriented structural model of original EZ3Manager behavior:
 

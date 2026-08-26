@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.9.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.9.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and its extracted libusb writer backend awaits hardware requalification. Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path were hardware-confirmed on the approved 0.8.1 baseline. The refactored `CardWriter` workflow was hardware-confirmed by a full two-ROM 8-MiB program/read-back cycle, EZ3 menu boot, and successful launch of both games on a real GBA. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.9.0 toolset has been compiled, transcript-tested, and writer-hardware-qualified on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The extracted libusb writer backend is confirmed by a full two-ROM 8-MiB program/read-back cycle, EZ3 menu boot, and successful launch of both games on a real GBA. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -2713,6 +2713,9 @@ opens the device and obtains the concrete implementation through
 `makeLibusbWriterBackend`; `CardWriter` continues to consume only the abstract
 backend. The mechanical move preserves command bytes, timing, flash-window
 geometry, erase/program behavior, and separately named verification paths.
+Hardware validation with the established F-Zero/Mario Kart image completed
+programming and full verification successfully; the menu and both games booted
+on a real GBA.
 
 ---
 
@@ -2725,7 +2728,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.9.0 baseline compiled and transcript-tested, with its extracted writer backend awaiting the required hardware requalification; partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction were confirmed on the approved 0.8.1 baseline; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.9.0 baseline compiled, transcript-tested, and writer-backend hardware-qualified; partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction are confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
