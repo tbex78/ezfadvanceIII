@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.9.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.9.0 toolset has been compiled, transcript-tested, and writer-hardware-qualified on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The extracted libusb writer backend is confirmed by a full two-ROM 8-MiB program/read-back cycle, EZ3 menu boot, and successful launch of both games on a real GBA. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.9.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. The partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail paths retain their earlier hardware qualification and are mechanically preserved in 0.9.0; they were not all physically rerun for this release. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -2713,9 +2713,11 @@ opens the device and obtains the concrete implementation through
 `makeLibusbWriterBackend`; `CardWriter` continues to consume only the abstract
 backend. The mechanical move preserves command bytes, timing, flash-window
 geometry, erase/program behavior, and separately named verification paths.
-Hardware validation with the established F-Zero/Mario Kart image completed
-programming and full verification successfully; the menu and both games booted
-on a real GBA.
+The 0.9.0-specific hardware requalification used the established two-ROM 8-MiB
+F-Zero/Mario Kart image. Programming and exact-8-MiB full verification
+succeeded; the menu and both games booted on a real GBA. The other
+capture-proven verification paths retain their prior hardware qualification
+and are mechanically preserved, but were not all physically rerun under 0.9.0.
 
 ---
 
@@ -2728,7 +2730,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.9.0 baseline compiled, transcript-tested, and writer-backend hardware-qualified; partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction are confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.9.0 baseline compiled and transcript-tested; extracted backend specifically requalified with the two-ROM exact-8-MiB path; partial-first-window, partial-12-/20-/28-MiB, exact-16-/24-/32-MiB, and tiny-tail paths retain prior hardware qualification and are mechanically preserved; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3181,7 +3183,11 @@ At shared toolset version **0.9.0**, the project has an object-oriented structur
   Sun; guarded full-address-space extraction, correct 8-MiB trimming, trusted
   SHA-256 equality, and extracted-file boot are also hardware-confirmed, while
   the other generic trim sizes are not yet hardware-generalized;
-- hardware validation now includes 1-/2-/4-MiB partial-first-window checkpoints, exact 8-/16-/24-/32-MiB paths, explicit partial 12-/20-/28-MiB paths, and the Fire-Emblem-style tiny-tail checkpoint, plus the documented map and multi-ROM layouts.
+- 0.9.0 specifically requalifies the two-ROM exact-8-MiB writer path; the
+  previously hardware-proven 1-/2-/4-MiB partial-first-window checkpoints,
+  exact 16-/24-/32-MiB paths, explicit partial 12-/20-/28-MiB paths, and the
+  Fire-Emblem-style tiny-tail checkpoint are mechanically preserved and retain
+  their historical qualification rather than being claimed as 0.9.0 reruns.
 
 The current refactored source additionally provides RAII device ownership, an
 injectable USB transport, shared protocol and read-state objects, domain models
