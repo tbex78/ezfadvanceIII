@@ -31,16 +31,6 @@ cartridge:
 make test
 ```
 
-Every executable reports the synchronized toolset version without accessing a
-USB device:
-
-```sh
-./ezfadvanceIII_card_reader --version
-./ezfadvanceIII_save_reader --version
-./ezfadvanceIII_multirom_writer --version
-./ezfadvanceIII_wipe_card --version
-```
-
 The native source/build targets are macOS, Linux, FreeBSD, OpenBSD, NetBSD,
 and DragonFly BSD. macOS on Apple Silicon is the current compile and physical
 hardware validation baseline. Linux and BSD hardware qualification remains
