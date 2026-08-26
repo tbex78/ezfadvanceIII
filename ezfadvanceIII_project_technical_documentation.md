@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.8.1`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.8.1`<br>
+**Current project/toolset version:** `0.9.0`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.9.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.8.1 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. The refactored `CardWriter` workflow is hardware-confirmed by a full two-ROM 8-MiB program/read-back cycle, EZ3 menu boot, and successful launch of both games on a real GBA. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.9.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and its extracted libusb writer backend awaits hardware requalification. Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path were hardware-confirmed on the approved 0.8.1 baseline. The refactored `CardWriter` workflow was hardware-confirmed by a full two-ROM 8-MiB program/read-back cycle, EZ3 menu boot, and successful launch of both games on a real GBA. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -82,6 +82,8 @@ The principal shared components are:
   first-window, explicit partial 12-/20-/28-MiB, exact 8-/16-/24-/32-MiB, and
   tiny-tail verification transcripts;
 - `WriterOptions`, which separates command-line parsing from image and device operations.
+- `LibusbWriterBackend`, which contains the capture-derived destructive USB
+  implementation behind the `WriterBackend` factory boundary.
 
 The application workflows are represented by `CartridgeImageBuilder`,
 `CardWriter`, `CardInspector`, `SaveExtractor`, and `CardEraser`. Composition is
@@ -2703,6 +2705,15 @@ and mismatched candidates are refused because no hardware save-slot switch is
 proven. Save-signature scanning is clamped to the first-16-MiB evidence limit.
 Both refusal and successful extraction were confirmed on real hardware.
 
+### 36.55 0.9.0 — extracted libusb writer backend
+
+The capture-derived destructive USB implementation and its console progress
+reporting now reside in `src/libusb_writer_backend.cpp`. The writer executable
+opens the device and obtains the concrete implementation through
+`makeLibusbWriterBackend`; `CardWriter` continues to consume only the abstract
+backend. The mechanical move preserves command bytes, timing, flash-window
+geometry, erase/program behavior, and separately named verification paths.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2714,7 +2725,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.8.1 baseline compiled, transcript-tested, and writer-workflow hardware-confirmed, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.9.0 baseline compiled and transcript-tested, with its extracted writer backend awaiting the required hardware requalification; partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction were confirmed on the approved 0.8.1 baseline; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3139,7 +3150,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.8.1**, the project has an object-oriented structural model:
+At shared toolset version **0.9.0**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,

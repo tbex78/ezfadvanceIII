@@ -38,7 +38,7 @@
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/version.hpp"
 
-// EZF Advance III card reader 0.8.1, read-only inspector.
+// EZF Advance III card reader 0.9.0, read-only inspector.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Card-read protocol behavior remains unchanged from 0.5.13.
 //

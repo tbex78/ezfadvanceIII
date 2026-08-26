@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.8.1` toolset, including guarded
+**Specification baseline:** shared `0.9.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -462,6 +462,12 @@ preflight, bridge initialization, erase, program, cleanup, and evidence-bounded
 verification ordering. A `WriterBackend` boundary keeps capture-specific USB
 operations injectable so orchestration and failure short-circuiting are tested
 without hardware.
+
+The concrete `LibusbWriterBackend` is also separately compiled and obtained
+through a factory returning `WriterBackend`. It owns capture-derived bridge
+initialization, flash setup, erase/program transactions, progress reporting,
+and delegation to the explicitly named verification sessions. The writer CLI
+must not duplicate those device operations.
 
 ## 7. Image construction
 

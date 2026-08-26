@@ -12,7 +12,7 @@
 #   ezfadvanceIII_wipe_card.cpp
 #
 # Optional versioned sources:
-#   make VERSION=0.8.1
+#   make VERSION=0.9.0
 #
 # Command-line make variables override these defaults, for example:
 #   make CXX=clang++
@@ -40,12 +40,12 @@ WIPE = ezfadvanceIII_wipe_card
 
 PROGRAMS = $(WRITER) $(CARD_READER) $(SAVE_READER) $(WIPE)
 TRANSPORT_SOURCES = src/usb_device.cpp src/protocol.cpp
-WRITER_SOURCES = $(TRANSPORT_SOURCES) src/card_writer.cpp src/cartridge_format.cpp src/cartridge_image_builder.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
+WRITER_SOURCES = $(TRANSPORT_SOURCES) src/card_writer.cpp src/libusb_writer_backend.cpp src/cartridge_format.cpp src/cartridge_image_builder.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 READ_ONLY_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/ez3_catalog.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp
 CARD_READER_SOURCES = $(READ_ONLY_SOURCES) src/card_reader_options.cpp
 SAVE_READER_SOURCES = $(READ_ONLY_SOURCES) src/save_memory_reader.cpp
 WIPE_SOURCES = $(TRANSPORT_SOURCES)
-ALL_SUPPORT_SOURCES = $(SAVE_READER_SOURCES) src/card_reader_options.cpp src/card_writer.cpp src/cartridge_image_builder.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
+ALL_SUPPORT_SOURCES = $(SAVE_READER_SOURCES) src/card_reader_options.cpp src/card_writer.cpp src/libusb_writer_backend.cpp src/cartridge_image_builder.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 
 # Source selection is performed by the POSIX shell in each recipe so this
 # Makefile does not depend on GNU/BSD make conditionals.
