@@ -461,7 +461,9 @@ verification selection.
 preflight, bridge initialization, erase, program, cleanup, and evidence-bounded
 verification ordering. A `WriterBackend` boundary keeps capture-specific USB
 operations injectable so orchestration and failure short-circuiting are tested
-without hardware.
+without hardware. Offline coverage must dispatch every supported verification
+geometry, exercise unsupported-geometry and `--skip-verify` cleanup, and prove
+that failures stop subsequent backend operations.
 
 The concrete `LibusbWriterBackend` is also separately compiled and obtained
 through a factory returning `WriterBackend`. It owns capture-derived bridge

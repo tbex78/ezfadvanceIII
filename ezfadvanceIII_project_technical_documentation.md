@@ -2718,6 +2718,10 @@ F-Zero/Mario Kart image. Programming and exact-8-MiB full verification
 succeeded; the menu and both games booted on a real GBA. The other
 capture-proven verification paths retain their prior hardware qualification
 and are mechanically preserved, but were not all physically rerun under 0.9.0.
+The offline coordinator matrix now covers all nine verification dispatches,
+unsupported-geometry and `--skip-verify` cleanup (including cleanup failures),
+and short-circuit failures at preflight, initialization, preparation, erase,
+programming, and verification stages.
 
 ---
 

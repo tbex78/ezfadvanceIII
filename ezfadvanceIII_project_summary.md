@@ -1212,6 +1212,9 @@ verification succeeded, the EZ3 menu booted, and both games launched on a real
 GBA. The remaining capture-proven verification paths retain their earlier
 hardware qualification and are mechanically preserved in 0.9.0; they were not
 all physically rerun for this release.
+The offline `CardWriter` matrix covers every verification dispatch, explicit
+and evidence-policy cleanup paths, every destructive workflow stage, and
+verification failure short-circuiting.
 
 At shared version **0.9.0**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
