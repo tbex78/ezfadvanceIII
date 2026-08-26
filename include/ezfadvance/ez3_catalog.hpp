@@ -16,6 +16,10 @@ struct Ez3CatalogLayout {
     std::vector<CatalogEntry> entries;
 
     bool isSingle() const noexcept { return kind == Ez3CatalogKind::single; }
+    std::optional<std::uint32_t> allocationEnd(
+        std::size_t index,
+        std::uint32_t loader_start,
+        std::uint32_t image_limit) const noexcept;
 };
 
 class Ez3CatalogParser final {

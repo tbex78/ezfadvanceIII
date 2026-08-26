@@ -36,6 +36,7 @@
 #include "ezfadvance/ez3_catalog.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"
+#include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
 // EZF Advance III save reader 0.7.30, read-only dumper.
@@ -96,6 +97,7 @@ static constexpr const char* host_platform_name()
 
 static constexpr uint32_t FLASH_WINDOW_SIZE = 0x00800000u; // 8 MiB
 static constexpr uint32_t CAPTURE_LINEAR_LIMIT  = 0x01000000u; // 16 MiB
+static constexpr uint32_t CARD_IMAGE_SIZE = 0x02000000u; // 32 MiB size classes
 
 static constexpr size_t MAX_CAPTURED_ROMS = 3;
 
@@ -295,10 +297,9 @@ static int inspect_and_dump_save(libusb_device_handle* h,
         DetectedRom r;
         r.e = catalog->entries[i];
         r.g = read_gba_header(h,r.e.start);
-        const uint32_t end = (i+1 < rom_count)
-            ? catalog->entries[i + 1].start
-            : loader_start;
-        r.span = (end > r.e.start) ? end-r.e.start : 0;
+        const auto end = catalog->allocationEnd(
+            i, loader_start, CARD_IMAGE_SIZE);
+        r.span = end ? *end - r.e.start : 0;
         if (r.span)
             r.sig = detect_save_signature(h,r.e.start,r.span);
         roms.push_back(std::move(r));
@@ -324,48 +325,20 @@ static int inspect_and_dump_save(libusb_device_handle* h,
                   << "  Save marker  : " << (r.sig.text.empty() ? "(none found)" : r.sig.text) << "\n";
     }
 
-    size_t selected = 0;
-    if (requested_rom && (*requested_rom < 1 || *requested_rom > rom_count)) {
+    const auto selection = ezfadvance::selectSaveRom(rom_count, requested_rom);
+    if (selection.status == ezfadvance::SaveSelectionStatus::out_of_range) {
         std::cerr << "--rom must be between 1 and " << rom_count << ".\n";
         return 1;
     }
-
-    if (rom_count == 1) {
-        selected = 0;
-        if (requested_rom && *requested_rom != 1) {
-            std::cerr << "Single-ROM card: only --rom 1 is valid.\n";
-            return 1;
-        }
-    } else {
-        // The new multi-ROM capture has exactly one capture-proven save-bearing
-        // ROM: Piano has no recognized save marker, Bios_Dumper has SRAM_V111.
-        // Crucially, there is NO USB ROM-slot selection command before the
-        // 0x0900 save read.  Therefore this reader refuses ambiguous cards rather than
-        // pretending --rom can switch the active hardware save window.
-        std::vector<size_t> proven;
-        for (size_t i=0;i<roms.size();++i)
-            if (roms[i].sig.capture_proven_32k)
-                proven.push_back(i);
-
-        if (proven.size() != 1) {
-            std::cerr << "\nThis multi-ROM card has " << proven.size()
-                      << " capture-proven SRAM_V111 save-bearing ROM(s).\n"
-                      << "The available PCAP shows no USB command for switching "
-                         "between multiple save slots, so this reader will not guess.\n";
-            return 4;
-        }
-
-        selected = proven[0];
-        if (requested_rom && (*requested_rom-1) != selected) {
-            std::cerr << "\n--rom " << *requested_rom
-                      << " is not the uniquely detected capture-proven save ROM.\n"
-                      << "No save-slot switch is known, so no dump is performed.\n";
-            return 4;
-        }
-
-        std::cout << "\nAuto-selected ROM " << (selected+1)
-                  << " because it is the only capture-proven SRAM_V111 save ROM.\n";
+    if (selection.status == ezfadvance::SaveSelectionStatus::rom_required) {
+        std::cerr
+            << "\nThis is a multi-ROM card. Specify the ROM whose save "
+               "should be extracted with --rom N.\n"
+            << "Example: ezfadvanceIII_save_reader --rom 2 "
+               "--output file.sav\n";
+        return 4;
     }
+    const size_t selected = selection.index;
 
     const auto& chosen = roms[selected];
 
@@ -379,9 +352,8 @@ static int inspect_and_dump_save(libusb_device_handle* h,
 
     if (!is_single) {
         // Critical evidence from readmultiromonesav.pcap: there is no
-        // additional ROM-slot selection command before this read.  Therefore
-        // this reader only uses the multi-ROM path when one uniquely recognized
-        // SRAM_V111 save-bearing ROM is present.
+        // additional ROM-slot selection command before this read. Selection is
+        // an explicit application-level choice and does not invent USB traffic.
         std::cout << "\nMulti-ROM save path: capture shows no extra ROM-slot "
                      "selection command before selector 0x0900.\n";
     }
@@ -467,8 +439,8 @@ static void usage(const char* argv0)
               << "Read-only EZF Advance III save dumper (" << host_platform_name() << ").\n"
               << "Capture-proven path: SRAM_V111 / Bios_Dumper = 32 KiB, "
                  "selector 0x0900.\n"
-              << "On a multi-ROM card, the reader auto-selects only when exactly one "
-                 "capture-proven save-bearing ROM is found.\n";
+              << "On a multi-ROM card, --rom N is required; the reader will not "
+                 "choose a ROM automatically.\n";
 }
 
 int main(int argc, char** argv)

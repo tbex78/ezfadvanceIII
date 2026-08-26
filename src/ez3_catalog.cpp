@@ -2,6 +2,34 @@
 
 namespace ezfadvance {
 
+std::optional<std::uint32_t> Ez3CatalogLayout::allocationEnd(
+    std::size_t index,
+    std::uint32_t loader_start,
+    std::uint32_t image_limit) const noexcept
+{
+    if (index >= entries.size())
+        return std::nullopt;
+    const CatalogEntry& entry = entries[index];
+    const auto stored_end = entry.storedEnd(image_limit);
+    if (!stored_end)
+        return std::nullopt;
+
+    std::uint32_t end = *stored_end + 1;
+    if (index + 1 < entries.size()) {
+        if (entries[index + 1].start <= entry.start)
+            return std::nullopt;
+        if (entries[index + 1].start < end)
+            end = entries[index + 1].start;
+    } else if (loader_start > entry.start && loader_start < end) {
+        // An appended loader terminates the last allocation. A loader before
+        // the last ROM is embedded in an earlier erased region and must not
+        // collapse the last ROM's span to zero.
+        end = loader_start;
+    }
+    return end > entry.start ? std::optional<std::uint32_t>(end)
+                             : std::nullopt;
+}
+
 namespace {
 
 constexpr std::size_t single_header_offset = 0x4E8;

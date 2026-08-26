@@ -155,6 +155,8 @@ test: check
 	./build/writer_options_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/version_test.cpp -o build/version_test
 	./build/version_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_selection_test.cpp -o build/save_selection_test
+	./build/save_selection_test
 
 print-config:
 	@echo "VERSION=$(VERSION)"
@@ -168,6 +170,6 @@ print-config:
 	done
 
 clean:
-	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/ez3_catalog_test build/card_reader_options_test build/protocol_test build/read_session_transition_test build/official_cartridge_read_test build/verification_exact_8mib_test build/verification_partial_12mib_test build/verification_exact_16mib_test build/verification_tiny_tail_above_16mib_test build/verification_partial_20mib_test build/verification_exact_24mib_test build/verification_partial_28mib_test build/verification_exact_32mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test build/version_test
+	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/ez3_catalog_test build/card_reader_options_test build/protocol_test build/read_session_transition_test build/official_cartridge_read_test build/verification_exact_8mib_test build/verification_partial_12mib_test build/verification_exact_16mib_test build/verification_tiny_tail_above_16mib_test build/verification_partial_20mib_test build/verification_exact_24mib_test build/verification_partial_28mib_test build/verification_exact_32mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test build/version_test build/save_selection_test
 
 FORCE:

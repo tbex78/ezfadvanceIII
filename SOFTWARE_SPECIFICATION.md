@@ -194,13 +194,14 @@ Responsibilities:
 
 - inspect the cartridge catalog;
 - scan ROM allocation spans for known save-library markers;
-- identify a uniquely supported save-bearing ROM;
+- require an explicit catalog-ROM choice for multi-ROM layouts;
 - read capture-proven 32 KiB SRAM save data;
 - write the returned bytes to a local `.sav` file.
 
-On multi-ROM cards, the reader may auto-select a ROM only when exactly one
-capture-proven `SRAM_V111` save-bearing ROM exists. It must refuse ambiguous
-save-slot configurations because no general hardware save-slot switch has been
+On single-ROM cards, the reader selects ROM 1 automatically. On multi-ROM
+cards, it must display the catalog and require `--rom N`; it must not infer a
+choice even when exactly one `SRAM_V111` marker is present. It must still refuse
+unsupported save formats because no general hardware save-slot switch has been
 proven.
 
 The save reader must not write save memory, erase flash, or program ROM data.

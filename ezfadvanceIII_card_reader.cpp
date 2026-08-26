@@ -736,9 +736,8 @@ static int inspect_card(libusb_device_handle* h,
     }
 
     for (size_t i=0;i<entries.size();++i) {
-        std::optional<uint32_t> span_end;
-        if (!is_single)
-            span_end = (i+1 < entries.size()) ? entries[i+1].start : loader_start;
+        const std::optional<uint32_t> span_end = is_single ? std::nullopt :
+            catalog->allocationEnd(i, loader_start, CARD_IMAGE_LIMIT);
         const GbaHeader g = read_gba_header(h,entries[i].start);
         print_rom(i+1,entries[i],g,span_end);
     }

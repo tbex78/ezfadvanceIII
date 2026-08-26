@@ -87,6 +87,37 @@ int main()
                static_cast<std::uint32_t>((count - 1) * 0x10000u));
     }
 
+    auto embedded_loader_bytes = multiLoader(2);
+    embedded_loader_bytes[multi_entry + 19] = 2;
+    put32(embedded_loader_bytes,
+          multi_entry + Ez3CatalogParser::entry_size + 20,
+          ((0x00800000u / 2u) << 8) | 3u);
+    const auto embedded_loader =
+        Ez3CatalogParser::parse(embedded_loader_bytes, image_limit);
+    assert(embedded_loader);
+    assert(embedded_loader->allocationEnd(0, 0x002CC420u, image_limit) ==
+           0x00800000u);
+    assert(embedded_loader->allocationEnd(1, 0x002CC420u, image_limit) ==
+           0x00900000u);
+
+    // Address authorization and physical size-class geometry are distinct:
+    // the save reader may accept starts only below 16 MiB while catalog type
+    // sizes still derive from the full 32-MiB cartridge.
+    const auto save_policy_catalog = Ez3CatalogParser::parse(
+        embedded_loader_bytes, 0x01000000u);
+    assert(save_policy_catalog);
+    assert(save_policy_catalog->allocationEnd(
+               0, 0x002CC420u, image_limit) == 0x00800000u);
+    assert(save_policy_catalog->allocationEnd(
+               1, 0x002CC420u, image_limit) == 0x00900000u);
+
+    const auto appended_loader =
+        Ez3CatalogParser::parse(multiLoader(2), image_limit);
+    assert(appended_loader);
+    assert(appended_loader->allocationEnd(1, 0x0001A880u, image_limit) ==
+           0x0001A880u);
+    assert(!appended_loader->allocationEnd(2, 0x0001A880u, image_limit));
+
     auto mismatched = multiLoader(3);
     put16(mismatched, multi_count2, 2);
     assert(!Ez3CatalogParser::parse(mismatched, image_limit));

@@ -98,11 +98,13 @@ extraction; `--verbose` selects per-block timing and throughput diagnostics.
 
 ```sh
 ./ezfadvanceIII_save_reader --output OUTPUT.sav
+./ezfadvanceIII_save_reader --rom N --output OUTPUT.sav
 ```
 
 Save/catalog processing is restricted to a cartridge positively classified as
-EZ3 flash. The currently capture-proven save path is 32-KiB `SRAM_V111`; use
-`--rom N` to choose a catalog entry when automatic selection is insufficient.
+EZ3 flash. The currently capture-proven save path is 32-KiB `SRAM_V111`.
+Single-ROM layouts select ROM 1 automatically; multi-ROM layouts require an
+explicit `--rom N` choice.
 
 ### Build or write a multi-ROM image
 

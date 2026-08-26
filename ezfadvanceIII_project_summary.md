@@ -1160,7 +1160,9 @@ applications. A single header owns the synchronized version string.
 **0.7.30** extracts capture-derived single/multi-ROM catalog interpretation
 into the pure shared `Ez3CatalogParser`. The card reader retains its structural
 120-slot view and 1–8 capture-proof reporting, while the save reader separately
-retains its conservative 1–3 ROM and first-16-MiB qualification policy.
+retains its conservative 1–3 ROM and first-16-MiB qualification policy. Save
+extraction now requires an explicit `--rom N` on multi-ROM layouts; single-ROM
+selection remains automatic.
 
 ## Current project status
 

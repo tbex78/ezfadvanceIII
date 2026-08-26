@@ -2659,7 +2659,9 @@ counts, structural bounds, entry plausibility, alignment, and caller-provided
 address bounds without performing USB operations or deciding evidence policy.
 The card reader continues to distinguish the 1–8 capture-proven range from the
 120 structural slots. The save reader continues to reject counts above three
-and loader/catalog addresses outside its first-16-MiB evidence boundary.
+and loader/catalog addresses outside its first-16-MiB evidence boundary. It
+also requires explicit `--rom N` selection for multi-ROM save extraction while
+retaining automatic ROM-1 selection on a single-ROM layout.
 
 ---
 
