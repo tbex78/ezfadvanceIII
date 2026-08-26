@@ -49,7 +49,7 @@ static constexpr const char* host_platform_name()
 static constexpr unsigned READINESS_ATTEMPTS = 5;
 static constexpr auto READINESS_RETRY_DELAY = std::chrono::milliseconds(100);
 
-// ezfadvanceIII wipe utility 0.7.31.
+// ezfadvanceIII wipe utility 0.8.0.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Erase protocol/timing behavior remains unchanged from 0.5.10.
 //

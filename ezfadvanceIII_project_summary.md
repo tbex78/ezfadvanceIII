@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.7.31**.
+Current shared project/toolset version covered by this summary: **0.8.0**.
 
 All mainline utilities carry this same version:
 
@@ -806,7 +806,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.7.31 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.8.0 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1170,11 +1170,23 @@ selection remains automatic.
 captured loader assets, packing, relocation, catalog generation, and entry
 patching from the writer executable. Whole-image hash fixtures lock single,
 two-, three-, and eight-ROM layouts plus internal loader placement. USB erase,
-program, and verification orchestration remain in the executable.
+program, and verification orchestration remained in the executable at that
+release.
+
+## 0.8.0 release changes
+
+**0.8.0** extracts `CardWriter` as a separately compiled workflow coordinator.
+The executable retains libusb-specific primitives and console presentation,
+while `CardWriter` owns the established preflight, erase, programming, cleanup,
+and verification-mode order through an injectable `WriterBackend`. Offline tests
+cover the successful sequence, preflight and erase failures, explicit
+verification skipping, and unsupported-geometry cleanup. A two-ROM 8-MiB write
+was then hardware-validated through full read-back verification, EZ3 menu boot,
+and successful launch of both games on a real GBA.
 
 ## Current project status
 
-At shared version **0.7.31**, the project has an object-oriented structural model of original EZ3Manager behavior:
+At shared version **0.8.0**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - normal runtime banners omit the project version; standalone `--version`
@@ -1233,4 +1245,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.7.31 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.8.0 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

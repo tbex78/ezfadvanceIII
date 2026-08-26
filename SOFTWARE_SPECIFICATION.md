@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.31` toolset, including guarded
+**Specification baseline:** shared `0.8.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -454,6 +454,12 @@ ordering and placement, captured loader assets and relocation, catalog bytes,
 the physical-ROM-1 branch patch, and final programmed extent calculation. It
 does not own authorization, USB sessions, erase/program commands, or
 verification selection.
+
+`CardWriter` is a separately compiled workflow coordinator. It owns the fixed
+preflight, bridge initialization, erase, program, cleanup, and evidence-bounded
+verification ordering. A `WriterBackend` boundary keeps capture-specific USB
+operations injectable so orchestration and failure short-circuiting are tested
+without hardware.
 
 ## 7. Image construction
 

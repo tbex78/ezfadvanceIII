@@ -33,6 +33,7 @@
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/cartridge_image_builder.hpp"
+#include "ezfadvance/card_writer.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/verification_session.hpp"
 #include "ezfadvance/writer_options.hpp"
@@ -179,7 +180,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.7.31 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.8.0 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -1719,9 +1720,9 @@ static void print_layout(const std::vector<RomInfo>& roms,
     print_hex(image.data(), std::min<size_t>(4, image.size()), 4);
 }
 
-class CardWriter final {
+class LibusbWriterBackend final : public ezfadvance::WriterBackend {
 public:
-    CardWriter(libusb_device_handle* handle, bool verbose)
+    LibusbWriterBackend(libusb_device_handle* handle, bool verbose)
         : handle_(handle), verbose_(verbose), transport_(handle),
           verification_(transport_)
     {
@@ -2114,13 +2115,14 @@ int main(int argc, char** argv)
             return 1;
         }
         libusb_device_handle* h = device.handle();
-        CardWriter card_writer(h, verbose);
+        LibusbWriterBackend writer_backend(h, verbose);
+        const ezfadvance::CardWriter card_writer(writer_backend);
 
         std::cout << "ezfadvanceIII opened; interface 0 claimed.\n";
 
-        bool ok = card_writer.preflight();
+        const auto write_result = card_writer.write(image, skip_verify, std::cout);
 
-        if (!ok) {
+        if (write_result.status == ezfadvance::CardWriteStatus::preflight_failed) {
             std::cerr
                 << "\n========================================\n"
                 << "WRITE PREFLIGHT ABORTED\n"
@@ -2131,152 +2133,21 @@ int main(int argc, char** argv)
             return 2;
         }
 
-        std::cout << "\nSimulating close-manager -> launch-v19 transition...\n";
-        ok = card_writer.initializeBridge();
-
-        std::cout << "\n========================================\n"
-                  << "MANAGER-PRIMED FULL WRITE\n"
-                  << "========================================\n"
-                  << "Manager-prime/write transition originally proven on macOS / Apple Silicon.\n"
-                  << "Flash-window pre-AA55 settle: fixed 125 ms.\n"
-                  << "ROM payload: one Windows-style 64-KiB BULK OUT request.\n";
-
-        // Reproduce the captured writer setup once, on a fresh bridge/cart
-        // session, before doing any erase/program operation.
-        if (ok)
-            ok = card_writer.prepareGlobalWrite();
-
-        // Capture-faithful BANK0 unlock for erase.
-        if (ok)
-            ok = card_writer.selectWindowZeroForErase();
-
-        if (ok)
-            ok = card_writer.erase(image.size());
-
-        // For <=8 MiB this closes bank0 erasing.  For >8 MiB the helper has
-        // already switched to bank1 and erased it, so this closes bank1.
-        if (ok)
-            ok = card_writer.finalizeFlashState();
-
-        // This is the key v17 experiment: on a completely fresh run, use the
-        // repeatable Windows-capture 125-ms quiet interval immediately before
-        // AA55, then send the real image in the original single-request form.
-        if (ok)
-            ok = card_writer.selectWindowZeroForProgram();
-
-        if (ok)
-            ok = card_writer.program(image);
-
-        bool full_verify_completed = false;
-        bool full_verify_skipped = false;
-        bool verify_skipped_by_user = false;
-
-        if (ok && skip_verify) {
-            // --skip-verify means no post-write 0x91 ROM read-back comparison.
-            // Keep only the short non-readback status/reset cleanup so the
-            // flash/bridge is not intentionally left in program-command state.
-            std::cout
-                << "\n--skip-verify supplied: skipping post-write ROM read-back "
-                   "verification.\n"
-                << "Sending non-readback flash status/reset cleanup only.\n";
-            ok = card_writer.finalizeFlashState();
-            verify_skipped_by_user = ok;
-        } else if (ok) {
-            // Use only verification mappings directly supported by captures.
-            // Compact packing now turns the Piano+MegaManZ case into the
-            // original manager's exact 8-MiB geometry, so it remains entirely
-            // on the simple capture-linear path.
-            const ezfadvance::VerificationPolicy verification_policy;
-            switch (verification_policy.modeFor(image.size())) {
-            case ezfadvance::VerificationMode::exact_32_mib:
-                ok = card_writer.verifyExact32MiB(image);
-                full_verify_completed = ok;
-                break;
-            case ezfadvance::VerificationMode::partial_28_mib:
-                // 4_8_16MB.pcap proves the explicit 28-MiB transcript
-                // without an exact-size selector/reset tail.
-                ok = card_writer.verifyPartial28MiB(image);
-                full_verify_completed = ok;
-                break;
-            case ezfadvance::VerificationMode::exact_24_mib:
-                ok = card_writer.verifyExact24MiB(image);
-                full_verify_completed = ok;
-                break;
-            case ezfadvance::VerificationMode::partial_20_mib:
-                // 16_4MB.pcap and 4_8_8MB.pcap independently prove the
-                // explicit 20-MiB transcript without a selector/reset tail.
-                ok = card_writer.verifyPartial20MiB(image);
-                full_verify_completed = ok;
-                break;
-            case ezfadvance::VerificationMode::exact_16_mib:
-                ok = card_writer.verifyExact16MiB(image);
-                full_verify_completed = ok;
-                break;
-            case ezfadvance::VerificationMode::partial_12_mib:
-                // 8_4MB.pcap proves the explicit 12-MiB partial higher-window
-                // transcript without an exact-size selector/reset tail.
-                ok = card_writer.verifyPartial12MiB(image);
-                full_verify_completed = ok;
-                break;
-            case ezfadvance::VerificationMode::exact_8_mib:
-                // Exact 8 MiB is independently capture-proven by both the
-                // single-ROM Advance Wars capture and 4MiB-4MiB.pcap.
-                ok = card_writer.verifyExact8MiB(image);
-                full_verify_completed = ok;
-                break;
-            case ezfadvance::VerificationMode::partial_first_window:
-                // 2MB.pcap, 2_2MB.pcap, and 4MB.pcap prove the generic partial
-                // first-window path: status cleanup only, then ordinary linear
-                // 0x91 reads. VerificationSession rounds the final read to a
-                // full 64-KiB block and expects erased 0xFF beyond image.size().
-                ok = card_writer.verifyPartialFirstWindow(image);
-                full_verify_completed = ok;
-                break;
-            case ezfadvance::VerificationMode::tiny_tail_above_16_mib:
-                // fireemblem.pcap proves this tiny BANK2-tail transition and
-                // verifies one complete 64-KiB block beyond 16 MiB.
-                ok = card_writer.verifyTinyTailAbove16MiB(image);
-                full_verify_completed = ok;
-                break;
-            case ezfadvance::VerificationMode::unsupported_partial_higher_window:
-                // 0.5.1 proved that reusing program-window selection for local
-                // 0x91 verification is wrong. Do not turn an unproven mapping
-                // into a false WRITE/VERIFY failure. Return the flash to a
-                // normal status/read state and report the limitation clearly.
-                ok = card_writer.finalizeFlashState();
-                if (ok) {
-                    full_verify_skipped = true;
-                    std::cout
-                        << "\nFull read-back verification skipped: image extent 0x"
-                        << std::hex << image.size() << std::dec
-                        << " is a partial higher-window geometry with no "
-                           "capture-proven linear read mapping yet.\n"
-                        << "Capture-proven full verification currently covers "
-                           "all images below 8 MiB, exact 8/16/24/32 MiB, "
-                           "partial 12/20/28 MiB, and "
-                           "the dedicated tiny-tail-above-16-MiB case.\n"
-                        << "Programming completed; no experimental verification "
-                           "window selection was sent.\n";
-                }
-                break;
-            }
-        }
-
         std::cout << "\n========================================\n";
-        if (!ok) {
+        if (!write_result) {
             std::cout << "WRITE/FINALIZE FAILED.\n";
-        } else if (verify_skipped_by_user) {
+        } else if (write_result.verification_skipped_by_user) {
             std::cout << "WRITE SUCCEEDED; READ-BACK VERIFICATION SKIPPED BY REQUEST.\n";
-        } else if (full_verify_skipped) {
+        } else if (write_result.verification_skipped_unproven) {
             std::cout << "WRITE SUCCEEDED; FULL READ-BACK VERIFICATION SKIPPED.\n";
-        } else if (full_verify_completed) {
+        } else if (write_result.verification_completed) {
             std::cout << "WRITE + FULL READ-BACK VERIFICATION SUCCEEDED.\n";
         } else {
             std::cout << "WRITE SUCCEEDED.\n";
         }
         std::cout << "========================================\n";
 
-        return ok ? 0 : 2;
+        return write_result ? 0 : 2;
     }
     catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << '\n';
