@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.7.30`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.30`<br>
+**Current project/toolset version:** `0.7.31`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.7.31`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.30 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.7.31 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -2663,6 +2663,17 @@ and loader/catalog addresses outside its first-16-MiB evidence boundary. It
 also requires explicit `--rom N` selection for multi-ROM save extraction while
 retaining automatic ROM-1 selection on a single-ROM layout.
 
+### 36.52 0.7.31 — pure cartridge image builder
+
+`RomInfo`, `BuiltCartridgeImage`, the captured loader assets, ROM placement,
+loader relocation, catalog generation, first-entry patching, and programmed
+extent calculation now belong to the separately compiled
+`CartridgeImageBuilder`. The executable retains file loading, interactive
+warnings, destructive authorization, USB erase/program operations, and
+evidence-specific verification selection. Deterministic whole-image FNV-1a
+fixtures cover single, two-, three-, and eight-ROM construction plus internal
+single-ROM loader placement.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2674,7 +2685,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.7.30 baseline compiled and transcript-tested, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.7.31 baseline compiled and transcript-tested, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3099,7 +3110,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.7.30**, the project has an object-oriented structural model:
+At shared toolset version **0.7.31**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,

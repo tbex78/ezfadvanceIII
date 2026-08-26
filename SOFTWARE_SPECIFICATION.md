@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.7.30` toolset, including guarded
+**Specification baseline:** shared `0.7.31` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -449,6 +449,12 @@ decision keeps official extraction distinct from EZ3 ROM selection.
 Application services use composition. The four tools do not inherit from a
 shared program base class.
 
+`CartridgeImageBuilder` is a pure, separately compiled component. It owns ROM
+ordering and placement, captured loader assets and relocation, catalog bytes,
+the physical-ROM-1 branch patch, and final programmed extent calculation. It
+does not own authorization, USB sessions, erase/program commands, or
+verification selection.
+
 ## 7. Image construction
 
 A generated cartridge image contains:
@@ -579,6 +585,8 @@ The test suite covers:
 - EZ3 catalog parsing, address decoding, plausibility, and bounds errors;
 - shared single-ROM and 2/3/8/120-entry catalog layouts, duplicated-count
   validation, truncation, alignment, packed-start, and address-bound failures;
+- whole-image hash fixtures for single, two-, three-, and eight-ROM writer
+  layouts and single-ROM internal loader placement;
 - EZ3 stored extents, loader-overlap blanking, ROM-1 entry reconstruction, and
   8/16/24/32-MiB linear-read mapping thresholds;
 - card-reader option parsing and official/EZ3 extraction routing, including
