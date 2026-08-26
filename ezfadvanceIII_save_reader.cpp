@@ -39,7 +39,7 @@
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
-// EZF Advance III save reader 0.8.0, read-only dumper.
+// EZF Advance III save reader 0.8.1, read-only dumper.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Save-read protocol behavior remains unchanged from 0.5.10.
 //
@@ -297,9 +297,9 @@ static int inspect_and_dump_save(libusb_device_handle* h,
         DetectedRom r;
         r.e = catalog->entries[i];
         r.g = read_gba_header(h,r.e.start);
-        const auto end = catalog->allocationEnd(
-            i, loader_start, CARD_IMAGE_SIZE);
-        r.span = end ? *end - r.e.start : 0;
+        const auto end = catalog->allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
+        r.span = end ? static_cast<uint32_t>(ezfadvance::boundedSaveScanSpan(
+                           r.e.start, *end, CAPTURE_LINEAR_LIMIT)) : 0;
         if (r.span)
             r.sig = detect_save_signature(h,r.e.start,r.span);
         roms.push_back(std::move(r));
@@ -325,7 +325,14 @@ static int inspect_and_dump_save(libusb_device_handle* h,
                   << "  Save marker  : " << (r.sig.text.empty() ? "(none found)" : r.sig.text) << "\n";
     }
 
-    const auto selection = ezfadvance::selectSaveRom(rom_count, requested_rom);
+    std::vector<size_t> supported_candidates;
+    for (size_t i = 0; i < roms.size(); ++i) {
+        if (roms[i].sig.capture_proven_32k)
+            supported_candidates.push_back(i);
+    }
+
+    const auto selection = ezfadvance::selectSaveRom(
+        rom_count, supported_candidates, requested_rom);
     if (selection.status == ezfadvance::SaveSelectionStatus::out_of_range) {
         std::cerr << "--rom must be between 1 and " << rom_count << ".\n";
         return 1;
@@ -336,6 +343,24 @@ static int inspect_and_dump_save(libusb_device_handle* h,
                "should be extracted with --rom N.\n"
             << "Example: ezfadvanceIII_save_reader --rom 2 "
                "--output file.sav\n";
+        return 4;
+    }
+    if (selection.status == ezfadvance::SaveSelectionStatus::no_supported_candidate) {
+        std::cerr << "\nThis card has no capture-proven SRAM_V111 save-bearing ROM.\n"
+                  << "No save read was performed.\n";
+        return 4;
+    }
+    if (selection.status == ezfadvance::SaveSelectionStatus::multiple_supported_candidates) {
+        std::cerr << "\nThis card has multiple SRAM_V111 candidates, but no "
+                     "capture-proven hardware save-slot switch exists.\n"
+                  << "No save read was performed.\n";
+        return 4;
+    }
+    if (selection.status == ezfadvance::SaveSelectionStatus::requested_rom_mismatch) {
+        std::cerr << "\nSelected ROM " << *requested_rom
+                  << " is not the uniquely supported SRAM_V111 entry (ROM "
+                  << (supported_candidates.front() + 1) << ").\n"
+                  << "No save read was performed.\n";
         return 4;
     }
     const size_t selected = selection.index;

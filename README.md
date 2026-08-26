@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.8.0**.
+version is **0.8.1**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.8.0
+“pending,” and “next” describe the named review point, not the present 0.8.1
 support boundary.
 
 ## Build and test
@@ -103,8 +103,10 @@ extraction; `--verbose` selects per-block timing and throughput diagnostics.
 
 Save/catalog processing is restricted to a cartridge positively classified as
 EZ3 flash. The currently capture-proven save path is 32-KiB `SRAM_V111`.
-Single-ROM layouts select ROM 1 automatically; multi-ROM layouts require an
-explicit `--rom N` choice.
+Single-ROM layouts select ROM 1 automatically. Multi-ROM layouts require an
+explicit `--rom N` choice, exactly one capture-proven `SRAM_V111` candidate,
+and a choice matching that unique candidate. Ambiguous layouts are refused
+because no hardware save-slot switching command has been proven.
 
 ### Build or write a multi-ROM image
 

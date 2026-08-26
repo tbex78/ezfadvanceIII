@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.8.0**.
+Current shared project/toolset version covered by this summary: **0.8.1**.
 
 All mainline utilities carry this same version:
 
@@ -806,7 +806,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.8.0 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.8.1 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1162,7 +1162,12 @@ into the pure shared `Ez3CatalogParser`. The card reader retains its structural
 120-slot view and 1–8 capture-proof reporting, while the save reader separately
 retains its conservative 1–3 ROM and first-16-MiB qualification policy. Save
 extraction now requires an explicit `--rom N` on multi-ROM layouts; single-ROM
-selection remains automatic.
+selection remains automatic. The 0.8.1 evidence-policy correction additionally
+requires exactly one supported `SRAM_V111` candidate and requires `N` to match
+it, because no hardware save-slot switching command is capture-proven. The
+corrected behavior is hardware-confirmed on the Castlevania + Bios_Dumper
+layout: selecting ROM 1 was refused without creating an output file, while
+selecting the unique ROM-2 `SRAM_V111` entry produced the expected save.
 
 ## 0.7.31 release changes
 
@@ -1186,7 +1191,14 @@ and successful launch of both games on a real GBA.
 
 ## Current project status
 
-At shared version **0.8.0**, the project has an object-oriented structural model of original EZ3Manager behavior:
+## 0.8.1 release changes
+
+**0.8.1** fixes multi-ROM save-selection semantics by requiring one unique
+capture-proven `SRAM_V111` candidate and requiring `--rom N` to match it. It
+also clamps save-signature scanning to the first-16-MiB evidence boundary. The
+matching and mismatching paths are hardware-confirmed.
+
+At shared version **0.8.1**, the project has an object-oriented structural model of original EZ3Manager behavior:
 
 - every mainline utility shares one synchronized project version; any code update in at least one program bumps the version for all four;
 - normal runtime banners omit the project version; standalone `--version`
@@ -1245,4 +1257,4 @@ Across these captures:
 - 32 MiB uses four erase/program windows and the existing full-card linear verify path;
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
-The current 0.8.0 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+The current 0.8.1 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.

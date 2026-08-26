@@ -180,7 +180,7 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
-// ezfadvanceIII multi-ROM writer 0.8.0 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer 0.8.1 for macOS, Linux and BSD.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:

@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.8.0` toolset, including guarded
+**Specification baseline:** shared `0.8.1` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -200,9 +200,10 @@ Responsibilities:
 
 On single-ROM cards, the reader selects ROM 1 automatically. On multi-ROM
 cards, it must display the catalog and require `--rom N`; it must not infer a
-choice even when exactly one `SRAM_V111` marker is present. It must still refuse
-unsupported save formats because no general hardware save-slot switch has been
-proven.
+choice even when exactly one `SRAM_V111` marker is present. Exactly one such
+candidate must exist and `N` must identify it. Zero candidates, multiple
+candidates, mismatched selections, and unsupported save formats must be
+refused because no general hardware save-slot switch has been proven.
 
 The save reader must not write save memory, erase flash, or program ROM data.
 It must require `CartridgeKind::ez3_flash` after shared initialization and
@@ -221,7 +222,8 @@ The capture-proven application path is `SRAM_V111`, selector `0x0900`, and
 one `0x8000`-byte read. Other SRAM signatures may be reported during scanning
 but must not be exported as if their size or bank selection were proven.
 `--rom` identifies catalog intent only; it must not imply that a general
-multi-ROM hardware save-slot switch exists.
+multi-ROM hardware save-slot switch exists. Signature scanning must remain
+clamped to the save reader's independently proven first-16-MiB boundary.
 
 ### 3.4 Card eraser
 

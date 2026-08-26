@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.8.0`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.8.0`<br>
+**Current project/toolset version:** `0.8.1`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.8.1`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.8.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. The refactored `CardWriter` workflow is hardware-confirmed by a full two-ROM 8-MiB program/read-back cycle, EZ3 menu boot, and successful launch of both games on a real GBA. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.8.1 toolset has been compiled and transcript-tested on macOS / Apple Silicon, and Linux CI compiles and runs the offline suite. The partial-first-window verification path, including explicit 1-/2-/4-MiB checkpoints, explicit partial 12-/20-/28-MiB paths, exact 8-/16-/24-/32-MiB paths, and the tiny-tail path are hardware-confirmed. The refactored `CardWriter` workflow is hardware-confirmed by a full two-ROM 8-MiB program/read-back cycle, EZ3 menu boot, and successful launch of both games on a real GBA. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -2661,7 +2661,14 @@ The card reader continues to distinguish the 1–8 capture-proven range from the
 120 structural slots. The save reader continues to reject counts above three
 and loader/catalog addresses outside its first-16-MiB evidence boundary. It
 also requires explicit `--rom N` selection for multi-ROM save extraction while
-retaining automatic ROM-1 selection on a single-ROM layout.
+retaining automatic ROM-1 selection on a single-ROM layout. The current 0.8.1
+policy requires exactly one supported `SRAM_V111` candidate and requires the
+explicit selection to match it. Zero, multiple, or mismatched candidates are
+refused because `--rom N` cannot represent an unproven hardware save-slot
+switch. Signature scanning is independently clamped to the save reader's
+first-16-MiB evidence boundary. Hardware validation on the Castlevania +
+Bios_Dumper layout confirmed that mismatched ROM 1 is refused without an output
+file and that the unique matching ROM 2 produces the expected 32-KiB save.
 
 ### 36.52 0.7.31 — pure cartridge image builder
 
@@ -2688,6 +2695,14 @@ The extracted workflow was subsequently validated on real hardware with an
 8-MiB F-Zero/Mario Kart image: programming and full verification succeeded,
 the EZ3 menu booted, and both games launched on a real GBA.
 
+### 36.54 0.8.1 — evidence-bounded multi-ROM save selection
+
+Multi-ROM save extraction now requires exactly one capture-proven `SRAM_V111`
+candidate and an explicit `--rom N` matching that candidate. Zero, multiple,
+and mismatched candidates are refused because no hardware save-slot switch is
+proven. Save-signature scanning is clamped to the first-16-MiB evidence limit.
+Both refusal and successful extraction were confirmed on real hardware.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2699,7 +2714,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.8.0 baseline compiled, transcript-tested, and writer-workflow hardware-confirmed, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.8.1 baseline compiled, transcript-tested, and writer-workflow hardware-confirmed, with partial-12-/20-/28-/exact-8-/16-/24-/32-MiB/tiny-tail, captured official-header bytes, and two-ROM EZ3 extraction confirmed on Apple Silicon; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3124,7 +3139,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.8.0**, the project has an object-oriented structural model:
+At shared toolset version **0.8.1**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,
