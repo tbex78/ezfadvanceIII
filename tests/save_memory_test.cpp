@@ -49,6 +49,24 @@ void testCapturedWriteTranscript()
     assert(transport.complete());
 }
 
+void testAllocatedThirdBankWriteTranscript()
+{
+    ezfadvance::test::TranscriptTransport transport;
+    expectSelector(transport, 0x0920);
+
+    const std::vector<std::uint8_t> command = {
+        0x5A, 0xA5, 0x92, 0x01, 0, 0, 0, 0,
+        0, 0x80, 0, 0, 0};
+    const std::vector<std::uint8_t> save(0x8000, 0x5A);
+    transport.expectOut(command, timeout_ms)
+             .expectOut(save, timeout_ms)
+             .expectInMax(command, 64, timeout_ms);
+
+    ezfadvance::SaveMemoryWriter writer(transport);
+    assert(writer.write32KiB(0x0920, save));
+    assert(transport.complete());
+}
+
 void testWrongSizeRejectedBeforeUsb()
 {
     ezfadvance::test::TranscriptTransport transport;
@@ -99,6 +117,7 @@ void testCapturedReadTranscript()
 int main()
 {
     testCapturedWriteTranscript();
+    testAllocatedThirdBankWriteTranscript();
     testWrongSizeRejectedBeforeUsb();
     testWriteEchoMismatchRejected();
     testCapturedReadTranscript();

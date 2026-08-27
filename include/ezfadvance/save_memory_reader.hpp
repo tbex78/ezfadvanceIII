@@ -15,7 +15,8 @@ public:
     explicit SaveMemoryReader(libusb_device_handle* handle) noexcept;
     explicit SaveMemoryReader(Transport& transport) noexcept;
 
-    bool read(std::size_t save_size, std::vector<std::uint8_t>& save);
+    bool read(std::size_t save_size, std::vector<std::uint8_t>& save,
+              std::uint16_t first_bank = 0x0900);
 
 private:
     bool selectBank(std::uint16_t bank_value);

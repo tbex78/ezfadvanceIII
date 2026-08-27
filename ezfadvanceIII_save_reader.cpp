@@ -37,10 +37,11 @@
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"
 #include "ezfadvance/save_memory_writer.hpp"
+#include "ezfadvance/save_bank_layout.hpp"
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
-// EZF Advance III save reader/writer 0.10.1.
+// EZF Advance III save reader/writer 0.10.2.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Save-read protocol behavior remains unchanged from 0.5.10.
 //
@@ -66,16 +67,17 @@
 //   single ROM: loader-relative header 0x4E8, entry 0x4F8
 //   multi ROM : loader-relative header 0x475E, entries 0x476E (28 bytes each)
 //
-// Current catalog support is deliberately conservative: 1..3 ROMs in the
-// first 16 MiB, using only the capture-proven linear-read mapping.
+// Catalog discovery supports the capture-proven 1..8 entry layouts and shared
+// 8-/16-/24-/32-MiB linear read mappings.
 //
 // Save protocol evidence:
 //   readsav.pcap: 0x0900 -> 32 KiB, then 0x0910 -> 32 KiB.
 //   writesav.pcap: writes exactly the first 32 KiB payload from readsav.pcap.
 //   readmultiromonesav.pcap: Piano + Bios_Dumper card; Bios_Dumper save export
 //     performs only 0x0900 -> 32 KiB and produces a 32-KiB .sav file.
-// Therefore this reader treats SRAM_V111 / Bios_Dumper as a capture-proven
-// 32-KiB save and refuses ambiguous multi-save configurations.
+// The paired FFTA + DumpRom captures additionally expose four shared 32-KiB
+// banks. This tool assigns them cumulatively in catalog order so a later ROM
+// does not overwrite banks reserved by an earlier ROM.
 
 static constexpr const char* host_platform_name()
 {
@@ -98,7 +100,7 @@ static constexpr const char* host_platform_name()
 
 static constexpr uint32_t CARD_IMAGE_SIZE = 0x02000000u;
 
-static constexpr size_t MAX_CAPTURED_ROMS = 3;
+static constexpr size_t MAX_CAPTURED_ROMS = 8;
 
 static uint32_t read_le32(const uint8_t* p)
 {
@@ -153,11 +155,19 @@ static std::string hex32(uint32_t v)
     return s.str();
 }
 
+static std::string hex16(uint16_t v)
+{
+    std::ostringstream s;
+    s << "0x" << std::hex << std::setw(4) << std::setfill('0') << v;
+    return s.str();
+}
+
 static bool read_save_capture(libusb_device_handle* h,
                               size_t save_size,
+                              uint16_t first_bank,
                               std::vector<uint8_t>& save)
 {
-    return ezfadvance::SaveMemoryReader(h).read(save_size, save);
+    return ezfadvance::SaveMemoryReader(h).read(save_size, save, first_bank);
 }
 
 static bool write_binary_file_without_overwrite(
@@ -384,21 +394,41 @@ static int inspect_and_dump_save(libusb_device_handle* h,
         return 4;
     }
     if (selection.status == ezfadvance::SaveSelectionStatus::multiple_supported_candidates) {
-        std::cerr << "\nThis card has multiple SRAM_V111 candidates, but no "
-                     "capture-proven hardware save-slot switch exists.\n"
+        std::cerr << "\nThis card has an unsupported ambiguous save selection.\n"
                   << "No save read was performed.\n";
         return 4;
     }
     if (selection.status == ezfadvance::SaveSelectionStatus::requested_rom_mismatch) {
         std::cerr << "\nSelected ROM " << *requested_rom
-                  << " is not the uniquely supported SRAM_V111 entry (ROM "
-                  << (supported_candidates.front() + 1) << ").\n"
+                  << " is not a supported SRAM_V111 entry.\n"
                   << "No save read was performed.\n";
         return 4;
     }
     const size_t selected = selection.index;
 
     const auto& chosen = roms[selected];
+
+    std::vector<std::string> save_markers;
+    save_markers.reserve(roms.size());
+    for (const auto& rom : roms)
+        save_markers.push_back(rom.sig.text);
+    const auto bank_layout =
+        ezfadvance::allocateSaveBanks(save_markers, selected);
+    if (bank_layout.status ==
+        ezfadvance::SaveBankLayoutStatus::unknown_predecessor_capacity) {
+        std::cerr << "\nCannot allocate save banks because ROM "
+                  << (bank_layout.first_unknown_rom + 1)
+                  << " has an unknown save capacity. No save access was performed.\n";
+        return 4;
+    }
+    if (bank_layout.status == ezfadvance::SaveBankLayoutStatus::capacity_exceeded) {
+        std::cerr << "\nThe cumulative save allocation exceeds the four proven "
+                     "32-KiB banks. No save access was performed.\n";
+        return 4;
+    }
+    if (bank_layout.status != ezfadvance::SaveBankLayoutStatus::selected)
+        return 4;
+    const uint16_t save_selector = bank_layout.selector;
 
     if (!chosen.sig.capture_proven_32k) {
         std::cerr << "\nSelected ROM " << (selected+1) << " has save marker "
@@ -409,18 +439,16 @@ static int inspect_and_dump_save(libusb_device_handle* h,
     }
 
     if (!is_single) {
-        // Critical evidence from readmultiromonesav.pcap: there is no
-        // additional ROM-slot selection command before this read. Selection is
-        // an explicit application-level choice and does not invent USB traffic.
-        std::cout << "\nMulti-ROM save path: capture shows no extra ROM-slot "
-                     "selection command before selector 0x0900.\n";
+        std::cout << "\nMulti-ROM save allocation: cumulative 32-KiB banks "
+                     "in catalog order.\n";
     }
+    std::cout << "Selected save bank: " << hex16(save_selector) << "\n";
 
     std::cout << "\nReading save for ROM " << (selected+1) << ": "
               << chosen.e.name << "\n";
 
     std::vector<uint8_t> save;
-    if (!read_save_capture(h,0x8000,save)) {
+    if (!read_save_capture(h,0x8000,save_selector,save)) {
         std::cerr << "Save read failed.\n";
         return 2;
     }
@@ -440,16 +468,15 @@ static int inspect_and_dump_save(libusb_device_handle* h,
             return 2;
         }
 
-        std::cout << "Writing 32768-byte save with selector 0x0900...\n";
-        if (!ezfadvance::SaveMemoryWriter(h).write32KiB(0x0900, *write_save)) {
+        std::cout << "Writing 32768-byte save with selector "
+                  << hex16(save_selector) << "...\n";
+        ezfadvance::SaveMemoryWriter writer(h);
+        if (!writer.write32KiB(save_selector, *write_save)) {
             std::cerr << "Save write failed. The original backup is available at "
                       << *backup_path << ".\n";
             return 2;
         }
 
-        // The captured write is followed by 0x98 readiness polls. Reuse the
-        // established bounded transition before issuing the independently
-        // capture-proven 0x91 read used for mandatory verification.
         if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
             std::cerr << "Post-write readiness transition failed. The save was "
                          "not verified. Backup: " << *backup_path << '\n';
@@ -458,7 +485,7 @@ static int inspect_and_dump_save(libusb_device_handle* h,
 
         std::vector<uint8_t> verification;
         std::cout << "Reading save back for byte-for-byte verification...\n";
-        if (!read_save_capture(h, 0x8000, verification)) {
+        if (!read_save_capture(h, 0x8000, save_selector, verification)) {
             std::cerr << "Save read-back failed. Backup: " << *backup_path << '\n';
             return 2;
         }
@@ -479,7 +506,8 @@ static int inspect_and_dump_save(libusb_device_handle* h,
                   << "ROM          : " << (selected+1) << " / " << rom_count << "\n"
                   << "Backup       : " << *backup_path << "\n"
                   << "Size         : 32768 bytes (32 KiB)\n"
-                  << "Write        : 0x92/01, selector 0x0900, one 0x8000-byte OUT\n"
+                  << "Write        : 0x92/01, selector " << hex16(save_selector)
+                  << ", one 0x8000-byte OUT\n"
                   << "Verification : full byte-for-byte 0x91/01 read-back matched\n";
         return 0;
     }
@@ -518,7 +546,8 @@ static int inspect_and_dump_save(libusb_device_handle* h,
               << "Size         : " << save.size() << " bytes (32 KiB)\n"
               << "Non-zero     : " << nonzero << " bytes\n"
               << "Non-FF       : " << nonff << " bytes\n"
-              << "Protocol     : 0x91/01, selector 0x0900, one 0x8000-byte IN\n\n"
+              << "Protocol     : 0x91/01, selector " << hex16(save_selector)
+              << ", one 0x8000-byte IN\n\n"
               << "No save-write payload, ROM-program, or erase operation was "
                  "performed by this extraction.\n";
     return 0;
@@ -563,8 +592,8 @@ static void usage(const char* argv0)
               << "  " << argv0 << " --write file.sav --backup original.sav "
                  "--yes-really-write [--rom N]\n\n"
               << "EZF Advance III save reader/writer (" << host_platform_name() << ").\n"
-              << "Capture-proven path: SRAM_V111 / Bios_Dumper = 32 KiB, "
-                 "selector 0x0900.\n"
+              << "Supported path: 32-KiB SRAM_V111 with cumulative four-bank "
+                 "allocation beginning at selector 0x0900.\n"
               << "On a multi-ROM card, --rom N is required; the reader will not "
                  "choose a ROM automatically.\n";
 }
@@ -638,7 +667,7 @@ int main(int argc, char** argv)
                      "--yes-really-write.\n";
         return 1;
     }
-    if (write_path == backup_path) {
+    if (ezfadvance::saveWritePathsConflict(write_path, backup_path)) {
         std::cerr << "The input save and backup paths must be different.\n";
         return 1;
     }

@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace ezfadvance {
@@ -20,6 +21,13 @@ struct SaveSelection {
     std::size_t index = 0;
 };
 
+inline bool saveWritePathsConflict(
+    const std::optional<std::string>& input,
+    const std::optional<std::string>& backup) noexcept
+{
+    return input && backup && *input == *backup;
+}
+
 inline SaveSelection selectSaveRom(
     std::size_t rom_count,
     const std::vector<std::size_t>& supported_candidates,
@@ -29,14 +37,19 @@ inline SaveSelection selectSaveRom(
         (requested_rom &&
          (*requested_rom == 0 || *requested_rom > rom_count)))
         return {SaveSelectionStatus::out_of_range, 0};
-    if (supported_candidates.empty())
-        return {SaveSelectionStatus::no_supported_candidate, 0};
-    if (supported_candidates.size() != 1)
-        return {SaveSelectionStatus::multiple_supported_candidates, 0};
     if (rom_count > 1 && !requested_rom)
         return {SaveSelectionStatus::rom_required, 0};
+    if (supported_candidates.empty())
+        return {SaveSelectionStatus::no_supported_candidate, 0};
     const std::size_t selected = requested_rom ? *requested_rom - 1 : 0;
-    if (selected != supported_candidates.front())
+    bool supported = false;
+    for (const auto candidate : supported_candidates) {
+        if (candidate == selected) {
+            supported = true;
+            break;
+        }
+    }
+    if (!supported)
         return {SaveSelectionStatus::requested_rom_mismatch, selected};
     return {SaveSelectionStatus::selected, selected};
 }

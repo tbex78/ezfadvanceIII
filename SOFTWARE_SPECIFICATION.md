@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.10.1` toolset, including guarded
+**Specification baseline:** shared `0.10.2` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -201,19 +201,26 @@ Responsibilities:
 
 On single-ROM cards, the reader selects ROM 1 automatically. On multi-ROM
 cards, it must display the catalog and require `--rom N`; it must not infer a
-choice even when exactly one `SRAM_V111` marker is present. Exactly one such
-candidate must exist and `N` must identify it. Zero candidates, multiple
-candidates, mismatched selections, and unsupported save formats must be
-refused because no general hardware save-slot switch has been proven.
+choice even when exactly one `SRAM_V111` marker is present. The selected ROM
+must identify a supported `SRAM_V111` entry. Missing or mismatched candidates,
+unsupported save formats, unknown predecessor capacity, and cumulative layouts
+larger than four banks must be refused.
 
 Save writing must require `--write FILE`, `--backup FILE`, and
 `--yes-really-write`. The input must be exactly 32768 bytes and the backup path
 must not already exist. The current save must be read and the backup completed
 before the first save-write payload is sent. A bounded readiness transition is
-required before the captured `0x92/01` write and again before the tool reads
+required before and after the captured `0x92/01` write. The tool must then read
 the full save through the proven `0x91/01` path. The read-back must match every
 input byte. A mismatch is failure,
 not partial success. The save tool must never erase flash or program ROM data.
+
+The four proven 32-KiB banks are allocated cumulatively in catalog order:
+`0x0900`, `0x0910`, `0x0920`, and `0x0930`. Marker-derived capacity reserves
+one bank for SRAM/EEPROM, two for FLASH512/FLASH, and four for FLASH1M. Unknown
+predecessor capacity and total allocation beyond four banks must be refused.
+This deliberately corrects the original manager's standalone-import behavior,
+which restarts a later save at `0x0900` and can overwrite a predecessor.
 
 It must require `CartridgeKind::ez3_flash` after shared initialization and
 before EZ3 loader, catalog, ROM-allocation, or save-bank processing. Official
@@ -229,12 +236,13 @@ ezfadvanceIII_save_reader --write FILE.sav --backup ORIGINAL.sav \
     --yes-really-write [--rom N]
 ```
 
-The capture-proven application path is `SRAM_V111`, selector `0x0900`, and
-one `0x8000`-byte read. Other SRAM signatures may be reported during scanning
-but must not be exported as if their size or bank selection were proven.
-`--rom` identifies catalog intent only; it must not imply that a general
-multi-ROM hardware save-slot switch exists. Catalog inspection and signature
-scanning may use the shared capture-proven 16-/24-/32-MiB linear mappings, but
+The supported application path is `SRAM_V111`, one cumulatively allocated
+selector from `0x0900` through `0x0930`, and one `0x8000`-byte read. Other SRAM
+signatures may be reported during scanning but must not be exported as if their
+size or bank selection were proven.
+`--rom` identifies catalog intent and selects the corresponding cumulatively
+allocated bank. Catalog inspection and signature scanning may use the shared
+capture-proven 16-/24-/32-MiB linear mappings, but
 must remain bounded by the physical 32-MiB cartridge image.
 
 ### 3.4 Card eraser

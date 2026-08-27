@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.10.1**.
+version is **0.10.2**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.10.1
+“pending,” and “next” describe the named review point, not the present 0.10.2
 support boundary.
 
 ## Build and test
@@ -105,9 +105,10 @@ extraction; `--verbose` selects per-block timing and throughput diagnostics.
 Save/catalog processing is restricted to a cartridge positively classified as
 EZ3 flash. The currently capture-proven save path is 32-KiB `SRAM_V111`.
 Single-ROM layouts select ROM 1 automatically. Multi-ROM layouts require an
-explicit `--rom N` choice, exactly one capture-proven `SRAM_V111` candidate,
-and a choice matching that unique candidate. Ambiguous layouts are refused
-because no hardware save-slot switching command has been proven.
+explicit `--rom N` choice, and the selected ROM must have the capture-proven
+`SRAM_V111` format. Its bank is derived from cumulative catalog-order save
+allocation; unknown predecessor capacity and layouts exceeding four banks are
+refused.
 
 ### Write an EZ3 save
 
@@ -119,15 +120,17 @@ because no hardware save-slot switching command has been proven.
   [--rom N]
 ```
 
-Save writing is deliberately restricted to the capture-proven 32-KiB
-`SRAM_V111` path and selector `0x0900`. The input must be exactly 32768 bytes.
+Save writing is deliberately restricted to 32-KiB `SRAM_V111` input. The
+input must be exactly 32768 bytes. Save banks are allocated cumulatively in
+catalog order across the four captured selectors `0x0900` through `0x0930`.
+For example, a preceding 64-KiB `FLASH512` allocation reserves `0x0900` and
+`0x0910`, so the following 32-KiB ROM uses `0x0920`.
 The tool refuses to overwrite an existing backup, reads and saves the current
 cartridge data before writing, completes the bounded readiness transitions,
 performs the captured `0x92/01` transfer, and then requires a full byte-for-byte
-`0x91/01` read-back match. Multi-ROM cards
-retain the same explicit `--rom N` and unique-candidate restrictions as save
-extraction. This path is transcript-tested but awaits real-hardware
-qualification in 0.10.0.
+`0x91/01` read-back match. Multi-ROM cards retain the same explicit `--rom N`
+requirement as save extraction. This path is transcript-tested but awaits real-hardware
+qualification in 0.10.2.
 
 ### Build or write a multi-ROM image
 

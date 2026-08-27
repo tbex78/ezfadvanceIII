@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.10.1**.
+Current shared project/toolset version covered by this summary: **0.10.2**.
 
 All mainline utilities carry this same version:
 
@@ -806,7 +806,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.10.1 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.10.2 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1303,3 +1303,18 @@ save readers both use this policy. The save reader derives its required range
 from parsed catalog allocation extents, fixing layouts with arbitrary ROM sizes
 or placement—including the observed ROM-2-at-16-MiB case—without encoding a
 title, game code, loader address, ROM count, or ROM size.
+
+## 0.10.2 development changes
+
+Save extraction no longer treats two absent write/backup paths as equal. Path
+conflict validation now runs only when both paths are present, preserving the
+existing `--rom N --output FILE` extraction workflow. Focused policy tests
+cover absent, partial, distinct, and identical path pairs.
+
+New paired captures expose four shared 32-KiB banks at `0x0900`, `0x0910`,
+`0x0920`, and `0x0930`. ROM programming clears all four. A 64-KiB FFTA save is
+written to the first two banks, but the original manager then incorrectly
+restarts a 32-KiB DumpRom save at `0x0900`, overwriting FFTA. The corrected
+tool allocates banks cumulatively from marker-derived save capacities, placing
+DumpRom at `0x0920` in this layout. Unknown or overflowing layouts are refused.
+Hardware qualification of the corrected allocation remains pending.

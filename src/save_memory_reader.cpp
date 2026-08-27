@@ -1,5 +1,6 @@
 #include "ezfadvance/save_memory_reader.hpp"
 
+#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 
@@ -48,7 +49,8 @@ bool SaveMemoryReader::readBank32KiB(std::uint16_t bank_value,
 }
 
 bool SaveMemoryReader::read(std::size_t save_size,
-                            std::vector<std::uint8_t>& save)
+                            std::vector<std::uint8_t>& save,
+                            std::uint16_t first_bank)
 {
     if (save_size != 0x8000 && save_size != 0x10000)
         throw std::runtime_error(
@@ -57,14 +59,19 @@ bool SaveMemoryReader::read(std::size_t save_size,
     std::vector<std::uint8_t> first;
     std::cout << "Reading save bank 1"
               << (save_size == 0x10000 ? "/2" : "")
-              << " (selector 0x0900, 32 KiB)...\n";
-    if (!readBank32KiB(0x0900,first)) return false;
+              << " (selector 0x" << std::hex << std::setw(4)
+              << std::setfill('0') << first_bank << std::dec
+              << ", 32 KiB)...\n";
+    if (!readBank32KiB(first_bank,first)) return false;
 
     save = first;
     if (save_size == 0x10000) {
         std::vector<std::uint8_t> second;
-        std::cout << "Reading save bank 2/2 (selector 0x0910, 32 KiB)...\n";
-        if (!readBank32KiB(0x0910,second)) return false;
+        const auto second_bank = static_cast<std::uint16_t>(first_bank + 0x10u);
+        std::cout << "Reading save bank 2/2 (selector 0x" << std::hex
+                  << std::setw(4) << std::setfill('0') << second_bank
+                  << std::dec << ", 32 KiB)...\n";
+        if (!readBank32KiB(second_bank,second)) return false;
         save.insert(save.end(),second.begin(),second.end());
     }
     return save.size() == save_size;
