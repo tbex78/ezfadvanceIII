@@ -214,21 +214,6 @@ static bool initialize_read_session(libusb_device_handle* h,
     return initialized;
 }
 
-static bool prepare_linear_16m_read(libusb_device_handle* h)
-{
-    return ezfadvance::ReadOnlyCartridge(h).prepareLinear16MiB();
-}
-
-static bool prepare_linear_24m_read(libusb_device_handle* h)
-{
-    return ezfadvance::ReadOnlyCartridge(h).prepareLinear24MiB();
-}
-
-static bool prepare_linear_32m_read(libusb_device_handle* h)
-{
-    return ezfadvance::ReadOnlyCartridge(h).prepareLinear32MiB();
-}
-
 static std::optional<uint32_t> arm_branch_target(uint32_t ins)
 {
     return ezfadvance::CartridgeFormat::armBranchTarget(ins);
@@ -485,13 +470,9 @@ static int extract_ez3_rom(libusb_device_handle* h,
         ezfadvance::CartridgeFormat::requiredLinearReadLimit(*inclusive_end);
     if (!required_limit)
         return fail_after_cleanup(3);
-    if (*required_limit == CARD_IMAGE_LIMIT) {
-        if (!prepare_linear_32m_read(h)) return fail_after_cleanup(2);
-    } else if (*required_limit == LINEAR24_LIMIT) {
-        if (!prepare_linear_24m_read(h)) return fail_after_cleanup(2);
-    } else if (*required_limit == LINEAR16_LIMIT) {
-        if (!prepare_linear_16m_read(h)) return fail_after_cleanup(2);
-    }
+    if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(
+            *inclusive_end))
+        return fail_after_cleanup(2);
 
     std::vector<std::uint8_t> image;
     std::cout << "Extracting ROM " << request.rom_number << " from "
@@ -666,15 +647,14 @@ static int inspect_card(libusb_device_handle* h,
 
     ReadMappingMode mapping_mode = ReadMappingMode::Lower8MiB;
     if (loader_start >= LINEAR24_LIMIT) {
-        if (!prepare_linear_32m_read(h)) return 2;
         mapping_mode = ReadMappingMode::Linear32MiB;
     } else if (loader_start >= LINEAR16_LIMIT) {
-        if (!prepare_linear_24m_read(h)) return 2;
         mapping_mode = ReadMappingMode::Linear24MiB;
     } else if (loader_start >= FLASH_WINDOW_SIZE) {
-        if (!prepare_linear_16m_read(h)) return 2;
         mapping_mode = ReadMappingMode::Linear16MiB;
     }
+    if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(loader_start))
+        return 2;
 
     const size_t loader_read_len = std::min<size_t>(
         ezfadvance::Ez3CatalogParser::loader_read_size,
@@ -702,16 +682,19 @@ static int inspect_card(libusb_device_handle* h,
 
     if (highest_start >= LINEAR24_LIMIT &&
         mapping_mode != ReadMappingMode::Linear32MiB) {
-        if (!prepare_linear_32m_read(h)) return 2;
+        if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(
+                highest_start)) return 2;
         mapping_mode = ReadMappingMode::Linear32MiB;
     } else if (highest_start >= LINEAR16_LIMIT &&
                mapping_mode != ReadMappingMode::Linear24MiB &&
                mapping_mode != ReadMappingMode::Linear32MiB) {
-        if (!prepare_linear_24m_read(h)) return 2;
+        if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(
+                highest_start)) return 2;
         mapping_mode = ReadMappingMode::Linear24MiB;
     } else if (highest_start >= FLASH_WINDOW_SIZE &&
                mapping_mode == ReadMappingMode::Lower8MiB) {
-        if (!prepare_linear_16m_read(h)) return 2;
+        if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(
+                highest_start)) return 2;
         mapping_mode = ReadMappingMode::Linear16MiB;
     }
 

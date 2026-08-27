@@ -48,6 +48,9 @@ public:
     bool prepareLinear16MiB();
     bool prepareLinear24MiB();
     bool prepareLinear32MiB();
+    // Select the smallest capture-proven linear mapping containing address.
+    // Lower-8-MiB addresses require no mapping command.
+    bool prepareLinearForAddress(std::uint32_t address);
 
     // Capture-derived readiness transition: three successful readiness polls
     // followed by the observed one-second quiet interval. This is not a full

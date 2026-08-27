@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.10.0**.
+Current shared project/toolset version covered by this summary: **0.10.1**.
 
 All mainline utilities carry this same version:
 
@@ -806,7 +806,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.10.0 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.10.1 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1289,3 +1289,17 @@ Transport tests lock the eight selector exchanges, exact write command, full
 payload, command echo, size rejection, and read transcript. This new write path
 is not yet hardware-qualified and must remain described as capture-derived and
 transcript-tested until the planned real-card save/restore test succeeds.
+
+The save tool now shares the card reader's capture-proven 16-/24-/32-MiB
+catalog mapping boundary. This admits the hardware-observed FFTA + Bios_Dumper
+layout whose ROM 2 starts at exactly `0x01000000`, while the actual save access
+remains restricted to the unique `SRAM_V111` candidate and selector `0x0900`.
+
+## 0.10.1 development changes
+
+The shared read-only cartridge service now generically selects the smallest
+capture-proven linear mapping for a requested inclusive address. The card and
+save readers both use this policy. The save reader derives its required range
+from parsed catalog allocation extents, fixing layouts with arbitrary ROM sizes
+or placement—including the observed ROM-2-at-16-MiB case—without encoding a
+title, game code, loader address, ROM count, or ROM size.

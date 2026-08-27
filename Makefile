@@ -133,7 +133,7 @@ test: check
 	./build/protocol_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/read_session_transition_test.cpp src/read_session_transition.cpp -o build/read_session_transition_test
 	./build/read_session_transition_test
-	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/official_cartridge_read_test.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/official_cartridge_read_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/official_cartridge_read_test.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/official_cartridge_read_test
 	./build/official_cartridge_read_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/verification_policy_test.cpp src/verification_policy.cpp -o build/verification_policy_test
 	./build/verification_policy_test

@@ -40,7 +40,7 @@
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
-// EZF Advance III save reader/writer 0.10.0.
+// EZF Advance III save reader/writer 0.10.1.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Save-read protocol behavior remains unchanged from 0.5.10.
 //
@@ -96,9 +96,7 @@ static constexpr const char* host_platform_name()
 #endif
 }
 
-static constexpr uint32_t FLASH_WINDOW_SIZE = 0x00800000u; // 8 MiB
-static constexpr uint32_t CAPTURE_LINEAR_LIMIT  = 0x01000000u; // 16 MiB
-static constexpr uint32_t CARD_IMAGE_SIZE = 0x02000000u; // 32 MiB size classes
+static constexpr uint32_t CARD_IMAGE_SIZE = 0x02000000u;
 
 static constexpr size_t MAX_CAPTURED_ROMS = 3;
 
@@ -130,11 +128,6 @@ static bool initialize_ez3_read_session(libusb_device_handle* h)
     if (!cartridge.finishSession())
         std::cerr << "Read-session cleanup after cartridge rejection failed.\n";
     return false;
-}
-
-static bool prepare_linear_16m_read(libusb_device_handle* h)
-{
-    return ezfadvance::ReadOnlyCartridge(h).prepareLinear16MiB();
 }
 
 static std::optional<uint32_t> arm_branch_target(uint32_t ins)
@@ -288,24 +281,24 @@ static int inspect_and_dump_save(libusb_device_handle* h,
     }
 
     const uint32_t loader_start = *loader_target;
-    if (loader_start < 0xC0 || loader_start >= CAPTURE_LINEAR_LIMIT) {
+    if (loader_start < 0xC0 || loader_start >= CARD_IMAGE_SIZE) {
         std::cerr << "Patched branch points to " << hex32(loader_start)
-                  << ", outside the currently understood first-16-MiB layout.\n";
+                  << ", outside the understood 32-MiB cartridge layout.\n";
         return 3;
-    }
-
-    if (loader_start >= FLASH_WINDOW_SIZE) {
-        if (!prepare_linear_16m_read(h)) return 2;
     }
 
     const size_t loader_read_len = std::min<size_t>(
         ezfadvance::Ez3CatalogParser::loader_read_size,
-        static_cast<size_t>(CAPTURE_LINEAR_LIMIT-loader_start));
+        static_cast<size_t>(CARD_IMAGE_SIZE-loader_start));
+    const auto loader_end = loader_start +
+        static_cast<uint32_t>(loader_read_len - 1);
+    if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(loader_end))
+        return 2;
     std::vector<uint8_t> loader;
     if (!read_card(h,loader_start,loader,loader_read_len)) return 2;
 
     const auto catalog =
-        ezfadvance::Ez3CatalogParser::parse(loader, CAPTURE_LINEAR_LIMIT);
+        ezfadvance::Ez3CatalogParser::parse(loader, CARD_IMAGE_SIZE);
     if (!catalog || catalog->entries.size() > MAX_CAPTURED_ROMS) {
         std::cerr << "Found loader branch at " << hex32(loader_start)
                   << " but no recognized EZ3 catalog.\n";
@@ -313,6 +306,16 @@ static int inspect_and_dump_save(libusb_device_handle* h,
     }
     const bool is_single = catalog->isSingle();
     const std::size_t rom_count = catalog->entries.size();
+
+    uint32_t highest_scan_address = loader_end;
+    for (size_t i = 0; i < rom_count; ++i) {
+        const auto end = catalog->allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
+        if (end && *end > catalog->entries[i].start)
+            highest_scan_address = std::max(highest_scan_address, *end - 1);
+    }
+    if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(
+            highest_scan_address))
+        return 2;
 
     struct DetectedRom {
         CatalogEntry e;
@@ -329,7 +332,7 @@ static int inspect_and_dump_save(libusb_device_handle* h,
         r.g = read_gba_header(h,r.e.start);
         const auto end = catalog->allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
         r.span = end ? static_cast<uint32_t>(ezfadvance::boundedSaveScanSpan(
-                           r.e.start, *end, CAPTURE_LINEAR_LIMIT)) : 0;
+                           r.e.start, *end, CARD_IMAGE_SIZE)) : 0;
         if (r.span)
             r.sig = detect_save_signature(h,r.e.start,r.span);
         roms.push_back(std::move(r));

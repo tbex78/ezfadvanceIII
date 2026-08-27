@@ -1,4 +1,5 @@
 #include "ezfadvance/read_only_cartridge.hpp"
+#include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/read_session_transition.hpp"
 
 #include <algorithm>
@@ -314,6 +315,24 @@ bool ReadOnlyCartridge::prepareLinear32MiB()
            protocol_.tx92One(0,0x55,"readmap32 selector0 55") &&
            protocol_.tx92One(1,6,"readmap32 selector1 06") &&
            finishReadMapping("read32 prefix");
+}
+
+bool ReadOnlyCartridge::prepareLinearForAddress(std::uint32_t address)
+{
+    const auto limit = CartridgeFormat::requiredLinearReadLimit(address);
+    if (!limit) {
+        std::cerr << "Read address lies outside the 32-MiB EZ3 cartridge.\n";
+        return false;
+    }
+    if (*limit == 0x00800000u)
+        return true;
+    if (*limit == 0x01000000u)
+        return prepareLinear16MiB();
+    if (*limit == 0x01800000u)
+        return prepareLinear24MiB();
+    if (*limit == 0x02000000u)
+        return prepareLinear32MiB();
+    return false;
 }
 
 } // namespace ezfadvance

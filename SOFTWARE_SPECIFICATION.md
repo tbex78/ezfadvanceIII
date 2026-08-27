@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.10.0` toolset, including guarded
+**Specification baseline:** shared `0.10.1` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -233,8 +233,9 @@ The capture-proven application path is `SRAM_V111`, selector `0x0900`, and
 one `0x8000`-byte read. Other SRAM signatures may be reported during scanning
 but must not be exported as if their size or bank selection were proven.
 `--rom` identifies catalog intent only; it must not imply that a general
-multi-ROM hardware save-slot switch exists. Signature scanning must remain
-clamped to the save reader's independently proven first-16-MiB boundary.
+multi-ROM hardware save-slot switch exists. Catalog inspection and signature
+scanning may use the shared capture-proven 16-/24-/32-MiB linear mappings, but
+must remain bounded by the physical 32-MiB cartridge image.
 
 ### 3.4 Card eraser
 

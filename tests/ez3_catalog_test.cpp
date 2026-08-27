@@ -141,6 +141,13 @@ int main()
           ((0x01000000u / 2u) << 8) | 4u);
     assert(!Ez3CatalogParser::parse(out_of_range, 0x01000000u));
 
+    // Hardware-observed FFTA + Bios_Dumper layout: ROM 2 begins exactly at
+    // 16 MiB and is valid when the caller authorizes the full EZ3 image.
+    const auto ffta_bios = Ez3CatalogParser::parse(out_of_range, image_limit);
+    assert(ffta_bios);
+    assert(ffta_bios->entries.size() == 2);
+    assert(ffta_bios->entries[1].start == 0x01000000u);
+
     auto empty_name = multiLoader(2);
     for (std::size_t index = 0; index < 16; ++index)
         empty_name[multi_entry + Ez3CatalogParser::entry_size + index] = 0;
