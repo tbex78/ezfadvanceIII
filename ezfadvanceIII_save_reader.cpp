@@ -41,7 +41,7 @@
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
-// EZF Advance III save reader/writer 0.11.0.
+// EZF Advance III save reader/writer 0.11.1.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Save-read protocol behavior remains unchanged from 0.5.10.
 //

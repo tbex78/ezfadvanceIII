@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.11.0**.
+Current shared project/toolset version covered by this summary: **0.11.1**.
 
 All mainline utilities carry this same version:
 
@@ -806,7 +806,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.11.0 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.11.1 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1322,22 +1322,6 @@ layout. DumpRom was written and verified at `0x0920`, then extracted in a fresh
 tool session; the input and extracted files shared SHA-256
 `c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
 
-Audit of all executables found the same one-byte operations in the multi-ROM
-writer's post-program `VerificationSession`. They were removed from every
-verification geometry, and the complete offline verification transcript matrix
-passes with control-only mapping. Writer hardware requalification remains the
-next checkpoint.
-
-The first writer hardware rerun passed programming, exact-8-MiB verification,
-menu boot, and both game boots, but bank `0x0900` was not all zero. Audit showed
-that capture-required erase/program window selection occurs after the original
-four-bank clear and also writes save offsets 0/1. The workflow now repeats the
-four-bank zeroing after verification or cleanup, and attempts it after any
-post-setup failure. The second hardware rerun passed programming, exact-8-MiB
-verification, EZ3 menu boot, and both game boots; read-only checks then verified
-all 32768 bytes of each selector `0x0900`, `0x0910`, `0x0920`, and `0x0930`
-were zero.
-
 ## 0.11.0 development changes
 
 The save utility now supports capture-derived 64-KiB `FLASH512` save access.
@@ -1367,3 +1351,19 @@ survived a separate fresh extraction. Input and extracted SHA-256 were both
 An adjacent-bank regression test then rewrote both FFTA banks and freshly
 extracted DumpRom from `0x0920`; its before/after/trusted SHA-256 remained
 `c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
+
+## 0.11.1 development changes
+
+Hardware isolation proved that one-byte mapping/status operations directly
+write save offsets 0 and 1. Card/save reading and every writer verification
+geometry now use control-only two-byte mapping sequences. The complete offline
+verification transcript matrix passes, and the corrected FFTA/DumpRom workflow
+is hardware-qualified by fresh SHA-256 equality for both saves.
+
+Capture-required ROM erase/program window selection still uses the one-byte
+operations after the writer's initial save clear. The writer therefore repeats
+the four-bank zeroing after verification or cleanup and attempts it after any
+post-setup failure. The final exact-8-MiB F-Zero/Mario Kart hardware run passed
+programming, verification, menu boot, and both game boots; subsequent read-only
+checks verified all 32768 bytes of each selector `0x0900`, `0x0910`, `0x0920`,
+and `0x0930` were zero.
