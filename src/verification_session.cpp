@@ -61,11 +61,9 @@ std::size_t VerificationSession::tinyTailAbove16MiBExtent(
 
 bool VerificationSession::statusSequence() const
 {
-    if (!protocol_.tx92Two(0xFF, 0xFF, "STATUS FFFF")) return false;
-    if (!protocol_.tx92One(0x01, 0x04, "STATUS 04")) return false;
-    if (!protocol_.tx92One(0x00, 0x00, "STATUS 00 A")) return false;
-    if (!protocol_.tx92One(0x00, 0x00, "STATUS 00 B")) return false;
-    return true;
+    // Hardware isolation proved the former one-byte tail addresses save
+    // offsets 0 and 1. Verification needs only the two-byte control transfer.
+    return protocol_.tx92Two(0xFF, 0xFF, "STATUS FFFF");
 }
 
 std::vector<std::uint8_t> VerificationSession::readCommand(
@@ -139,10 +137,6 @@ bool VerificationSession::verifyExact8MiB(
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY64 0000 B")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY64 0000 C")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY64 0000 D")) return false;
-    if (!protocol_.tx92One(0x00, 0xAA, "VERIFY64 selector0 AA")) return false;
-    if (!protocol_.tx92One(0x00, 0x55, "VERIFY64 selector0 55")) return false;
-    if (!protocol_.tx92One(0x01, 0x06, "VERIFY64 selector1 06")) return false;
-
     if (!statusSequence()) return false;
 
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY64READ 55AA")) return false;
@@ -174,10 +168,6 @@ bool VerificationSession::verifyExact16MiB(
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY128 0000 B")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY128 0000 C")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY128 0000 D")) return false;
-    if (!protocol_.tx92One(0x00, 0xAA, "VERIFY128 selector0 AA")) return false;
-    if (!protocol_.tx92One(0x00, 0x55, "VERIFY128 selector0 55")) return false;
-    if (!protocol_.tx92One(0x01, 0x06, "VERIFY128 selector1 06")) return false;
-
     if (!statusSequence()) return false;
 
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY128READ 55AA")) return false;
@@ -242,10 +232,6 @@ bool VerificationSession::verifyExact24MiB(
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192 0000 B")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192 0000 C")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192 0000 D")) return false;
-    if (!protocol_.tx92One(0x00, 0xAA, "VERIFY192 selector0 AA")) return false;
-    if (!protocol_.tx92One(0x00, 0x55, "VERIFY192 selector0 55")) return false;
-    if (!protocol_.tx92One(0x01, 0x06, "VERIFY192 selector1 06")) return false;
-
     if (!statusSequence()) return false;
 
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY192READ 55AA")) return false;
@@ -294,10 +280,6 @@ bool VerificationSession::verifyExact32MiB(
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 C")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 D")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 E")) return false;
-    if (!protocol_.tx92One(0x00, 0xAA, "VERIFY256 selector0 AA")) return false;
-    if (!protocol_.tx92One(0x00, 0x55, "VERIFY256 selector0 55")) return false;
-    if (!protocol_.tx92One(0x01, 0x06, "VERIFY256 selector1 06")) return false;
-
     if (!statusSequence()) return false;
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY256READ 55AA")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256READ 0000 A")) return false;

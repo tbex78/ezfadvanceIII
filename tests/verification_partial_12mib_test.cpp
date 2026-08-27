@@ -47,21 +47,9 @@ void expect92Two(ezfadvance::test::TranscriptTransport& transcript,
               .expectInMax(command, 64, timeout_ms);
 }
 
-void expect92One(ezfadvance::test::TranscriptTransport& transcript,
-                 std::uint8_t selector, std::uint8_t value)
-{
-    const auto command = ezfadvance::Protocol::command92One(selector);
-    transcript.expectOut(command, timeout_ms)
-              .expectOut({value}, timeout_ms)
-              .expectInMax(command, 64, timeout_ms);
-}
-
 void expectStatus(ezfadvance::test::TranscriptTransport& transcript)
 {
     expect92Two(transcript, 0xFF, 0xFF);
-    expect92One(transcript, 0x01, 0x04);
-    expect92One(transcript, 0x00, 0x00);
-    expect92One(transcript, 0x00, 0x00);
 }
 
 bool observed(const ezfadvance::test::TranscriptTransport& transcript,

@@ -121,25 +121,6 @@ refused.
   [--rom N]
 ```
 
-The input must be exactly 32768 bytes for `SRAM_V111` or 65536 bytes for
-`FLASH512`, matching the selected ROM's allocated save capacity. A 64-KiB save
-is split across two consecutive 32-KiB transfers. Save banks are allocated cumulatively in
-catalog order across the four captured selectors `0x0900` through `0x0930`.
-For example, a preceding 64-KiB `FLASH512` allocation reserves `0x0900` and
-`0x0910`, so the following 32-KiB ROM uses `0x0920`.
-The tool refuses to overwrite an existing backup, reads and saves the current
-cartridge data before writing, completes the bounded readiness transitions,
-performs the captured `0x92/01` transfer, and then requires a full byte-for-byte
-`0x91/01` read-back match. Multi-ROM cards retain the same explicit `--rom N`
-requirement as save extraction. The corrected `0x0920` path is hardware-qualified
-in 0.10.2: a DumpRom save following a two-bank FFTA allocation survived a fresh
-tool session and matched the input byte-for-byte by SHA-256.
-The 64-KiB FFTA path completed both bank writes, immediate verification, and a
-successful real-GBA load. A fresh tool invocation differed from the input only
-at offsets `0x0000..0x0001`: requested `FF FF` became `00 04`; the remaining
-65534 bytes matched. It is not yet known whether cleanup, later initialization,
-controller persistence, or another protocol effect causes this mutation.
-
 ### Build or write a multi-ROM image
 
 Dry-run layout inspection does not access USB:

@@ -1322,6 +1322,12 @@ layout. DumpRom was written and verified at `0x0920`, then extracted in a fresh
 tool session; the input and extracted files shared SHA-256
 `c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
 
+Audit of all executables found the same one-byte operations in the multi-ROM
+writer's post-program `VerificationSession`. They were removed from every
+verification geometry, and the complete offline verification transcript matrix
+passes with control-only mapping. Writer hardware requalification remains the
+next checkpoint.
+
 ## 0.11.0 development changes
 
 The save utility now supports capture-derived 64-KiB `FLASH512` save access.
@@ -1334,11 +1340,20 @@ On real hardware, both writes and immediate byte-for-byte verification passed,
 FFTA loaded successfully on a GBA, and the following DumpRom save at `0x0920`
 remained SHA-256 identical. A fresh FFTA extraction differed from the input in
 exactly two bytes: offsets 0 and 1 changed from `FF FF` to `00 04`; bytes
-`0x0002..0xFFFF` were identical. The mutation occurs after immediate
-verification but has not been isolated to session cleanup, subsequent
-initialization, controller persistence, or another protocol effect.
+`0x0002..0xFFFF` were identical.
 
-The next controlled investigation must read the save immediately after the
-write, after `finishSession()` without reinitialization, and after close/reopen
-plus initialization. No automatic normalization or verification exception is
-authorized before that cause is proven.
+A standalone hardware diagnostic established that initialization changed zero
+bytes, then isolated every one-byte mapping transaction as a direct save write:
+`1/04` changes offset 1, and selector-0 values change offset 0. Removing those
+transactions and retaining the two-byte control sequence exposed the genuine
+two-ROM FFTA/DumpRom catalog through staged 16-/24-MiB mapping while preserving
+all 32768 bytes of bank `0x0900`. No automatic normalization or ignored-byte
+verification is used.
+
+The corrected production workflow subsequently wrote the complete 64-KiB FFTA
+save across `0x0900` and `0x0910`, passed immediate read-back verification, and
+survived a separate fresh extraction. Input and extracted SHA-256 were both
+`822db2704ddc1287c8deac4980e6200f1a5a46445bd996ff55f482392f9e3611`.
+An adjacent-bank regression test then rewrote both FFTA banks and freshly
+extracted DumpRom from `0x0920`; its before/after/trusted SHA-256 remained
+`c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.

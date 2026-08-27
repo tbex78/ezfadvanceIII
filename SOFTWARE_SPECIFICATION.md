@@ -223,6 +223,22 @@ only at offsets 0 and 1 (`FF FF` became `00 04`). The software must not silently
 normalize or ignore those bytes until the mutation's cause and meaning are
 proven.
 
+Controlled tests isolated the mutation to one-byte `0x92` transfers in the
+linear mapping sequence: selector/value `1/04` writes save offset 1, while
+`0/00`, `0/AA`, and `0/55` write save offset 0. The production read mapping
+must therefore use only the proven two-byte control transfers. A staged
+tx92Two-only 16-to-24-MiB transition exposed the genuine two-ROM FFTA/DumpRom
+catalog while preserving all 32768 bytes of bank `0x0900`.
+The production save tool was then hardware-qualified end to end: it wrote both
+FFTA banks, passed immediate byte-for-byte verification, and a separate fresh
+invocation extracted a 65536-byte file whose SHA-256 exactly matched the input.
+After another complete FFTA write, the adjacent DumpRom bank at `0x0920` also
+retained its trusted SHA-256 across a fresh extraction.
+Post-program ROM verification must follow the same rule: no `tx92One` mapping
+or status transaction is permitted. Every verification geometry uses only the
+two-byte control sequence so programming verification cannot rewrite save
+offsets 0 or 1 after save-bank initialization.
+
 The four proven 32-KiB banks are allocated cumulatively in catalog order:
 `0x0900`, `0x0910`, `0x0920`, and `0x0930`. Marker-derived capacity reserves
 one bank for SRAM/EEPROM, two for FLASH512/FLASH, and four for FLASH1M. Unknown

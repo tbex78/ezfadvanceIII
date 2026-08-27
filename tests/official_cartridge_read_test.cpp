@@ -199,6 +199,48 @@ void testReadUsesFinalPartialBlock()
     assert(transcript.complete());
 }
 
+void expectSafeLinearMapping(ezfadvance::test::TranscriptTransport& transcript,
+                             unsigned mapping_mib)
+{
+    expect92Two(transcript, 0xFF, 0xFF);
+    expect92Two(transcript, 0x55, 0xAA);
+    if (mapping_mib == 32) {
+        expect92Two(transcript, 0, 0);
+        expect92Two(transcript, 0, 0);
+        expect92Two(transcript, 2, 0);
+    } else {
+        expect92Two(transcript, 2, 0);
+        expect92Two(transcript, 0, mapping_mib == 16 ? 0x80 : 0xC0);
+        expect92Two(transcript, 0, 0);
+    }
+    expect92Two(transcript, 0xAA, 0x55);
+    expect92Two(transcript, 0, 0);
+    expect92Two(transcript, 0, 0);
+    expect92Two(transcript, 0, 0);
+    expect92Two(transcript, 0xFF, 0xFF);
+    expect92Two(transcript, 0x55, 0xAA);
+    expect92Two(transcript, 0, 0);
+    expect92Two(transcript, 0, 0);
+    expect92Two(transcript, 0, 0);
+}
+
+void testHighMappingsContainNoSaveWrites()
+{
+    for (const unsigned mapping_mib : {16u, 24u, 32u}) {
+        ezfadvance::test::TranscriptTransport transcript;
+        expectSafeLinearMapping(transcript, mapping_mib);
+        ezfadvance::ReadOnlyCartridge cartridge(transcript);
+        const bool ok = mapping_mib == 16 ? cartridge.prepareLinear16MiB()
+                      : mapping_mib == 24 ? cartridge.prepareLinear24MiB()
+                                          : cartridge.prepareLinear32MiB();
+        assert(ok);
+        assert(transcript.complete());
+        for (const auto& command : transcript.observedOut())
+            assert(command != ezfadvance::Protocol::command92One(0) &&
+                   command != ezfadvance::Protocol::command92One(1));
+    }
+}
+
 } // namespace
 
 int main()
@@ -207,4 +249,5 @@ int main()
     testOfficialDetectionStopsEz3Path();
     testFull32MiBExtractionTranscript();
     testReadUsesFinalPartialBlock();
+    testHighMappingsContainNoSaveWrites();
 }

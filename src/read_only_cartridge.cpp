@@ -245,10 +245,10 @@ bool ReadOnlyCartridge::finishSession()
 
 bool ReadOnlyCartridge::flashStatus()
 {
-    return protocol_.tx92Two(0xFF,0xFF,"status FFFF") &&
-           protocol_.tx92One(1,4,"status 04") &&
-           protocol_.tx92One(0,0,"status 00 A") &&
-           protocol_.tx92One(0,0,"status 00 B");
+    // Hardware isolation proved the former one-byte tail writes directly to
+    // save offsets 1, 0, and 0. The two-byte FFFF control transfer is
+    // sufficient when combined with the capture-derived mapping body.
+    return protocol_.tx92Two(0xFF,0xFF,"status FFFF");
 }
 
 bool ReadOnlyCartridge::finishReadMapping(const char* prefix)
@@ -273,9 +273,6 @@ bool ReadOnlyCartridge::prepareLinear16MiB()
            protocol_.tx92Two(0,0,"readmap 0000 B") &&
            protocol_.tx92Two(0,0,"readmap 0000 C") &&
            protocol_.tx92Two(0,0,"readmap 0000 D") &&
-           protocol_.tx92One(0,0xAA,"readmap selector0 AA") &&
-           protocol_.tx92One(0,0x55,"readmap selector0 55") &&
-           protocol_.tx92One(1,6,"readmap selector1 06") &&
            finishReadMapping("read prefix");
 }
 
@@ -292,9 +289,6 @@ bool ReadOnlyCartridge::prepareLinear24MiB()
            protocol_.tx92Two(0,0,"readmap24 0000 B") &&
            protocol_.tx92Two(0,0,"readmap24 0000 C") &&
            protocol_.tx92Two(0,0,"readmap24 0000 D") &&
-           protocol_.tx92One(0,0xAA,"readmap24 selector0 AA") &&
-           protocol_.tx92One(0,0x55,"readmap24 selector0 55") &&
-           protocol_.tx92One(1,6,"readmap24 selector1 06") &&
            finishReadMapping("read24 prefix");
 }
 
@@ -311,9 +305,6 @@ bool ReadOnlyCartridge::prepareLinear32MiB()
            protocol_.tx92Two(0,0,"readmap32 0000 C") &&
            protocol_.tx92Two(0,0,"readmap32 0000 D") &&
            protocol_.tx92Two(0,0,"readmap32 0000 E") &&
-           protocol_.tx92One(0,0xAA,"readmap32 selector0 AA") &&
-           protocol_.tx92One(0,0x55,"readmap32 selector0 55") &&
-           protocol_.tx92One(1,6,"readmap32 selector1 06") &&
            finishReadMapping("read32 prefix");
 }
 

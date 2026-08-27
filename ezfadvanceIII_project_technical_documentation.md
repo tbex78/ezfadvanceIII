@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.11.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.11.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. The partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail paths retain their earlier hardware qualification. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. The 64-KiB FFTA path wrote both banks, passed immediate verification, and loaded on a GBA, but a fresh extraction exposed an unexplained two-byte post-verification mutation. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.11.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. The partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths retain their earlier hardware qualification. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -2809,13 +2809,39 @@ rather than the input's
 Byte comparison isolates the difference to offsets 0 and 1: input `FF FF`
 became `00 04`; all bytes from `0x0002` through `0xFFFF` matched.
 
-The evidence does not establish that the cartridge changed these bytes
-autonomously. The mutation occurred after immediate verification and could be
-caused by `finishSession()`, initialization in the next invocation, controller
-persistence behavior, or another protocol effect. A controlled test must read
-at three points: immediately after writing, after cleanup without reinitializing,
-and after close/reopen plus initialization. Until then, the implementation must
-not normalize or ignore the two bytes.
+Follow-up diagnostics isolated the boundary. With the original manager's FFTA
+save present, bank `0x0900` began with `46 46 54 45 ...`. A direct read before
+initialization and another after shared initialization were identical across all
+32768 bytes. After restoring initialized ROM-read state and calling only
+`prepareLinear16MiB()`, the bank began `00 04 54 45 ...`; exactly offsets 0 and
+1 changed. Thus USB open, save selection/read, initialization, and
+`finishSession()` are excluded by the controlled evidence, while the 16-MiB
+mapping transition is confirmed as the mutation boundary.
+
+Transaction-level replay proved that each `tx92One` operation addresses save
+memory: `1/04` wrote offset 1, and `0/00`, `0/AA`, and `0/55` wrote offset 0.
+The tx92Two-only 16-MiB and staged 16-to-24-MiB mapping sequences preserved all
+32768 bytes of bank `0x0900`; with the genuine FFTA/DumpRom layout restored, the
+staged sequence also exposed both catalog entries. Production read mapping now
+omits those save-writing operations. Automatic `00 04` normalization remains
+forbidden.
+
+The resulting production save workflow was physically validated with the
+two-ROM FFTA/DumpRom layout. A 65536-byte FFTA save was written across selectors
+`0x0900` and `0x0910`, immediately verified byte-for-byte, then extracted by a
+separate tool invocation. The input and fresh extraction shared SHA-256
+`822db2704ddc1287c8deac4980e6200f1a5a46445bd996ff55f482392f9e3611`.
+The adjacent-bank test then rewrote FFTA and extracted DumpRom from `0x0920` in
+a fresh invocation. Trusted, pre-FFTA-write, and post-FFTA-write DumpRom files
+all had SHA-256
+`c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`,
+confirming that the two-bank FFTA write did not alter the following allocation.
+
+The same proven save-writing one-byte transactions were removed from the shared
+post-program `VerificationSession` used by `ezfadvanceIII_multirom_writer`.
+All verification geometries now retain only their two-byte mapping controls;
+the complete offline 8/12/16/20/24/28/32-MiB, tiny-tail, and partial-window
+transcript matrix passes. Writer-side physical requalification is pending.
 
 ---
 
@@ -2828,7 +2854,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.11.0 baseline compiled and transcript-tested; extracted backend specifically requalified with the two-ROM exact-8-MiB path; corrected DumpRom bank-2 save writing qualified on the FFTA + DumpRom layout; 64-KiB FFTA writing boots but has an unresolved two-byte post-verification mutation; other prior qualifications retained; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.11.0 baseline compiled and transcript-tested; extracted backend specifically requalified with the two-ROM exact-8-MiB path; corrected DumpRom bank-2 save writing qualified on the FFTA + DumpRom layout; save-safe staged 16-/24-MiB catalog mapping is hardware-proven; other prior qualifications retained; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
