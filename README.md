@@ -129,8 +129,9 @@ The tool refuses to overwrite an existing backup, reads and saves the current
 cartridge data before writing, completes the bounded readiness transitions,
 performs the captured `0x92/01` transfer, and then requires a full byte-for-byte
 `0x91/01` read-back match. Multi-ROM cards retain the same explicit `--rom N`
-requirement as save extraction. This path is transcript-tested but awaits real-hardware
-qualification in 0.10.2.
+requirement as save extraction. The corrected `0x0920` path is hardware-qualified
+in 0.10.2: a DumpRom save following a two-bank FFTA allocation survived a fresh
+tool session and matched the input byte-for-byte by SHA-256.
 
 ### Build or write a multi-ROM image
 

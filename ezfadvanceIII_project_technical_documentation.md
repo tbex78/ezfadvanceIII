@@ -2785,8 +2785,11 @@ to `0x0900` instead of using `0x0920`, overwriting half of FFTA. The corrected
 software allocates banks cumulatively in catalog order using marker-derived
 capacity: SRAM/EEPROM reserves one bank, FLASH512/FLASH two, and FLASH1M four.
 Unknown predecessor sizes and allocations beyond four banks are rejected.
-This corrected behavior intentionally differs from the captured manager bug
-and awaits real-hardware qualification.
+This corrected behavior intentionally differs from the captured manager bug.
+It is hardware-qualified on the FFTA + DumpRom layout: the tool wrote and
+verified DumpRom at `0x0920`, a fresh invocation extracted the same bank, and
+both files matched SHA-256
+`c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
 
 ---
 
@@ -2799,7 +2802,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.10.2 baseline compiled and transcript-tested; extracted backend specifically requalified with the two-ROM exact-8-MiB path; save writing awaits hardware qualification; other prior qualifications retained; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.10.2 baseline compiled and transcript-tested; extracted backend specifically requalified with the two-ROM exact-8-MiB path; corrected DumpRom bank-2 save writing qualified on the FFTA + DumpRom layout; other prior qualifications retained; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending

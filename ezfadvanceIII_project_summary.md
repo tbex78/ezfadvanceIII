@@ -1317,4 +1317,7 @@ written to the first two banks, but the original manager then incorrectly
 restarts a 32-KiB DumpRom save at `0x0900`, overwriting FFTA. The corrected
 tool allocates banks cumulatively from marker-derived save capacities, placing
 DumpRom at `0x0920` in this layout. Unknown or overflowing layouts are refused.
-Hardware qualification of the corrected allocation remains pending.
+The corrected allocation is hardware-qualified on the observed FFTA + DumpRom
+layout. DumpRom was written and verified at `0x0920`, then extracted in a fresh
+tool session; the input and extracted files shared SHA-256
+`c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
