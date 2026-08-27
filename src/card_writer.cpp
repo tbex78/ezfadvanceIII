@@ -27,6 +27,7 @@ CardWriteResult CardWriter::write(const std::vector<std::uint8_t>& image,
            << "Flash-window pre-AA55 settle: fixed 125 ms.\n"
            << "ROM payload: one Windows-style 64-KiB BULK OUT request.\n";
     if (ok) ok = backend_.prepareGlobalWrite();
+    const bool save_banks_need_final_clear = ok;
     if (ok) ok = backend_.selectWindowZeroForErase();
     if (ok) ok = backend_.erase(image.size());
     if (ok) ok = backend_.finalizeFlashState();
@@ -94,6 +95,15 @@ CardWriteResult CardWriter::write(const std::vector<std::uint8_t>& image,
             }
             break;
         }
+    }
+
+    // Erase/program window setup uses capture-required one-byte transfers that
+    // address save offsets 0 and 1. Always attempt a final four-bank clear once
+    // the initial global setup succeeded, including after later failures.
+    if (save_banks_need_final_clear) {
+        report << "\nClearing all four save banks after ROM programming workflow.\n";
+        const bool clear_ok = backend_.clearSaveBanks();
+        ok = ok && clear_ok;
     }
 
     result.status = ok ? CardWriteStatus::success : CardWriteStatus::operation_failed;

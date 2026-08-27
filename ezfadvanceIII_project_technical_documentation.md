@@ -2843,6 +2843,17 @@ All verification geometries now retain only their two-byte mapping controls;
 the complete offline 8/12/16/20/24/28/32-MiB, tiny-tail, and partial-window
 transcript matrix passes. Writer-side physical requalification is pending.
 
+The initial physical rerun proved ROM programming, exact-8-MiB verification,
+menu boot, and both game boots, but the final `0x0900` zero check failed. The
+remaining source was not verification: capture-required erase/program window
+setup also sends the one-byte transactions after the original global save
+clear. The writer now repeats the capture-derived four-bank zero payload step
+after the complete workflow and attempts that final clear after any failure
+following successful global setup. A second physical run passed programming,
+exact-8-MiB full verification, menu boot, and both game boots. Subsequent
+read-only checks verified every byte of all four selectors (`0x0900` through
+`0x0930`) was zero, hardware-qualifying the corrected ordering.
+
 ---
 
 ## 37. Build environment and native platform scope

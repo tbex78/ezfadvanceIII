@@ -1328,6 +1328,16 @@ verification geometry, and the complete offline verification transcript matrix
 passes with control-only mapping. Writer hardware requalification remains the
 next checkpoint.
 
+The first writer hardware rerun passed programming, exact-8-MiB verification,
+menu boot, and both game boots, but bank `0x0900` was not all zero. Audit showed
+that capture-required erase/program window selection occurs after the original
+four-bank clear and also writes save offsets 0/1. The workflow now repeats the
+four-bank zeroing after verification or cleanup, and attempts it after any
+post-setup failure. The second hardware rerun passed programming, exact-8-MiB
+verification, EZ3 menu boot, and both game boots; read-only checks then verified
+all 32768 bytes of each selector `0x0900`, `0x0910`, `0x0920`, and `0x0930`
+were zero.
+
 ## 0.11.0 development changes
 
 The save utility now supports capture-derived 64-KiB `FLASH512` save access.

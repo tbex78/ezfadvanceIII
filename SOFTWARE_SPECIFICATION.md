@@ -238,6 +238,13 @@ Post-program ROM verification must follow the same rule: no `tx92One` mapping
 or status transaction is permitted. Every verification geometry uses only the
 two-byte control sequence so programming verification cannot rewrite save
 offsets 0 or 1 after save-bank initialization.
+Because capture-required erase/program window selection itself uses one-byte
+transactions, the writer must clear all four save banks again after the entire
+ROM workflow. This final clear is attempted after both success and any failure
+occurring after the initial global setup.
+The corrected ordering is hardware-qualified with the established exact-8-MiB
+two-ROM workflow; afterward, all four 32-KiB banks were independently verified
+to contain only zero bytes.
 
 The four proven 32-KiB banks are allocated cumulatively in catalog order:
 `0x0900`, `0x0910`, `0x0920`, and `0x0930`. Marker-derived capacity reserves

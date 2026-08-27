@@ -12,6 +12,7 @@ public:
     virtual bool preflight() = 0;
     virtual bool initializeBridge() = 0;
     virtual bool prepareGlobalWrite() = 0;
+    virtual bool clearSaveBanks() = 0;
     virtual bool selectWindowZeroForErase() = 0;
     virtual bool erase(std::size_t image_size) = 0;
     virtual bool finalizeFlashState() = 0;

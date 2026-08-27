@@ -26,6 +26,7 @@ public:
     bool preflight() override { return call("preflight"); }
     bool initializeBridge() override { return call("initialize"); }
     bool prepareGlobalWrite() override { return call("prepare"); }
+    bool clearSaveBanks() override { return call("clear-saves"); }
     bool selectWindowZeroForErase() override { return call("erase-window"); }
     bool erase(std::size_t) override { return call("erase"); }
     bool finalizeFlashState() override { return call("finalize"); }
@@ -74,6 +75,7 @@ void expect_dispatch(std::size_t image_size, const char* verification_call)
     std::vector<std::string> wanted;
     for (const char* item : write_prefix) wanted.emplace_back(item);
     wanted.emplace_back(verification_call);
+    wanted.emplace_back("clear-saves");
     expect(backend.calls == wanted, "verification mode dispatched incorrectly");
 }
 
@@ -115,28 +117,35 @@ int main()
     expect_failure("initialize", {"preflight", "initialize"});
     expect_failure("prepare", {"preflight", "initialize", "prepare"});
     expect_failure("erase-window", {"preflight", "initialize", "prepare",
-                                     "erase-window"});
+                                     "erase-window", "clear-saves"});
     expect_failure("erase", {"preflight", "initialize", "prepare",
-                              "erase-window", "erase"});
+                              "erase-window", "erase", "clear-saves"});
     expect_failure("finalize", {"preflight", "initialize", "prepare",
-                                 "erase-window", "erase", "finalize"});
+                                 "erase-window", "erase", "finalize",
+                                 "clear-saves"});
     expect_failure("program-window", {"preflight", "initialize", "prepare",
                                        "erase-window", "erase", "finalize",
-                                       "program-window"});
+                                       "program-window", "clear-saves"});
     expect_failure("program", {"preflight", "initialize", "prepare",
                                 "erase-window", "erase", "finalize",
-                                "program-window", "program"});
+                                "program-window", "program", "clear-saves"});
     expect_failure("verify-partial-first", {"preflight", "initialize", "prepare",
                                              "erase-window", "erase", "finalize",
                                              "program-window", "program",
-                                             "verify-partial-first"});
+                                             "verify-partial-first",
+                                             "clear-saves"});
+    expect_failure("clear-saves", {"preflight", "initialize", "prepare",
+                                    "erase-window", "erase", "finalize",
+                                    "program-window", "program",
+                                    "verify-partial-first", "clear-saves"});
     {
         FakeBackend backend;
         std::ostringstream report;
         const auto result = ezfadvance::CardWriter(backend).write({1}, true, report);
         expect(result.verification_skipped_by_user, "skip-verify cleanup should succeed");
         expect_calls(backend, {"preflight", "initialize", "prepare", "erase-window",
-                               "erase", "finalize", "program-window", "program", "finalize"});
+                               "erase", "finalize", "program-window", "program",
+                               "finalize", "clear-saves"});
     }
     {
         FakeBackend backend;
@@ -150,7 +159,7 @@ int main()
                "failed cleanup must not report successful skip");
         expect_calls(backend, {"preflight", "initialize", "prepare", "erase-window",
                                "erase", "finalize", "program-window", "program",
-                               "finalize"});
+                               "finalize", "clear-saves"});
     }
     {
         FakeBackend backend;
@@ -160,7 +169,7 @@ int main()
         expect(result.verification_skipped_unproven, "unproven geometry should be reported");
         expect_calls(backend, {"preflight", "initialize", "prepare", "erase-window",
                                "erase", "finalize", "program-window", "program",
-                               "finalize"});
+                               "finalize", "clear-saves"});
     }
     {
         FakeBackend backend;
@@ -175,7 +184,7 @@ int main()
                "failed cleanup must not report unsupported skip");
         expect_calls(backend, {"preflight", "initialize", "prepare", "erase-window",
                                "erase", "finalize", "program-window", "program",
-                               "finalize"});
+                               "finalize", "clear-saves"});
     }
 
     std::cout << "card writer tests passed\n";

@@ -1188,6 +1188,10 @@ public:
     bool prepareGlobalWrite() {
         return captured_global_write_setup(handle_, false, 0, verbose_);
     }
+    bool clearSaveBanks() {
+        std::cout << "\nClearing all four save banks after ROM workflow...\n";
+        return captured_global_write_setup(handle_, false, 0, verbose_);
+    }
     bool selectWindowZeroForErase() {
         return flash_bank0_setup(handle_, 125000, false);
     }
