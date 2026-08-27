@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.10.2` toolset, including guarded
+**Specification baseline:** shared `0.11.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -195,20 +195,21 @@ Responsibilities:
 - inspect the cartridge catalog;
 - scan ROM allocation spans for known save-library markers;
 - require an explicit catalog-ROM choice for multi-ROM layouts;
-- read capture-proven 32 KiB SRAM save data;
+- read supported 32 KiB SRAM and 64 KiB FLASH512 save data;
 - write extracted bytes to a local `.sav` file;
-- back up, write, and verify capture-proven 32 KiB SRAM save data.
+- back up, write, and verify supported 32 KiB SRAM and 64 KiB FLASH512 data.
 
 On single-ROM cards, the reader selects ROM 1 automatically. On multi-ROM
 cards, it must display the catalog and require `--rom N`; it must not infer a
 choice even when exactly one `SRAM_V111` marker is present. The selected ROM
-must identify a supported `SRAM_V111` entry. Missing or mismatched candidates,
+must identify a supported `SRAM_V111` or `FLASH512` entry. Missing or mismatched candidates,
 unsupported save formats, unknown predecessor capacity, and cumulative layouts
 larger than four banks must be refused.
 
 Save writing must require `--write FILE`, `--backup FILE`, and
-`--yes-really-write`. The input must be exactly 32768 bytes and the backup path
-must not already exist. The current save must be read and the backup completed
+`--yes-really-write`. The input must be exactly 32768 or 65536 bytes and must
+equal the selected ROM's allocated capacity. The backup path must not already
+exist. The current save must be read and the backup completed
 before the first save-write payload is sent. A bounded readiness transition is
 required before and after the captured `0x92/01` write. The tool must then read
 the full save through the proven `0x91/01` path. The read-back must match every
@@ -236,8 +237,9 @@ ezfadvanceIII_save_reader --write FILE.sav --backup ORIGINAL.sav \
     --yes-really-write [--rom N]
 ```
 
-The supported application path is `SRAM_V111`, one cumulatively allocated
-selector from `0x0900` through `0x0930`, and one `0x8000`-byte read. Other SRAM
+The supported application paths are `SRAM_V111` with one 32-KiB bank and
+`FLASH512` with two consecutive 32-KiB banks, cumulatively allocated from
+`0x0900` through `0x0930`. Other SRAM
 signatures may be reported during scanning but must not be exported as if their
 size or bank selection were proven.
 `--rom` identifies catalog intent and selects the corresponding cumulatively
@@ -428,12 +430,13 @@ provided image limit.
 #### `SaveMemoryReader`
 
 Owns capture-proven save-bank selection and 32/64 KiB save reads. Current
-application policy permits only the proven 32 KiB `SRAM_V111` path.
+application policy permits 32 KiB `SRAM_V111` and 64 KiB `FLASH512`.
 
 #### `SaveMemoryWriter`
 
 Owns the capture-derived eight-transfer save-bank selection sequence and the
-exact 32 KiB `0x92/01` command, payload, and command-echo transaction. It is
+exact 32 KiB `0x92/01` command, payload, and command-echo transaction. A
+64-KiB save is split into two consecutive bank transactions. It is
 transport-injectable so the destructive transcript can be tested offline.
 
 #### `VerificationPolicy`

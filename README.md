@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.10.2**.
+version is **0.11.0**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.10.2
+“pending,” and “next” describe the named review point, not the present 0.11.0
 support boundary.
 
 ## Build and test
@@ -103,10 +103,11 @@ extraction; `--verbose` selects per-block timing and throughput diagnostics.
 ```
 
 Save/catalog processing is restricted to a cartridge positively classified as
-EZ3 flash. The currently capture-proven save path is 32-KiB `SRAM_V111`.
+EZ3 flash. Supported save paths are 32-KiB `SRAM_V111` and 64-KiB
+`FLASH512`.
 Single-ROM layouts select ROM 1 automatically. Multi-ROM layouts require an
-explicit `--rom N` choice, and the selected ROM must have the capture-proven
-`SRAM_V111` format. Its bank is derived from cumulative catalog-order save
+explicit `--rom N` choice, and the selected ROM must have a supported format.
+Its bank and capacity are derived from cumulative catalog-order save
 allocation; unknown predecessor capacity and layouts exceeding four banks are
 refused.
 
@@ -120,8 +121,9 @@ refused.
   [--rom N]
 ```
 
-Save writing is deliberately restricted to 32-KiB `SRAM_V111` input. The
-input must be exactly 32768 bytes. Save banks are allocated cumulatively in
+The input must be exactly 32768 bytes for `SRAM_V111` or 65536 bytes for
+`FLASH512`, matching the selected ROM's allocated save capacity. A 64-KiB save
+is split across two consecutive 32-KiB transfers. Save banks are allocated cumulatively in
 catalog order across the four captured selectors `0x0900` through `0x0930`.
 For example, a preceding 64-KiB `FLASH512` allocation reserves `0x0900` and
 `0x0910`, so the following 32-KiB ROM uses `0x0920`.
@@ -132,6 +134,8 @@ performs the captured `0x92/01` transfer, and then requires a full byte-for-byte
 requirement as save extraction. The corrected `0x0920` path is hardware-qualified
 in 0.10.2: a DumpRom save following a two-bank FFTA allocation survived a fresh
 tool session and matched the input byte-for-byte by SHA-256.
+The 64-KiB FFTA write path is capture-derived and transcript-tested but awaits
+real-hardware qualification in 0.11.0.
 
 ### Build or write a multi-ROM image
 

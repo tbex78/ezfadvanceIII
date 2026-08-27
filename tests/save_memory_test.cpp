@@ -67,11 +67,40 @@ void testAllocatedThirdBankWriteTranscript()
     assert(transport.complete());
 }
 
+void expectWriteBank(ezfadvance::test::TranscriptTransport& transport,
+                     std::uint16_t selector,
+                     const std::vector<std::uint8_t>& save)
+{
+    expectSelector(transport, selector);
+    const std::vector<std::uint8_t> command = {
+        0x5A, 0xA5, 0x92, 0x01, 0, 0, 0, 0,
+        0, 0x80, 0, 0, 0};
+    transport.expectOut(command, timeout_ms)
+             .expectOut(save, timeout_ms)
+             .expectInMax(command, 64, timeout_ms);
+}
+
+void testCaptured64KiBWriteTranscript()
+{
+    ezfadvance::test::TranscriptTransport transport;
+    const std::vector<std::uint8_t> first(0x8000, 0x11);
+    const std::vector<std::uint8_t> second(0x8000, 0x22);
+    expectWriteBank(transport, 0x0900, first);
+    expectWriteBank(transport, 0x0910, second);
+
+    std::vector<std::uint8_t> save = first;
+    save.insert(save.end(), second.begin(), second.end());
+    ezfadvance::SaveMemoryWriter writer(transport);
+    assert(writer.write(0x0900, save));
+    assert(transport.complete());
+}
+
 void testWrongSizeRejectedBeforeUsb()
 {
     ezfadvance::test::TranscriptTransport transport;
     ezfadvance::SaveMemoryWriter writer(transport);
     assert(!writer.write32KiB(0x0900, std::vector<std::uint8_t>(0x7fff)));
+    assert(!writer.write(0x0900, std::vector<std::uint8_t>(0x18000)));
     assert(transport.complete());
 }
 
@@ -112,13 +141,39 @@ void testCapturedReadTranscript()
     assert(transport.complete());
 }
 
+void testCaptured64KiBReadTranscript()
+{
+    ezfadvance::test::TranscriptTransport transport;
+    const std::vector<std::uint8_t> first(0x8000, 0x11);
+    const std::vector<std::uint8_t> second(0x8000, 0x22);
+    const std::vector<std::uint8_t> command = {
+        0x5A, 0xA5, 0x91, 0x01, 0, 0, 0, 0,
+        0, 0x80, 0, 0, 0};
+    expectSelector(transport, 0x0900);
+    transport.expectOut(command, timeout_ms)
+             .expectInExact(first, first.size(), timeout_ms);
+    expectSelector(transport, 0x0910);
+    transport.expectOut(command, timeout_ms)
+             .expectInExact(second, second.size(), timeout_ms);
+
+    std::vector<std::uint8_t> actual;
+    ezfadvance::SaveMemoryReader reader(transport);
+    assert(reader.read(0x10000, actual, 0x0900));
+    std::vector<std::uint8_t> expected = first;
+    expected.insert(expected.end(), second.begin(), second.end());
+    assert(actual == expected);
+    assert(transport.complete());
+}
+
 } // namespace
 
 int main()
 {
     testCapturedWriteTranscript();
     testAllocatedThirdBankWriteTranscript();
+    testCaptured64KiBWriteTranscript();
     testWrongSizeRejectedBeforeUsb();
     testWriteEchoMismatchRejected();
     testCapturedReadTranscript();
+    testCaptured64KiBReadTranscript();
 }

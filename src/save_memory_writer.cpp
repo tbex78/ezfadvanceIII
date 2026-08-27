@@ -68,4 +68,25 @@ bool SaveMemoryWriter::write32KiB(
     return true;
 }
 
+bool SaveMemoryWriter::write(
+    std::uint16_t first_bank,
+    const std::vector<std::uint8_t>& save)
+{
+    if (save.size() != save_size_32k && save.size() != 2 * save_size_32k) {
+        std::cerr << "save write requires exactly 32768 or 65536 bytes\n";
+        return false;
+    }
+
+    for (std::size_t offset = 0; offset < save.size(); offset += save_size_32k) {
+        const auto bank = static_cast<std::uint16_t>(
+            first_bank + (offset / save_size_32k) * 0x10u);
+        const std::vector<std::uint8_t> chunk(
+            save.begin() + static_cast<std::ptrdiff_t>(offset),
+            save.begin() + static_cast<std::ptrdiff_t>(offset + save_size_32k));
+        if (!write32KiB(bank, chunk))
+            return false;
+    }
+    return true;
+}
+
 } // namespace ezfadvance

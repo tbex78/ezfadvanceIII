@@ -24,6 +24,9 @@ int main()
     assert(ffta_dump.selector == 0x0920);
     assert(ezfadvance::saveBankCountForMarker("FLASH1M_V103") == 4);
     assert(ezfadvance::saveBankCountForMarker("EEPROM_V124") == 1);
+    assert(ezfadvance::supportedSaveSizeForMarker("SRAM_V111") == 0x8000);
+    assert(ezfadvance::supportedSaveSizeForMarker("FLASH512") == 0x10000);
+    assert(!ezfadvance::supportedSaveSizeForMarker("FLASH1M_V103"));
 
     assert(ezfadvance::allocateSaveBanks({"(none)", "SRAM_V111"}, 1).status ==
            ezfadvance::SaveBankLayoutStatus::unknown_predecessor_capacity);

@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.10.2**.
+Current shared project/toolset version covered by this summary: **0.11.0**.
 
 All mainline utilities carry this same version:
 
@@ -806,7 +806,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.10.2 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.11.0 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1321,3 +1321,11 @@ The corrected allocation is hardware-qualified on the observed FFTA + DumpRom
 layout. DumpRom was written and verified at `0x0920`, then extracted in a fresh
 tool session; the input and extracted files shared SHA-256
 `c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
+
+## 0.11.0 development changes
+
+The save utility now supports capture-derived 64-KiB `FLASH512` save access.
+It derives the selected ROM's capacity from its save marker, requires the input
+file to match that capacity, backs up both 32-KiB banks, writes consecutive
+selectors, and verifies all 65536 bytes. Offline transcripts cover the exact
+`0x0900` and `0x0910` sequence. Real-hardware qualification remains pending.

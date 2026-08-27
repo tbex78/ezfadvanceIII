@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.10.2`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.10.2`<br>
+**Current project/toolset version:** `0.11.0`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.11.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.10.2 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. The partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail paths retain their earlier hardware qualification. The new 0.10.0 save-write path is capture-derived and transcript-tested but awaits hardware qualification. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.11.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. The partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail paths retain their earlier hardware qualification. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified; the new 64-KiB FFTA path awaits hardware qualification. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -2791,6 +2791,16 @@ verified DumpRom at `0x0920`, a fresh invocation extracted the same bank, and
 both files matched SHA-256
 `c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
 
+### 36.59 0.11.0 — 64-KiB FLASH512 save writing
+
+The save tool derives the selected ROM's supported capacity from its save
+marker: `SRAM_V111` selects one 32-KiB bank and `FLASH512` selects two. A write
+input must match that capacity exactly. The 64-KiB path backs up both banks,
+sends the captured 32-KiB transaction first to the allocated base selector and
+then to the following selector, and verifies the combined 65536-byte result.
+Focused transcript tests lock the `0x0900`/`0x0910` FFTA sequence. This path
+awaits real-hardware qualification.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2802,7 +2812,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.10.2 baseline compiled and transcript-tested; extracted backend specifically requalified with the two-ROM exact-8-MiB path; corrected DumpRom bank-2 save writing qualified on the FFTA + DumpRom layout; other prior qualifications retained; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.11.0 baseline compiled and transcript-tested; extracted backend specifically requalified with the two-ROM exact-8-MiB path; corrected DumpRom bank-2 save writing qualified on the FFTA + DumpRom layout; 64-KiB FFTA save writing awaits hardware qualification; other prior qualifications retained; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3227,7 +3237,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.10.2**, the project has an object-oriented structural model:
+At shared toolset version **0.11.0**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,

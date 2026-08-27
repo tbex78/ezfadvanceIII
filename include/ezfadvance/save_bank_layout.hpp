@@ -35,6 +35,16 @@ inline std::optional<std::size_t> saveBankCountForMarker(
     return std::nullopt;
 }
 
+inline std::optional<std::size_t> supportedSaveSizeForMarker(
+    const std::string& marker) noexcept
+{
+    if (marker == "SRAM_V111")
+        return 0x8000;
+    if (marker.rfind("FLASH512", 0) == 0)
+        return 0x10000;
+    return std::nullopt;
+}
+
 // Corrected cumulative allocation for the four capture-proven 32-KiB save
 // banks. Unlike the original manager's standalone importer, later ROMs do not
 // restart at selector 0x0900 and overwrite their predecessors.
