@@ -610,32 +610,7 @@ static void usage(const char* argv0)
         << "              Without it, erase/program/verify use live progress bars.\n\n"
         << "Optional capture-metadata overrides:\n"
         << "  --type1=2   --type6=3   --type10=4\n"
-        << "  --map1=6    --map6=6    --map10=3\n\n"
-        << "Notes:\n"
-        << "  * No small fixed ROM-count limit is imposed; 1..8 active entries are capture-proven.\n"
-        << "  * The loader contains 120 structural catalog slots; this is a safety bound, not a claim that 120-ROM menu operation is proven.\n"
-        << "  * Total input ROM file size must not exceed 32 MiB / 256 Mbit.\n"
-        << "  * No intermediate .bin image is written to disk.\n"
-        << "  * FLASH/FLASH512/FLASH1M/EEPROM signatures emit a conservative warning.\n"
-        << "    Each warning requires an explicit y/yes response to continue.\n"
-        << "    This writer never patches save routines automatically.\n"
-        << "    If SRAM conversion is desired, patch the ROM manually with a separate tool first.\n"
-        << "  * EEPROM_V alone does not determine map 4 vs 5; use --mapN explicitly for EEPROM ROMs.\n"
-        << "  * The constructed in-memory image must fit in the 32 MiB / 256-Mbit cartridge.\n"
-        << "  * Full-size single ROMs may place the loader inside trailing/internal FF space.\n"
-        << "  * Catalog type is derived from ROM size class (32 MiB=0 ... 64 KiB=9).\n"
-        << "  * FLASH-family metadata maps to 6; SRAM/other to 3; EEPROM requires explicit map 4/5.\n"
-        << "  * Multi-ROM input is stable-sorted by descending file size, matching captures.\n"
-        << "  * Equal-size ROMs keep their original relative order.\n"
-        << "  * Smaller ROMs may reuse trailing FF padding of earlier ROMs.\n"
-        << "  * The multi-ROM loader is embedded in a suitable FF run when possible.\n"
-        << "  * Physical/catalog ROM #1 is patched to branch to the EZF loader/menu.\n"
-        << "  * Every constructed image below 8 MiB is fully read-back verified.\n"
-        << "  * Exact 8/16/24/32-MiB readback paths are capture-proven.\n"
-        << "  * Other partial higher-window geometries remain verify-skipped until captured.\n"
-        << "  * --skip-verify skips all post-write ROM read-back comparison.\n"
-        << "    A short status/reset cleanup is still sent after programming.\n"
-        << "  * Without --yes-really-write, no USB device is touched and nothing is written.\n";
+        << "  --map1=6    --map6=6    --map10=3\n";
 }
 
 int main(int argc, char** argv)
