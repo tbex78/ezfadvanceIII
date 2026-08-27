@@ -216,6 +216,13 @@ the full save through the proven `0x91/01` path. The read-back must match every
 input byte. A mismatch is failure,
 not partial success. The save tool must never erase flash or program ROM data.
 
+Immediate same-session verification is distinct from persistence across a
+completed session and later initialization. In the 0.11.0 FFTA hardware test,
+the immediate 65536-byte comparison passed, while a fresh extraction differed
+only at offsets 0 and 1 (`FF FF` became `00 04`). The software must not silently
+normalize or ignore those bytes until the mutation's cause and meaning are
+proven.
+
 The four proven 32-KiB banks are allocated cumulatively in catalog order:
 `0x0900`, `0x0910`, `0x0920`, and `0x0930`. Marker-derived capacity reserves
 one bank for SRAM/EEPROM, two for FLASH512/FLASH, and four for FLASH1M. Unknown

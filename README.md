@@ -134,8 +134,11 @@ performs the captured `0x92/01` transfer, and then requires a full byte-for-byte
 requirement as save extraction. The corrected `0x0920` path is hardware-qualified
 in 0.10.2: a DumpRom save following a two-bank FFTA allocation survived a fresh
 tool session and matched the input byte-for-byte by SHA-256.
-The 64-KiB FFTA write path is capture-derived and transcript-tested but awaits
-real-hardware qualification in 0.11.0.
+The 64-KiB FFTA path completed both bank writes, immediate verification, and a
+successful real-GBA load. A fresh tool invocation differed from the input only
+at offsets `0x0000..0x0001`: requested `FF FF` became `00 04`; the remaining
+65534 bytes matched. It is not yet known whether cleanup, later initialization,
+controller persistence, or another protocol effect causes this mutation.
 
 ### Build or write a multi-ROM image
 

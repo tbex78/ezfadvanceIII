@@ -1328,4 +1328,17 @@ The save utility now supports capture-derived 64-KiB `FLASH512` save access.
 It derives the selected ROM's capacity from its save marker, requires the input
 file to match that capacity, backs up both 32-KiB banks, writes consecutive
 selectors, and verifies all 65536 bytes. Offline transcripts cover the exact
-`0x0900` and `0x0910` sequence. Real-hardware qualification remains pending.
+`0x0900` and `0x0910` sequence.
+
+On real hardware, both writes and immediate byte-for-byte verification passed,
+FFTA loaded successfully on a GBA, and the following DumpRom save at `0x0920`
+remained SHA-256 identical. A fresh FFTA extraction differed from the input in
+exactly two bytes: offsets 0 and 1 changed from `FF FF` to `00 04`; bytes
+`0x0002..0xFFFF` were identical. The mutation occurs after immediate
+verification but has not been isolated to session cleanup, subsequent
+initialization, controller persistence, or another protocol effect.
+
+The next controlled investigation must read the save immediately after the
+write, after `finishSession()` without reinitialization, and after close/reopen
+plus initialization. No automatic normalization or verification exception is
+authorized before that cause is proven.
