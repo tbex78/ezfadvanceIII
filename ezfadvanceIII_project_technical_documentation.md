@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.9.0`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.9.0`<br>
+**Current project/toolset version:** `0.10.0`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.10.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.9.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. The partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail paths retain their earlier hardware qualification and are mechanically preserved in 0.9.0; they were not all physically rerun for this release. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.10.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. The partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail paths retain their earlier hardware qualification. The new 0.10.0 save-write path is capture-derived and transcript-tested but awaits hardware qualification. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -1816,9 +1816,10 @@ The project historically recommends a fresh USB unplug/replug before some wipe e
 
 ## 29. Save-memory companion work
 
-The mainline `ezfadvanceIII_save_reader` implements read-only save extraction.
-Historical save-write experiments remain research material and are not exposed
-by the maintained toolset.
+The mainline `ezfadvanceIII_save_reader` implements save extraction and, from
+0.10.0, a guarded 32-KiB save-write path derived directly from
+`writesav.pcap`. The writer requires a completed backup before the payload,
+explicit destructive authorization, and full read-back verification.
 
 Capture-derived save access uses a different command mode from ROM reads/writes.
 
@@ -1836,6 +1837,14 @@ A Bios_Dumper save-reader test produced an exact 32-KiB hardware match. The
 object-oriented `SaveMemoryReader` refactor was subsequently tested against the
 same multi-ROM Castlevania + Bios_Dumper card, and repeated dumps were
 byte-identical.
+
+The 0.10.0 writer emits the eight captured `0x92/02` selector exchanges,
+selector `0x0900`, the exact `0x92/01` 32768-byte command, one 32768-byte OUT
+payload, and validates the returned command echo. It then uses the established
+bounded readiness transition before the independently proven save-read path.
+The resulting 32768 bytes must match the input exactly. The transaction is
+locked by an injectable-transport test; real-hardware qualification is the
+next required checkpoint.
 
 Multi-ROM save selection remains a separate area of reverse engineering and should not be conflated with the ROM catalog `map` byte.
 
@@ -2723,6 +2732,25 @@ unsupported-geometry and `--skip-verify` cleanup (including cleanup failures),
 and short-circuit failures at preflight, initialization, preparation, erase,
 programming, and verification stages.
 
+### 36.56 0.10.0 — guarded SRAM save writing
+
+The save utility now exposes the exact 32-KiB `SRAM_V111` transaction captured
+in `writesav.pcap`: eight `0x92/02` selector exchanges ending at selector
+`0x0900`, an `0x92/01` command declaring `0x8000` bytes, one payload OUT, and
+the matching command echo. The application accepts only an exact 32768-byte
+input and requires `--backup FILE` plus `--yes-really-write`. It refuses an
+existing backup path, saves the current cartridge contents first, performs the
+bounded readiness transition before writing and again before verification, and
+requires a complete byte-for-byte read-back match through the independently
+proven `0x91/01` path.
+
+The same unique-`SRAM_V111` and explicit multi-ROM selection policy remains in
+force; the new option does not invent a save-slot switch or generalize to
+other SRAM, EEPROM, or Flash formats. Offline transcript tests cover the exact
+read/write transfers and failure checks. Real-hardware save backup, write,
+read-back, and game-load validation remain required before this path is called
+hardware-proven.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2734,7 +2762,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.9.0 baseline compiled and transcript-tested; extracted backend specifically requalified with the two-ROM exact-8-MiB path; partial-first-window, partial-12-/20-/28-MiB, exact-16-/24-/32-MiB, and tiny-tail paths retain prior hardware qualification and are mechanically preserved; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.10.0 baseline compiled and transcript-tested; extracted backend specifically requalified with the two-ROM exact-8-MiB path; save writing awaits hardware qualification; other prior qualifications retained; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3159,7 +3187,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.9.0**, the project has an object-oriented structural model:
+At shared toolset version **0.10.0**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,

@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.9.0` toolset, including guarded
+**Specification baseline:** shared `0.10.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -186,7 +186,7 @@ as official-cartridge extraction. `--verbose` must replace it with per-block
 address, timing, and throughput diagnostics without changing transferred or
 written bytes.
 
-### 3.3 Save reader
+### 3.3 Save reader/writer
 
 Executable: `ezfadvanceIII_save_reader`
 
@@ -196,7 +196,8 @@ Responsibilities:
 - scan ROM allocation spans for known save-library markers;
 - require an explicit catalog-ROM choice for multi-ROM layouts;
 - read capture-proven 32 KiB SRAM save data;
-- write the returned bytes to a local `.sav` file.
+- write extracted bytes to a local `.sav` file;
+- back up, write, and verify capture-proven 32 KiB SRAM save data.
 
 On single-ROM cards, the reader selects ROM 1 automatically. On multi-ROM
 cards, it must display the catalog and require `--rom N`; it must not infer a
@@ -205,7 +206,15 @@ candidate must exist and `N` must identify it. Zero candidates, multiple
 candidates, mismatched selections, and unsupported save formats must be
 refused because no general hardware save-slot switch has been proven.
 
-The save reader must not write save memory, erase flash, or program ROM data.
+Save writing must require `--write FILE`, `--backup FILE`, and
+`--yes-really-write`. The input must be exactly 32768 bytes and the backup path
+must not already exist. The current save must be read and the backup completed
+before the first save-write payload is sent. A bounded readiness transition is
+required before the captured `0x92/01` write and again before the tool reads
+the full save through the proven `0x91/01` path. The read-back must match every
+input byte. A mismatch is failure,
+not partial success. The save tool must never erase flash or program ROM data.
+
 It must require `CartridgeKind::ez3_flash` after shared initialization and
 before EZ3 loader, catalog, ROM-allocation, or save-bank processing. Official
 and unknown cartridges must be rejected and read-session cleanup attempted.
@@ -216,6 +225,8 @@ Supported invocations are:
 ezfadvanceIII_save_reader
 ezfadvanceIII_save_reader --output FILE.sav
 ezfadvanceIII_save_reader --rom N [--output FILE.sav]
+ezfadvanceIII_save_reader --write FILE.sav --backup ORIGINAL.sav \
+    --yes-really-write [--rom N]
 ```
 
 The capture-proven application path is `SRAM_V111`, selector `0x0900`, and
@@ -409,6 +420,12 @@ provided image limit.
 
 Owns capture-proven save-bank selection and 32/64 KiB save reads. Current
 application policy permits only the proven 32 KiB `SRAM_V111` path.
+
+#### `SaveMemoryWriter`
+
+Owns the capture-derived eight-transfer save-bank selection sequence and the
+exact 32 KiB `0x92/01` command, payload, and command-echo transaction. It is
+transport-injectable so the destructive transcript can be tested offline.
 
 #### `VerificationPolicy`
 

@@ -36,18 +36,19 @@
 #include "ezfadvance/ez3_catalog.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"
+#include "ezfadvance/save_memory_writer.hpp"
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
-// EZF Advance III save reader 0.9.0, read-only dumper.
+// EZF Advance III save reader/writer 0.10.0.
 // 0.6.2 removes hard-coded project-version text from runtime output.
 // Save-read protocol behavior remains unchanged from 0.5.10.
 //
 // Ported from the historical save-reader v2 implementation. The USB/save
 // protocol and conservative safety behavior are intentionally unchanged.
-// This utility never sends erase (0x96) commands and never sends ROM-program
-// payloads. Its 0x92 traffic is limited to the capture-derived EZ3Manager
-// probe/mapping command sequences needed to read the cartridge.
+// This utility never sends erase (0x96) commands or ROM-program payloads. Save
+// writing is limited to the capture-derived 32-KiB SRAM_V111 transaction and
+// requires backup, explicit authorization, and byte-for-byte verification.
 //
 // Supported native targets:
 //   macOS
@@ -166,6 +167,33 @@ static bool read_save_capture(libusb_device_handle* h,
     return ezfadvance::SaveMemoryReader(h).read(save_size, save);
 }
 
+static bool write_binary_file_without_overwrite(
+    const std::string& path,
+    const std::vector<uint8_t>& data)
+{
+    std::ifstream existing(path, std::ios::binary);
+    if (existing.good()) {
+        std::cerr << "Refusing to overwrite existing backup file: "
+                  << path << '\n';
+        return false;
+    }
+    existing.close();
+
+    std::ofstream output(path, std::ios::binary);
+    if (!output) {
+        std::cerr << "Could not create backup file: " << path << '\n';
+        return false;
+    }
+    output.write(reinterpret_cast<const char*>(data.data()),
+                 static_cast<std::streamsize>(data.size()));
+    output.close();
+    if (!output) {
+        std::cerr << "Failed while writing backup file: " << path << '\n';
+        return false;
+    }
+    return true;
+}
+
 static bool contains_pattern(const std::vector<uint8_t>& data,
                              const std::string& pattern)
 {
@@ -244,7 +272,9 @@ static std::string safe_filename_component(std::string s)
 
 static int inspect_and_dump_save(libusb_device_handle* h,
                                  const std::optional<std::string>& requested_output,
-                                 const std::optional<size_t>& requested_rom)
+                                 const std::optional<size_t>& requested_rom,
+                                 const std::optional<std::vector<uint8_t>>& write_save,
+                                 const std::optional<std::string>& backup_path)
 {
     std::vector<uint8_t> first;
     if (!read_card(h,0,first,4)) return 2;
@@ -306,7 +336,7 @@ static int inspect_and_dump_save(libusb_device_handle* h,
     }
 
     std::cout << "\n========================================\n"
-              << "EZF ADVANCE III SAVE READER - CARD CONTENTS\n"
+              << "EZF ADVANCE III SAVE TOOL - CARD CONTENTS\n"
               << "========================================\n"
               << "Layout       : " << (is_single ? "single ROM" : "multi ROM") << "\n"
               << "ROM count    : " << rom_count << "\n"
@@ -340,7 +370,7 @@ static int inspect_and_dump_save(libusb_device_handle* h,
     if (selection.status == ezfadvance::SaveSelectionStatus::rom_required) {
         std::cerr
             << "\nThis is a multi-ROM card. Specify the ROM whose save "
-               "should be extracted with --rom N.\n"
+               "should be accessed with --rom N.\n"
             << "Example: ezfadvanceIII_save_reader --rom 2 "
                "--output file.sav\n";
         return 4;
@@ -383,13 +413,72 @@ static int inspect_and_dump_save(libusb_device_handle* h,
                      "selection command before selector 0x0900.\n";
     }
 
-    std::cout << "\nDumping save for ROM " << (selected+1) << ": "
+    std::cout << "\nReading save for ROM " << (selected+1) << ": "
               << chosen.e.name << "\n";
 
     std::vector<uint8_t> save;
     if (!read_save_capture(h,0x8000,save)) {
         std::cerr << "Save read failed.\n";
         return 2;
+    }
+
+    if (write_save) {
+        if (!backup_path) {
+            std::cerr << "Internal error: save writing requires a backup path.\n";
+            return 1;
+        }
+        if (!write_binary_file_without_overwrite(*backup_path, save))
+            return 5;
+
+        std::cout << "Existing save backed up to: " << *backup_path << "\n";
+        if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+            std::cerr << "Pre-write readiness transition failed. No save-write "
+                         "payload was sent. Backup: " << *backup_path << '\n';
+            return 2;
+        }
+
+        std::cout << "Writing 32768-byte save with selector 0x0900...\n";
+        if (!ezfadvance::SaveMemoryWriter(h).write32KiB(0x0900, *write_save)) {
+            std::cerr << "Save write failed. The original backup is available at "
+                      << *backup_path << ".\n";
+            return 2;
+        }
+
+        // The captured write is followed by 0x98 readiness polls. Reuse the
+        // established bounded transition before issuing the independently
+        // capture-proven 0x91 read used for mandatory verification.
+        if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+            std::cerr << "Post-write readiness transition failed. The save was "
+                         "not verified. Backup: " << *backup_path << '\n';
+            return 2;
+        }
+
+        std::vector<uint8_t> verification;
+        std::cout << "Reading save back for byte-for-byte verification...\n";
+        if (!read_save_capture(h, 0x8000, verification)) {
+            std::cerr << "Save read-back failed. Backup: " << *backup_path << '\n';
+            return 2;
+        }
+        if (verification != *write_save) {
+            const auto mismatch = std::mismatch(
+                verification.begin(), verification.end(), write_save->begin());
+            const auto offset = static_cast<size_t>(
+                std::distance(verification.begin(), mismatch.first));
+            std::cerr << "SAVE VERIFICATION FAILED at byte offset 0x"
+                      << std::hex << offset << std::dec
+                      << ". Backup: " << *backup_path << '\n';
+            return 6;
+        }
+
+        std::cout << "\n========================================\n"
+                  << "SAVE WRITE AND VERIFICATION COMPLETE\n"
+                  << "========================================\n"
+                  << "ROM          : " << (selected+1) << " / " << rom_count << "\n"
+                  << "Backup       : " << *backup_path << "\n"
+                  << "Size         : 32768 bytes (32 KiB)\n"
+                  << "Write        : 0x92/01, selector 0x0900, one 0x8000-byte OUT\n"
+                  << "Verification : full byte-for-byte 0x91/01 read-back matched\n";
+        return 0;
     }
 
     std::string output;
@@ -427,8 +516,8 @@ static int inspect_and_dump_save(libusb_device_handle* h,
               << "Non-zero     : " << nonzero << " bytes\n"
               << "Non-FF       : " << nonff << " bytes\n"
               << "Protocol     : 0x91/01, selector 0x0900, one 0x8000-byte IN\n\n"
-              << "No save-write payload, ROM-program, or erase operation is "
-                 "implemented by this program.\n";
+              << "No save-write payload, ROM-program, or erase operation was "
+                 "performed by this extraction.\n";
     return 0;
 }
 
@@ -436,22 +525,29 @@ class SaveExtractor final {
 public:
     SaveExtractor(libusb_device_handle* handle,
                   std::optional<std::string> output,
-                  std::optional<size_t> requested_rom)
+                  std::optional<size_t> requested_rom,
+                  std::optional<std::vector<uint8_t>> write_save,
+                  std::optional<std::string> backup_path)
         : handle_(handle),
           output_(std::move(output)),
-          requested_rom_(requested_rom)
+          requested_rom_(requested_rom),
+          write_save_(std::move(write_save)),
+          backup_path_(std::move(backup_path))
     {
     }
 
     int run()
     {
-        return inspect_and_dump_save(handle_, output_, requested_rom_);
+        return inspect_and_dump_save(handle_, output_, requested_rom_,
+                                     write_save_, backup_path_);
     }
 
 private:
     libusb_device_handle* handle_;
     std::optional<std::string> output_;
     std::optional<size_t> requested_rom_;
+    std::optional<std::vector<uint8_t>> write_save_;
+    std::optional<std::string> backup_path_;
 };
 
 static void usage(const char* argv0)
@@ -461,7 +557,9 @@ static void usage(const char* argv0)
               << "  " << argv0 << " --version\n"
               << "  " << argv0 << " --output file.sav\n"
               << "  " << argv0 << " --rom N [--output file.sav]\n\n"
-              << "Read-only EZF Advance III save dumper (" << host_platform_name() << ").\n"
+              << "  " << argv0 << " --write file.sav --backup original.sav "
+                 "--yes-really-write [--rom N]\n\n"
+              << "EZF Advance III save reader/writer (" << host_platform_name() << ").\n"
               << "Capture-proven path: SRAM_V111 / Bios_Dumper = 32 KiB, "
                  "selector 0x0900.\n"
               << "On a multi-ROM card, --rom N is required; the reader will not "
@@ -477,6 +575,9 @@ int main(int argc, char** argv)
 
     std::optional<std::string> output;
     std::optional<size_t> requested_rom;
+    std::optional<std::string> write_path;
+    std::optional<std::string> backup_path;
+    bool yes_really_write = false;
 
     for (int i=1;i<argc;++i) {
         const std::string a = argv[i];
@@ -497,12 +598,60 @@ int main(int argc, char** argv)
                 return 1;
             }
             requested_rom = static_cast<size_t>(n);
+        } else if (a == "--write") {
+            if (i+1 >= argc) {
+                usage(argv[0]);
+                return 1;
+            }
+            write_path = argv[++i];
+        } else if (a == "--backup") {
+            if (i+1 >= argc) {
+                usage(argv[0]);
+                return 1;
+            }
+            backup_path = argv[++i];
+        } else if (a == "--yes-really-write") {
+            yes_really_write = true;
         } else if (a == "--help" || a == "-h") {
             usage(argv[0]);
             return 0;
         } else {
             std::cerr << "Unknown option: " << a << '\n';
             usage(argv[0]);
+            return 1;
+        }
+    }
+
+    if (write_path && output) {
+        std::cerr << "--output is for extraction and cannot be combined with --write.\n";
+        return 1;
+    }
+    if (!write_path && (backup_path || yes_really_write)) {
+        std::cerr << "--backup and --yes-really-write require --write FILE.\n";
+        return 1;
+    }
+    if (write_path && (!backup_path || !yes_really_write)) {
+        std::cerr << "Save writing requires both --backup FILE and "
+                     "--yes-really-write.\n";
+        return 1;
+    }
+    if (write_path == backup_path) {
+        std::cerr << "The input save and backup paths must be different.\n";
+        return 1;
+    }
+
+    std::optional<std::vector<uint8_t>> write_save;
+    if (write_path) {
+        std::ifstream input(*write_path, std::ios::binary);
+        if (!input) {
+            std::cerr << "Could not open save input: " << *write_path << '\n';
+            return 1;
+        }
+        write_save.emplace(std::istreambuf_iterator<char>(input),
+                           std::istreambuf_iterator<char>());
+        if (write_save->size() != 0x8000) {
+            std::cerr << "Save input must be exactly 32768 bytes; got "
+                      << write_save->size() << ".\n";
             return 1;
         }
     }
@@ -528,7 +677,7 @@ int main(int argc, char** argv)
 
     int result = 2;
     if (initialize_ez3_read_session(h)) {
-        SaveExtractor extractor(h, output, requested_rom);
+        SaveExtractor extractor(h, output, requested_rom, write_save, backup_path);
         result = extractor.run();
         if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
             std::cerr << "Save-reader operation finished, but the "

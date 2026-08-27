@@ -43,7 +43,7 @@ TRANSPORT_SOURCES = src/usb_device.cpp src/protocol.cpp
 WRITER_SOURCES = $(TRANSPORT_SOURCES) src/card_writer.cpp src/libusb_writer_backend.cpp src/cartridge_format.cpp src/cartridge_image_builder.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 READ_ONLY_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/ez3_catalog.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp
 CARD_READER_SOURCES = $(READ_ONLY_SOURCES) src/card_reader_options.cpp
-SAVE_READER_SOURCES = $(READ_ONLY_SOURCES) src/save_memory_reader.cpp
+SAVE_READER_SOURCES = $(READ_ONLY_SOURCES) src/save_memory_reader.cpp src/save_memory_writer.cpp
 WIPE_SOURCES = $(TRANSPORT_SOURCES)
 ALL_SUPPORT_SOURCES = $(SAVE_READER_SOURCES) src/card_reader_options.cpp src/card_writer.cpp src/libusb_writer_backend.cpp src/cartridge_image_builder.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 
@@ -161,6 +161,8 @@ test: check
 	./build/version_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_selection_test.cpp -o build/save_selection_test
 	./build/save_selection_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_memory_test.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/save_memory_test
+	./build/save_memory_test
 
 print-config:
 	@echo "VERSION=$(VERSION)"
@@ -174,6 +176,6 @@ print-config:
 	done
 
 clean:
-	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/cartridge_image_builder_test build/card_writer_test build/ez3_catalog_test build/card_reader_options_test build/protocol_test build/read_session_transition_test build/official_cartridge_read_test build/verification_exact_8mib_test build/verification_partial_12mib_test build/verification_exact_16mib_test build/verification_tiny_tail_above_16mib_test build/verification_partial_20mib_test build/verification_exact_24mib_test build/verification_partial_28mib_test build/verification_exact_32mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test build/version_test build/save_selection_test
+	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/cartridge_image_builder_test build/card_writer_test build/ez3_catalog_test build/card_reader_options_test build/protocol_test build/read_session_transition_test build/official_cartridge_read_test build/verification_exact_8mib_test build/verification_partial_12mib_test build/verification_exact_16mib_test build/verification_tiny_tail_above_16mib_test build/verification_partial_20mib_test build/verification_exact_24mib_test build/verification_partial_28mib_test build/verification_exact_32mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test build/version_test build/save_selection_test build/save_memory_test
 
 FORCE:

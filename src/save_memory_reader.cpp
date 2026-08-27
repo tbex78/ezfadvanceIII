@@ -9,7 +9,13 @@ constexpr unsigned timeout_ms = 15000;
 }
 
 SaveMemoryReader::SaveMemoryReader(libusb_device_handle* handle) noexcept
-    : transport_(handle), protocol_(transport_)
+    : owned_transport_(new BulkTransport(handle)),
+      transport_(*owned_transport_), protocol_(transport_)
+{
+}
+
+SaveMemoryReader::SaveMemoryReader(Transport& transport) noexcept
+    : transport_(transport), protocol_(transport_)
 {
 }
 

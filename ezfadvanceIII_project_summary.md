@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.9.0**.
+Current shared project/toolset version covered by this summary: **0.10.0**.
 
 All mainline utilities carry this same version:
 
@@ -806,7 +806,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.9.0 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.10.0 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1276,3 +1276,16 @@ Across these captures:
 - full-card ROM totals can still fit because EZ3Manager may place the loader inside an internal erased `FF` region.
 
 The current 0.9.0 writer therefore validates capacity rather than using a fixed 5/6/7/8-ROM limit.
+
+## 0.10.0 development changes
+
+The save utility now exposes the capture-derived 32-KiB `SRAM_V111` write
+transaction from `writesav.pcap`. It requires an exact-size input, a new backup
+path, `--yes-really-write`, and the same conservative ROM-selection policy as
+save extraction. It backs up the current save before sending the `0x92/01`
+payload and requires a complete byte-for-byte `0x91/01` read-back match.
+
+Transport tests lock the eight selector exchanges, exact write command, full
+payload, command echo, size rejection, and read transcript. This new write path
+is not yet hardware-qualified and must remain described as capture-derived and
+transcript-tested until the planned real-card save/restore test succeeds.

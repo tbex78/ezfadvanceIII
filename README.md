@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.9.0**.
+version is **0.10.0**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.9.0
+“pending,” and “next” describe the named review point, not the present 0.10.0
 support boundary.
 
 ## Build and test
@@ -108,6 +108,26 @@ Single-ROM layouts select ROM 1 automatically. Multi-ROM layouts require an
 explicit `--rom N` choice, exactly one capture-proven `SRAM_V111` candidate,
 and a choice matching that unique candidate. Ambiguous layouts are refused
 because no hardware save-slot switching command has been proven.
+
+### Write an EZ3 save
+
+```sh
+./ezfadvanceIII_save_reader \
+  --write INPUT.sav \
+  --backup ORIGINAL.sav \
+  --yes-really-write \
+  [--rom N]
+```
+
+Save writing is deliberately restricted to the capture-proven 32-KiB
+`SRAM_V111` path and selector `0x0900`. The input must be exactly 32768 bytes.
+The tool refuses to overwrite an existing backup, reads and saves the current
+cartridge data before writing, completes the bounded readiness transitions,
+performs the captured `0x92/01` transfer, and then requires a full byte-for-byte
+`0x91/01` read-back match. Multi-ROM cards
+retain the same explicit `--rom N` and unique-candidate restrictions as save
+extraction. This path is transcript-tested but awaits real-hardware
+qualification in 0.10.0.
 
 ### Build or write a multi-ROM image
 
