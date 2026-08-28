@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.11.1` toolset, including guarded
+**Specification baseline:** shared `0.11.2` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -234,10 +234,19 @@ FFTA banks, passed immediate byte-for-byte verification, and a separate fresh
 invocation extracted a 65536-byte file whose SHA-256 exactly matched the input.
 After another complete FFTA write, the adjacent DumpRom bank at `0x0920` also
 retained its trusted SHA-256 across a fresh extraction.
-Post-program ROM verification must follow the same rule: no `tx92One` mapping
-or status transaction is permitted. Every verification geometry uses only the
-two-byte control sequence so programming verification cannot rewrite save
-offsets 0 or 1 after save-bank initialization.
+Shared read-only ROM and save discovery must follow the same rule: no
+`tx92One` mapping or status transaction is permitted. Writer post-program
+verification is a separate state transition. Where a direct manager capture
+requires one-byte status or selector operations to expose the correct flash
+window, the writer must reproduce that exact sequence and must subsequently
+clear and verify all four known save banks. Those writer-only operations must
+never be reused by read-only applications.
+
+For the Fire Emblem tiny-tail geometry, the final USB read remains a complete
+64-KiB transport block, but comparison stops at the constructed image end.
+The capture erases and programs only the small sector containing the loader;
+bytes in later sectors of the rounded read block are outside the image and are
+not required to be `0xFF`.
 Because capture-required erase/program window selection itself uses one-byte
 transactions, the writer must clear all four save banks again after the entire
 ROM workflow. This final clear is attempted after both success and any failure

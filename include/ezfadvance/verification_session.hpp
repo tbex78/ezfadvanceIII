@@ -40,44 +40,54 @@ public:
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 
-    // 8_4MB.pcap: status/reset followed by 55AA + three 0000 writes, then
-    // 192 global-linear 0x91 reads. No selector tail or delay is emitted.
+    // 8_4MB.pcap: complete post-program status/reset (including its three
+    // one-byte writes) followed by 55AA + three 0000 writes, then 192 linear
+    // reads. Writer-only: the caller must clear all save banks afterward.
     bool verifyPartial12MiB(
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 
-    // writerom128Mb.pcap: explicit 0x0080 mapping transition followed by
-    // 256 global-linear 0x91 reads.
+    // writerom128Mb.pcap: complete writer-only post-program status/tail,
+    // explicit 0x0080 mapping, selector tail, final status/tail, then 256
+    // linear reads. The caller must clear all save banks afterward.
     bool verifyExact16MiB(
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 
-    // fireemblem.pcap: short status/read prefix with no mapping transition or
-    // delay, followed by global-linear reads through one rounded tail block.
+    // fireemblem.pcap: complete writer-only status tail and short read prefix,
+    // with no mapping transition or delay, followed by linear reads through
+    // one rounded transport block. Only constructed-image bytes are compared;
+    // later sectors in that block were not erased by the capture. The caller
+    // must clear all save banks afterward.
     bool verifyTinyTailAbove16MiB(
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 
-    // 16_4MB.pcap and 4_8_8MB.pcap: status/reset followed by 55AA + three
-    // 0000 writes, then 320 global-linear reads. No selector tail or delay.
+    // 16_4MB.pcap and 4_8_8MB.pcap: complete writer-only status tail followed
+    // by 55AA + three 0000 writes, then 320 linear reads. No selector tail or
+    // delay. The caller must clear all save banks afterward.
     bool verifyPartial20MiB(
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 
-    // 4_4_4_4_8MB.pcap: explicit 0x00C0 mapping transition followed by
-    // 384 global-linear 0x91 reads.
+    // 4_4_4_4_8MB.pcap: complete writer-only post-program status/tail,
+    // explicit 0x00C0 mapping, selector tail, final status/tail, then 384
+    // linear reads. The caller must clear all save banks afterward.
     bool verifyExact24MiB(
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 
-    // 4_8_16MB.pcap: status/reset followed by 55AA + three 0000 writes, then
-    // 448 global-linear reads. No selector tail or delay is emitted.
+    // 4_8_16MB.pcap: complete writer-only status tail followed by 55AA +
+    // three 0000 writes, then 448 linear reads. No selector tail or delay.
+    // The caller must clear all save banks afterward.
     bool verifyPartial28MiB(
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
 
-    // 256MBits-rom.pcap: transition from the already-selected 0x00C0 program
-    // window without emitting another window selector, then 512 linear reads.
+    // 256MBits-rom.pcap: complete writer-only status/tail, transition from the
+    // already-selected final program window without another size selector,
+    // selector tail, final status/tail, then 512 linear reads. The caller must
+    // clear all save banks afterward.
     bool verifyExact32MiB(
         const std::vector<std::uint8_t>& image,
         const BlockVerifiedCallback& block_verified = {}) const;
@@ -91,10 +101,12 @@ private:
                                                   std::size_t length);
     static bool compareBlock(const std::vector<std::uint8_t>& image,
                              std::size_t offset,
-                             const std::vector<std::uint8_t>& received);
+                             const std::vector<std::uint8_t>& received,
+                             bool require_erased_padding);
     bool verifyLinear(const std::vector<std::uint8_t>& image,
                       std::size_t verify_size,
-                      const BlockVerifiedCallback& block_verified) const;
+                      const BlockVerifiedCallback& block_verified,
+                      bool require_erased_padding = true) const;
 
     Transport& transport_;
     Protocol protocol_;

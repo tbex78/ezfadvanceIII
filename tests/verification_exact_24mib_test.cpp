@@ -50,6 +50,15 @@ void expectStatus(ezfadvance::test::TranscriptTransport& transcript)
     expect92Two(transcript, 0xFF, 0xFF);
 }
 
+void expect92One(ezfadvance::test::TranscriptTransport& transcript,
+                 std::uint8_t selector, std::uint8_t value)
+{
+    const auto command = ezfadvance::Protocol::command92One(selector);
+    transcript.expectOut(command, timeout_ms)
+              .expectOut({value}, timeout_ms)
+              .expectInMax(command, 64, timeout_ms);
+}
+
 bool observed(const ezfadvance::test::TranscriptTransport& transcript,
               const std::vector<std::uint8_t>& payload)
 {
@@ -76,6 +85,9 @@ int main()
 
     ezfadvance::test::TranscriptTransport transcript;
     expectStatus(transcript);
+    expect92One(transcript, 0x01, 0x04);
+    expect92One(transcript, 0x00, 0x00);
+    expect92One(transcript, 0x00, 0x00);
     expect92Two(transcript, 0x55, 0xAA);
     expect92Two(transcript, 0x02, 0x00);
     expect92Two(transcript, 0x00, 0xC0);
@@ -84,7 +96,13 @@ int main()
     expect92Two(transcript, 0x00, 0x00);
     expect92Two(transcript, 0x00, 0x00);
     expect92Two(transcript, 0x00, 0x00);
+    expect92One(transcript, 0x00, 0xAA);
+    expect92One(transcript, 0x00, 0x55);
+    expect92One(transcript, 0x01, 0x06);
     expectStatus(transcript);
+    expect92One(transcript, 0x01, 0x04);
+    expect92One(transcript, 0x00, 0x00);
+    expect92One(transcript, 0x00, 0x00);
     expect92Two(transcript, 0x55, 0xAA);
     expect92Two(transcript, 0x00, 0x00);
     expect92Two(transcript, 0x00, 0x00);
@@ -107,7 +125,7 @@ int main()
         transcript,
         [&](std::chrono::microseconds duration) {
             delays.push_back(duration);
-            delay_position_ok = transcript.observedOut().size() == 10 &&
+            delay_position_ok = transcript.observedOut().size() == 16 &&
                 transcript.observedOut().back() ==
                     std::vector<std::uint8_t>{0x00, 0x00};
         });
@@ -135,6 +153,12 @@ int main()
     assert(observed(transcript, {0x00, 0xC0}));
     assert(observed(transcript, {0x55, 0xAA}));
     assert(observed(transcript, {0xAA, 0x55}));
+    assert(observed(transcript, ezfadvance::Protocol::command92One(0x00)));
+    assert(observed(transcript, ezfadvance::Protocol::command92One(0x01)));
+    assert(observed(transcript, {0x04}));
+    assert(observed(transcript, {0xAA}));
+    assert(observed(transcript, {0x55}));
+    assert(observed(transcript, {0x06}));
     assert(!observed(transcript, {0x00, 0x20}));
     assert(!observed(transcript, {0x00, 0x40}));
     assert(!observed(transcript, {0x00, 0x80}));

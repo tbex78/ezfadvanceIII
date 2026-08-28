@@ -89,10 +89,13 @@ std::vector<std::uint8_t> VerificationSession::readCommand(
 bool VerificationSession::compareBlock(
     const std::vector<std::uint8_t>& image,
     std::size_t offset,
-    const std::vector<std::uint8_t>& received)
+    const std::vector<std::uint8_t>& received,
+    bool require_erased_padding)
 {
     for (std::size_t i = 0; i < received.size(); ++i) {
         const std::size_t absolute = offset + i;
+        if (absolute >= image.size() && !require_erased_padding)
+            continue;
         const std::uint8_t expected =
             absolute < image.size() ? image[absolute] : 0xFF;
         if (received[i] != expected) {
@@ -155,7 +158,13 @@ bool VerificationSession::verifyExact16MiB(
         throw std::invalid_argument(
             "exact 16-MiB verification requires a 16-MiB image");
 
-    if (!statusSequence()) return false;
+    // writerom128Mb.pcap requires the complete writer-only post-program
+    // status tail here. These one-byte transfers touch save bytes; CardWriter
+    // clears all four save banks after verification, including on failure.
+    if (!protocol_.tx92Two(0xFF, 0xFF, "VERIFY128 status FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "VERIFY128 status 1/04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY128 status 0/00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY128 status 0/00 B")) return false;
 
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY128 55AA")) return false;
     if (!protocol_.tx92Two(0x02, 0x00, "VERIFY128 0200")) return false;
@@ -168,7 +177,14 @@ bool VerificationSession::verifyExact16MiB(
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY128 0000 B")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY128 0000 C")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY128 0000 D")) return false;
-    if (!statusSequence()) return false;
+    if (!protocol_.tx92One(0x00, 0xAA, "VERIFY128 selector0 AA")) return false;
+    if (!protocol_.tx92One(0x00, 0x55, "VERIFY128 selector0 55")) return false;
+    if (!protocol_.tx92One(0x01, 0x06, "VERIFY128 selector1 06")) return false;
+
+    if (!protocol_.tx92Two(0xFF, 0xFF, "VERIFY128 final status FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "VERIFY128 final status 1/04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY128 final status 0/00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY128 final status 0/00 B")) return false;
 
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY128READ 55AA")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY128READ 0000 A")) return false;
@@ -187,7 +203,16 @@ bool VerificationSession::verifyPartial12MiB(
         throw std::invalid_argument(
             "partial 12-MiB verification requires a 12-MiB image");
 
-    if (!statusSequence()) return false;
+    // 8_4MB.pcap sends this complete post-program status sequence before its
+    // first linear read. Hardware testing proved that omitting its one-byte
+    // tail leaves the upper flash window visible at logical address zero.
+    // The one-byte transfers also touch save offsets 0 and 1, so this method
+    // is writer-only: CardWriter unconditionally clears all four save banks
+    // after verification, including on verification failure.
+    if (!protocol_.tx92Two(0xFF, 0xFF, "VERIFY96 status FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "VERIFY96 status 1/04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY96 status 0/00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY96 status 0/00 B")) return false;
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY96READ 55AA")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY96READ 0000 A")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY96READ 0000 B")) return false;
@@ -202,13 +227,23 @@ bool VerificationSession::verifyTinyTailAbove16MiB(
 {
     const std::size_t verify_size = tinyTailAbove16MiBExtent(image.size());
 
-    if (!statusSequence()) return false;
+    // fireemblem.pcap programs the tiny tail after selecting the second
+    // window, then requires only this complete writer-only status tail before
+    // its linear reads. CardWriter clears all save banks afterward.
+    if (!protocol_.tx92Two(0xFF, 0xFF, "VERIFYTAIL status FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "VERIFYTAIL status 1/04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFYTAIL status 0/00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFYTAIL status 0/00 B")) return false;
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFYTAIL 55AA")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFYTAIL 0000 A")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFYTAIL 0000 B")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFYTAIL 0000 C")) return false;
 
-    return verifyLinear(image, verify_size, block_verified);
+    // fireemblem.pcap issues a full 64-KiB final read although its captured
+    // tail erase covers only the small sector containing the programmed
+    // loader. Compare the complete constructed image, but do not infer that
+    // later, unprogrammed sectors must contain 0xFF.
+    return verifyLinear(image, verify_size, block_verified, false);
 }
 
 bool VerificationSession::verifyExact24MiB(
@@ -219,7 +254,12 @@ bool VerificationSession::verifyExact24MiB(
         throw std::invalid_argument(
             "exact 24-MiB verification requires a 24-MiB image");
 
-    if (!statusSequence()) return false;
+    // 4_4_4_4_8MB.pcap requires the complete writer-only post-program
+    // status tail. CardWriter clears all four save banks afterward.
+    if (!protocol_.tx92Two(0xFF, 0xFF, "VERIFY192 status FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "VERIFY192 status 1/04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY192 status 0/00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY192 status 0/00 B")) return false;
 
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY192 55AA")) return false;
     if (!protocol_.tx92Two(0x02, 0x00, "VERIFY192 0200")) return false;
@@ -232,7 +272,14 @@ bool VerificationSession::verifyExact24MiB(
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192 0000 B")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192 0000 C")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192 0000 D")) return false;
-    if (!statusSequence()) return false;
+    if (!protocol_.tx92One(0x00, 0xAA, "VERIFY192 selector0 AA")) return false;
+    if (!protocol_.tx92One(0x00, 0x55, "VERIFY192 selector0 55")) return false;
+    if (!protocol_.tx92One(0x01, 0x06, "VERIFY192 selector1 06")) return false;
+
+    if (!protocol_.tx92Two(0xFF, 0xFF, "VERIFY192 final status FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "VERIFY192 final status 1/04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY192 final status 0/00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY192 final status 0/00 B")) return false;
 
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY192READ 55AA")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY192READ 0000 A")) return false;
@@ -251,7 +298,12 @@ bool VerificationSession::verifyPartial20MiB(
         throw std::invalid_argument(
             "partial 20-MiB verification requires a 20-MiB image");
 
-    if (!statusSequence()) return false;
+    // 16_4MB.pcap and 4_8_8MB.pcap agree on this complete writer-only
+    // post-program status tail. CardWriter clears all save banks afterward.
+    if (!protocol_.tx92Two(0xFF, 0xFF, "VERIFY160 status FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "VERIFY160 status 1/04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY160 status 0/00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY160 status 0/00 B")) return false;
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY160READ 55AA")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY160READ 0000 A")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY160READ 0000 B")) return false;
@@ -268,7 +320,13 @@ bool VerificationSession::verifyExact32MiB(
         throw std::invalid_argument(
             "exact 32-MiB verification requires a 32-MiB image");
 
-    if (!statusSequence()) return false;
+    // 256MBits-rom.pcap transitions from the already-selected final program
+    // window, but still requires the complete writer-only status tails.
+    // CardWriter clears all four save banks afterward.
+    if (!protocol_.tx92Two(0xFF, 0xFF, "VERIFY256 status FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "VERIFY256 status 1/04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY256 status 0/00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY256 status 0/00 B")) return false;
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY256 55AA")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 A")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 B")) return false;
@@ -280,7 +338,14 @@ bool VerificationSession::verifyExact32MiB(
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 C")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 D")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256 0000 E")) return false;
-    if (!statusSequence()) return false;
+    if (!protocol_.tx92One(0x00, 0xAA, "VERIFY256 selector0 AA")) return false;
+    if (!protocol_.tx92One(0x00, 0x55, "VERIFY256 selector0 55")) return false;
+    if (!protocol_.tx92One(0x01, 0x06, "VERIFY256 selector1 06")) return false;
+
+    if (!protocol_.tx92Two(0xFF, 0xFF, "VERIFY256 final status FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "VERIFY256 final status 1/04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY256 final status 0/00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY256 final status 0/00 B")) return false;
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY256READ 55AA")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256READ 0000 A")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY256READ 0000 B")) return false;
@@ -298,7 +363,12 @@ bool VerificationSession::verifyPartial28MiB(
         throw std::invalid_argument(
             "partial 28-MiB verification requires a 28-MiB image");
 
-    if (!statusSequence()) return false;
+    // 4_8_16MB.pcap requires this complete writer-only post-program status
+    // tail. CardWriter clears all four save banks afterward.
+    if (!protocol_.tx92Two(0xFF, 0xFF, "VERIFY224 status FFFF")) return false;
+    if (!protocol_.tx92One(0x01, 0x04, "VERIFY224 status 1/04")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY224 status 0/00 A")) return false;
+    if (!protocol_.tx92One(0x00, 0x00, "VERIFY224 status 0/00 B")) return false;
     if (!protocol_.tx92Two(0x55, 0xAA, "VERIFY224READ 55AA")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY224READ 0000 A")) return false;
     if (!protocol_.tx92Two(0x00, 0x00, "VERIFY224READ 0000 B")) return false;
@@ -310,7 +380,8 @@ bool VerificationSession::verifyPartial28MiB(
 bool VerificationSession::verifyLinear(
     const std::vector<std::uint8_t>& image,
     std::size_t verify_size,
-    const BlockVerifiedCallback& block_verified) const
+    const BlockVerifiedCallback& block_verified,
+    bool require_erased_padding) const
 {
     for (std::size_t offset = 0; offset < verify_size; ) {
         const std::size_t length =
@@ -321,7 +392,8 @@ bool VerificationSession::verifyLinear(
         std::vector<std::uint8_t> received;
         if (!transport_.inExact(received, length, usb_timeout_ms))
             return false;
-        if (!compareBlock(image, offset, received)) return false;
+        if (!compareBlock(image, offset, received, require_erased_padding))
+            return false;
 
         if (block_verified) block_verified(offset, length);
         offset += length;

@@ -50,6 +50,15 @@ void expectStatus(ezfadvance::test::TranscriptTransport& transcript)
     expect92Two(transcript, 0xFF, 0xFF);
 }
 
+void expect92One(ezfadvance::test::TranscriptTransport& transcript,
+                 std::uint8_t selector, std::uint8_t value)
+{
+    const auto command = ezfadvance::Protocol::command92One(selector);
+    transcript.expectOut(command, timeout_ms)
+              .expectOut({value}, timeout_ms)
+              .expectInMax(command, 64, timeout_ms);
+}
+
 bool observed(const ezfadvance::test::TranscriptTransport& transcript,
               const std::vector<std::uint8_t>& payload)
 {
@@ -82,13 +91,19 @@ int main()
 
     ezfadvance::test::TranscriptTransport transcript;
     expectStatus(transcript);
+    expect92One(transcript, 0x01, 0x04);
+    expect92One(transcript, 0x00, 0x00);
+    expect92One(transcript, 0x00, 0x00);
     expect92Two(transcript, 0x55, 0xAA);
     expect92Two(transcript, 0x00, 0x00);
     expect92Two(transcript, 0x00, 0x00);
     expect92Two(transcript, 0x00, 0x00);
 
     for (std::size_t offset = 0; offset < verify_size; offset += block_size) {
-        std::vector<std::uint8_t> block(block_size, 0xFF);
+        // The capture erases only the small tail sector. Populate bytes beyond
+        // the constructed image with non-FF stale data to prove verification
+        // does not assert an erase that never occurred.
+        std::vector<std::uint8_t> block(block_size, 0x70);
         const std::size_t available =
             offset < image.size()
                 ? std::min(block_size, image.size() - offset)
@@ -127,6 +142,9 @@ int main()
 
     assert(observed(transcript, {0x55, 0xAA}));
     assert(observed(transcript, {0x00, 0x00}));
+    assert(observed(transcript, ezfadvance::Protocol::command92One(0x00)));
+    assert(observed(transcript, ezfadvance::Protocol::command92One(0x01)));
+    assert(observed(transcript, {0x04}));
     assert(!observed(transcript, {0x00, 0x20}));
     assert(!observed(transcript, {0x00, 0x40}));
     assert(!observed(transcript, {0x00, 0x80}));
