@@ -1315,11 +1315,14 @@ New paired captures expose four shared 32-KiB banks at `0x0900`, `0x0910`,
 `0x0920`, and `0x0930`. ROM programming clears all four. A 64-KiB FFTA save is
 written to the first two banks, but the original manager then incorrectly
 restarts a 32-KiB DumpRom save at `0x0900`, overwriting FFTA. The corrected
-tool allocates banks cumulatively from marker-derived save capacities, placing
-DumpRom at `0x0920` in this layout. Unknown or overflowing layouts are refused.
-The corrected allocation is hardware-qualified on the observed FFTA + DumpRom
-layout. DumpRom was written and verified at `0x0920`, then extracted in a fresh
-tool session; the input and extracted files shared SHA-256
+tool uses a cumulative marker-capacity allocation policy, placing DumpRom at
+`0x0920` in this layout. Unknown or overflowing layouts are refused. Only this
+observed `FLASH512` FFTA followed by `SRAM_V111` DumpRom allocation is
+hardware-qualified. The analogous EEPROM-, generic-FLASH-, and
+FLASH1M-predecessor allocations remain policy inference pending direct capture
+or controlled hardware evidence. DumpRom was written and verified at `0x0920`,
+then extracted in a fresh tool session; the input and extracted files shared
+SHA-256
 `c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
 
 ## 0.11.0 development changes

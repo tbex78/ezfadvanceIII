@@ -2782,12 +2782,18 @@ New paired captures expose four shared 32-KiB banks selected by `0x0900`,
 programming the FFTA + DumpRom ROM layout. Its 64-KiB FFTA import correctly
 uses the first two banks, but its following DumpRom import incorrectly returns
 to `0x0900` instead of using `0x0920`, overwriting half of FFTA. The corrected
-software allocates banks cumulatively in catalog order using marker-derived
-capacity: SRAM/EEPROM reserves one bank, FLASH512/FLASH two, and FLASH1M four.
-Unknown predecessor sizes and allocations beyond four banks are rejected.
-This corrected behavior intentionally differs from the captured manager bug.
-It is hardware-qualified on the FFTA + DumpRom layout: the tool wrote and
-verified DumpRom at `0x0920`, a fresh invocation extracted the same bank, and
+software uses a cumulative catalog-order allocation policy based on
+marker-derived capacity: SRAM/EEPROM reserves one bank, FLASH512/FLASH two,
+and FLASH1M four. This table is implementation policy, not a generally proven
+protocol rule. Direct hardware evidence currently covers only the observed
+`FLASH512` FFTA allocation at `0x0900`/`0x0910` followed by `SRAM_V111`
+DumpRom at `0x0920`. EEPROM-, generic-FLASH-, and FLASH1M-predecessor layouts
+remain inferred until supported by direct manager captures or controlled
+hardware tests. Unknown predecessor sizes and allocations beyond four banks
+are rejected. This corrected behavior intentionally differs from the captured
+manager bug. It is hardware-qualified on the FFTA + DumpRom layout: the tool
+wrote and verified DumpRom at `0x0920`, a fresh invocation extracted the same
+bank, and
 both files matched SHA-256
 `c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
 

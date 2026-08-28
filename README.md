@@ -107,9 +107,10 @@ EZ3 flash. Supported save paths are 32-KiB `SRAM_V111` and 64-KiB
 `FLASH512`.
 Single-ROM layouts select ROM 1 automatically. Multi-ROM layouts require an
 explicit `--rom N` choice, and the selected ROM must have a supported format.
-Its bank and capacity are derived from cumulative catalog-order save
-allocation; unknown predecessor capacity and layouts exceeding four banks are
-refused.
+Its bank and capacity are derived from the documented cumulative
+catalog-order allocation policy; only the observed `FLASH512`-then-`SRAM_V111`
+case is currently hardware-proven. Unknown predecessor capacity and layouts
+exceeding four banks are refused.
 
 ### Write an EZ3 save
 

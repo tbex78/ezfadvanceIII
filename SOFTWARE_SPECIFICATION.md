@@ -255,10 +255,15 @@ The corrected ordering is hardware-qualified with the established exact-8-MiB
 two-ROM workflow; afterward, all four 32-KiB banks were independently verified
 to contain only zero bytes.
 
-The four proven 32-KiB banks are allocated cumulatively in catalog order:
-`0x0900`, `0x0910`, `0x0920`, and `0x0930`. Marker-derived capacity reserves
-one bank for SRAM/EEPROM, two for FLASH512/FLASH, and four for FLASH1M. Unknown
-predecessor capacity and total allocation beyond four banks must be refused.
+The four observed 32-KiB banks use selectors `0x0900`, `0x0910`, `0x0920`, and
+`0x0930`. The software's cumulative catalog-order allocator is policy, not a
+fully capture-proven protocol rule. It reserves one bank for SRAM/EEPROM, two
+for FLASH512/FLASH, and four for FLASH1M according to marker-derived capacity.
+Only the observed `FLASH512` FFTA allocation at `0x0900`/`0x0910`, followed by
+`SRAM_V111` DumpRom at `0x0920`, is hardware-qualified. EEPROM predecessors,
+generic FLASH predecessors, and FLASH1M predecessors still require direct
+manager captures or controlled hardware validation. Unknown predecessor
+capacity and total allocation beyond four banks must be refused.
 This deliberately corrects the original manager's standalone-import behavior,
 which restarts a later save at `0x0900` and can overwrite a predecessor.
 
