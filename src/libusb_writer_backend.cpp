@@ -31,6 +31,9 @@
 #include <thread>
 #include <vector>
 
+#include <sys/ioctl.h>
+#include <unistd.h>
+
 static constexpr size_t PROGRAM_BLOCK = 0x10000;
 static constexpr size_t FLASH_WINDOW_SIZE = 0x800000;
 static constexpr size_t CARD_HALF_SIZE = 0x1000000;
@@ -53,6 +56,20 @@ static std::string progress_duration(double seconds)
         oss << minutes << ':' << std::setw(2) << std::setfill('0') << secs;
     }
     return oss.str();
+}
+
+static std::string fit_progress_to_terminal(std::string line)
+{
+    if (!::isatty(STDOUT_FILENO)) return line;
+
+    struct winsize terminal_size {};
+    if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &terminal_size) != 0 ||
+        terminal_size.ws_col < 2)
+        return line;
+
+    const size_t maximum = terminal_size.ws_col - 1;
+    if (line.size() > maximum) line.resize(maximum);
+    return line;
 }
 
 class ProgressBar
@@ -122,8 +139,12 @@ public:
                 << "  ETA " << progress_duration(remaining);
         }
 
-        const std::string line = oss.str();
-        std::cout << '\r' << line;
+        const std::string line = fit_progress_to_terminal(oss.str());
+        if (::isatty(STDOUT_FILENO))
+            std::cout << "\r\033[2K";
+        else
+            std::cout << '\r';
+        std::cout << line;
         if (last_width_ > line.size())
             std::cout << std::string(last_width_ - line.size(), ' ');
         std::cout << std::flush;

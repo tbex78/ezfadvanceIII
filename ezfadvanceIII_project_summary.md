@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.11.2**.
+Current shared project/toolset version covered by this summary: **0.11.3**.
 
 All mainline utilities carry this same version:
 
@@ -669,7 +669,10 @@ status/reset cleanup
 
 ### Progress display / verbose diagnostics
 
-Default destructive writes show live in-place progress bars for erase, program, and verification, including percentage, elapsed time, throughput where meaningful, and ETA.
+Default destructive writes show live in-place progress bars for erase, program,
+and verification, including percentage, elapsed time, throughput where
+meaningful, and ETA. Interactive updates clear and replace one terminal line
+and are clipped to its detected width so they do not wrap.
 
 Use:
 
@@ -806,7 +809,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.11.2 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.11.3 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending

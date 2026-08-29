@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.11.2` toolset, including guarded
+**Specification baseline:** shared `0.11.3` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -141,7 +141,9 @@ It is restricted to a detected official GBA cartridge and must:
 - read through final byte offset `0x01FF0000` and exclusive end
   `0x02000000`;
 - display an in-place progress bar with percentage, completed/total MiB,
-  throughput, elapsed time, and ETA;
+  throughput, elapsed time, and ETA. On an interactive terminal, each update
+  must clear and replace one physical line and must be clipped to the detected
+  terminal width to prevent wrapping;
 - complete the read-session readiness transition before writing the file;
 - locate the final byte that is not `0xFF` after the complete read;
 - choose the smallest supported output extent—1, 2, 4, 8, 16, or 32 MiB—that

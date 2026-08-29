@@ -30,6 +30,9 @@
 #include <utility>
 #include <vector>
 
+#include <sys/ioctl.h>
+#include <unistd.h>
+
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/cartridge_format.hpp"
@@ -124,6 +127,20 @@ static std::string progress_duration(double seconds)
     return output.str();
 }
 
+static std::string fit_progress_to_terminal(std::string line)
+{
+    if (!::isatty(STDOUT_FILENO)) return line;
+
+    struct winsize terminal_size {};
+    if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &terminal_size) != 0 ||
+        terminal_size.ws_col < 2)
+        return line;
+
+    const std::size_t maximum = terminal_size.ws_col - 1;
+    if (line.size() > maximum) line.resize(maximum);
+    return line;
+}
+
 class ProgressBar final {
 public:
     ProgressBar(std::string label, std::size_t total)
@@ -167,8 +184,12 @@ public:
                    << "  ETA " << progress_duration(remaining);
         }
 
-        const std::string line = output.str();
-        std::cout << '\r' << line;
+        const std::string line = fit_progress_to_terminal(output.str());
+        if (::isatty(STDOUT_FILENO))
+            std::cout << "\r\033[2K";
+        else
+            std::cout << '\r';
+        std::cout << line;
         if (last_width_ > line.size())
             std::cout << std::string(last_width_ - line.size(), ' ');
         std::cout << std::flush;
