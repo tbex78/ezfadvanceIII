@@ -552,8 +552,7 @@ static bool original_manager_initialize_and_check(libusb_device_handle* h)
 {
     std::cout << "\n========================================\n"
               << "ORIGINAL MANAGER CARD INITIALIZATION / PROBE\n"
-              << "========================================\n"
-              << "Replaying the capture-derived state-setting phase (originally proven on macOS / Apple Silicon).\n";
+              << "========================================\n";
 
     if (!original_bridge_startup_979899(h))
         return false;

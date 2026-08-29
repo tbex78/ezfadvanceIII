@@ -23,7 +23,6 @@ CardWriteResult CardWriter::write(const std::vector<std::uint8_t>& image,
     report << "\n========================================\n"
            << "MANAGER-PRIMED FULL WRITE\n"
            << "========================================\n"
-           << "Manager-prime/write transition originally proven on macOS / Apple Silicon.\n"
            << "Flash-window pre-AA55 settle: fixed 125 ms.\n"
            << "ROM payload: one Windows-style 64-KiB BULK OUT request.\n";
     if (ok) ok = backend_.prepareGlobalWrite();

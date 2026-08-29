@@ -34,6 +34,7 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/cartridge_image_builder.hpp"
 #include "ezfadvance/card_writer.hpp"
+#include "ezfadvance/eeprom_mapping.hpp"
 #include "ezfadvance/libusb_writer_backend.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/verification_session.hpp"
@@ -42,7 +43,6 @@
 #include "ezfadvance/version.hpp"
 
 static constexpr size_t PROGRAM_BLOCK = 0x10000; // 64 KiB
-static constexpr size_t CARD_HALF_SIZE = 0x1000000;   // 128 Mbit / 16 MiB boundary
 static constexpr size_t MAX_CARD_IMAGE = 0x2000000;   // 256 Mbit / 32 MiB card
 
 using RomInfo = ezfadvance::RomInfo;
@@ -115,9 +115,9 @@ static constexpr const char* host_platform_name()
 //   * program extent is rounded up to a 0x100-byte boundary;
 //   * sub-8-MiB verification extent is rounded up to a full 0x10000-byte block
 //     and bytes beyond the programmed image are expected to remain 0xFF.
-// Finally, EEPROM_V124 is now known to map to both catalog map 4 and map 5 in
-// different captures. Until a generic EEPROM-capacity discriminator is found,
-// EEPROM ROMs require an explicit --mapN=4 or --mapN=5 override.
+// Finally, EEPROM_V124 is known to map to both catalog map 4 and map 5. Version
+// 0.12.0 recovers a structurally visible SDK capacity argument; unresolved
+// call forms retain the explicit --mapN=4/5 override.
 //
 // 0.5.16 adds exact 4-MiB / 32-Mbit post-program verification from 4MB.pcap.
 // The original EZ3Manager sequence after the final program block is:
@@ -279,9 +279,6 @@ static constexpr const char* host_platform_name()
 // 24 MiB, exact 32 MiB, and the tiny Fire-Emblem-style tail immediately above 16 MiB).
 // Other partial higher-window images are written normally but are not falsely
 // reported as verification failures.
-//
-// The preventive full-card wipe recommendation remains informational only;
-// the writer never runs ezfadvanceIII_wipe_card automatically.
 //
 // v35 removed the game-specific AFXP/FFTA catalog-name override. Catalog names
 // are always derived through the normal generic naming path.
@@ -460,10 +457,9 @@ static bool has_flash_save_library(const std::vector<uint8_t>& rom)
 
 // The low byte of catalog entry bytes 20..23 is independent from ROM size.
 // Captured SRAM/non-FLASH cases use 3; captured FLASH save-library cases use 6.
-// EEPROM is now known to have at least two distinct values:
-//   * Classic NES / EEPROM_V124 captures -> map 4
-//   * Tales of Phantasia / EEPROM_V124   -> map 5
-// Therefore EEPROM_Vnnn alone is not a generic discriminator.
+// EEPROM map 4/5 follows the ROM's SDK capacity initialization when that
+// structure can be recovered: 4 Kbit/512 bytes -> 4; 64 Kbit/8 KiB -> 5.
+// The marker version alone remains insufficient.
 static bool has_eeprom_save_library(const std::vector<uint8_t>& rom)
 {
     return contains_bytes(rom, "EEPROM_V");
@@ -471,9 +467,8 @@ static bool has_eeprom_save_library(const std::vector<uint8_t>& rom)
 
 static uint8_t detect_mapping_flag(const std::vector<uint8_t>& rom)
 {
-    // EEPROM is intentionally excluded: callers must require an explicit
-    // --mapN override until a generic capacity/configuration discriminator is
-    // recovered from captures or ROM structure.
+    // EEPROM is intentionally handled separately by structural capacity
+    // detection, with explicit override as the unresolved fallback.
     if (has_flash_save_library(rom)) return 6;
     return 3;
 }
@@ -544,15 +539,27 @@ static bool load_rom(RomInfo& r)
 
     if (!r.mapping_flag_overridden) {
         if (has_eeprom_save_library(r.data)) {
-            std::cerr
-                << "EEPROM catalog mapping is ambiguous for: " << r.path << '\n'
-                << "Current captures prove EEPROM_V124 can use map 4 or map 5.\n"
-                << "Specify the capture-appropriate value explicitly with "
-                   "--mapN=4 or --mapN=5 for this ROM slot.\n"
-                << "No USB write was attempted.\n";
-            return false;
+            const auto detected = ezfadvance::detectEepromMapping(r.data);
+            r.mapping_flag = ezfadvance::catalogMapForEeprom(detected.capacity);
+            if (r.mapping_flag == 0) {
+                std::cerr
+                    << "EEPROM capacity could not be proven from ROM structure: "
+                    << r.path << '\n'
+                    << "Catalog map 4 requires 4-Kbit/512-byte EEPROM; map 5 "
+                       "requires 64-Kbit/8-KiB EEPROM.\n"
+                    << "Specify the evidence-appropriate value explicitly with "
+                       "--mapN=4 or --mapN=5 for this ROM slot.\n"
+                    << "No USB write was attempted.\n";
+                return false;
+            }
+            std::cout << "EEPROM SDK initialization selects "
+                      << (r.mapping_flag == 4 ? "4-Kbit / 512-byte" :
+                                                "64-Kbit / 8-KiB")
+                      << " capacity; using catalog map "
+                      << static_cast<unsigned>(r.mapping_flag) << ".\n";
+        } else {
+            r.mapping_flag = detect_mapping_flag(r.data);
         }
-        r.mapping_flag = detect_mapping_flag(r.data);
     }
 
     return true;
@@ -694,18 +701,6 @@ int main(int argc, char** argv)
         const size_t programmed_size = built_image.programmed_size;
 
         print_layout(roms, image, programmed_size);
-
-        if (image.size() >= CARD_HALF_SIZE) {
-            std::cout
-                << "\n========================================\n"
-                << "LARGE-IMAGE RELIABILITY NOTE\n"
-                << "========================================\n"
-                << "This image is 128 Mbit / 16 MiB or larger.\n"
-                << "On real EZ-Flash Advance III hardware, a preventive full-card wipe\n"
-                << "with ezfadvanceIII_wipe_card before a large write has been observed to\n"
-                << "improve the chance of reliable programming.\n"
-                << "The wipe is optional, destructive, and is NOT run automatically.\n";
-        }
 
         if (!do_write) {
             std::cout

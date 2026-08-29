@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.11.4`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.11.4`<br>
+**Current project/toolset version:** `0.12.0`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.12.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.11.4 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.12.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
 
 ---
 
@@ -1204,7 +1204,10 @@ catalog type    = 1
 mapping flag    = 5
 ```
 
-Because `EEPROM_V124` now exists in both map-4 and map-5 captures, the writer does **not** auto-select an EEPROM map. It requires:
+Because `EEPROM_V124` exists in both map-4 and map-5 captures, the writer does
+not select from the marker or ROM size. Version 0.12.0 follows a structurally
+visible Nintendo SDK capacity initializer: argument `4` selects map 4 and
+argument `0x40` selects map 5. If the call structure is unresolved it requires:
 
 ```text
 --mapN=4
@@ -1212,7 +1215,7 @@ or
 --mapN=5
 ```
 
-until a generic ROM-level discriminator is recovered.
+as an evidence-backed override.
 
 ### 19.5 Embedded signature versus active save implementation
 
@@ -1591,7 +1594,8 @@ Behavior:
 - loads and analyzes ROMs;
 - displays non-SRAM warnings and requires confirmations when applicable;
 - derives catalog type and non-EEPROM map values unless overridden;
-- requires explicit `--mapN=4` or `--mapN=5` for EEPROM-signature ROMs;
+- derives map 4 or 5 from recognized EEPROM SDK capacity initialization and
+  requires an explicit override for unresolved structures;
 - sorts and packs the ROMs;
 - constructs the loader/catalog in memory;
 - prints final layout;
@@ -1654,7 +1658,7 @@ For protocol experiments:
 --mapN=VALUE
 ```
 
-Multi-digit slot numbers are supported. Overrides remain useful for protocol experiments and are currently required for EEPROM ROMs until the generic map-4/map-5 discriminator is understood.
+Multi-digit slot numbers are supported. Overrides remain useful for protocol experiments and are required for EEPROM ROMs whose capacity initializer cannot be structurally resolved.
 
 ### 26.6 Official GBA cartridge inspection and extraction
 
@@ -2225,7 +2229,8 @@ The 1-MiB and two-1-MiB captures completed the generic sub-8-MiB model:
 - no fixed synthetic delay;
 - program extent rounds to `0x100`;
 - verification rounds to `0x10000`;
-- `EEPROM_V124` is proven with both map 4 and map 5, so EEPROM auto-map selection was removed.
+- `EEPROM_V124` is proven with both map 4 and map 5, so marker-only auto-map
+  selection was removed; version 0.12.0 adds structural capacity selection.
 
 Real hardware subsequently validated the 1-MiB map-4 singles, two-ROM map-4 pair, single 4-MiB F-Zero, mixed map-3/map-4 configurations, and 6-ROM 24-/32-MiB images.
 
@@ -2915,6 +2920,21 @@ warning remains enabled for the distinct `FLASH512_V`, `FLASH1M_V`, and
 `EEPROM_V` families. This changes warning policy only; it does not patch ROMs
 or alter image construction, USB programming, or verification behavior.
 
+### 36.64 0.12.0 — structural EEPROM map selection
+
+The writer now locates the Nintendo SDK EEPROM capacity selector and follows
+the observed direct or one-level wrapped Thumb call. A capacity argument of
+`4` means 4 Kbit/512 bytes and selects catalog map 4; `0x40` means 64 Kbit/8
+KiB and selects map 5. TOF is detected through its direct V124 call and Super
+Monkey Ball Jr. through its V122 wrapper. The detector does not use ROM size,
+title, game code, or `EEPROM_Vnnn` revision. Missing or contradictory call
+evidence retains the explicit `--mapN=4`/`--mapN=5` requirement.
+
+Both automatic paths are hardware-qualified. Super Monkey Ball Jr. selected
+map 4 through the wrapped V122 structure, and TOF selected map 5 through the
+direct V124 structure. Neither used an override; both games booted and saved
+successfully.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -2926,7 +2946,7 @@ prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.11.4 baseline compiled and transcript-tested; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.12.0 baseline compiled and transcript-tested; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3271,13 +3291,12 @@ Classic NES Super Mario / Castlevania -> 512-byte (4-Kbit) save -> map 4
 Tales of Phantasia                    -> 8-KiB (64-Kbit) save   -> map 5
 ```
 
-The save sizes were confirmed from the produced save files. They establish a
-strong capacity/map correlation in the current samples and make EEPROM
-capacity the leading candidate for the discriminator used by original
-EZ3Manager. They do not yet prove a generic rule because the Classic NES family
-also has special runtime mapping behavior. At least one additional controlled
-non-Classic EEPROM case is required to distinguish a capacity rule from a
-Classic-specific configuration rule.
+The save sizes were confirmed from the produced save files. Super Monkey Ball
+Jr. provides an independent 4-Kbit case: its V122 wrapper passes argument `4`,
+map 4 boots and saves, and map 5 produces an in-game save error. TOF directly
+passes `0x40` to its V124 identifier and its native 8-KiB save works with map 5.
+Together these controlled cases establish the capacity/map relationship for
+the structurally recognized SDK forms.
 
 The ASCII `EEPROM_V124` library marker does not carry the capacity. The
 underlying serial command shape does: 512-byte EEPROM uses a 6-bit address,
@@ -3295,8 +3314,8 @@ save file.
 
 The Classic NES A/B tests prove the distinction is runtime-significant rather than cosmetic catalog metadata: both titles fully verify when forced to map 5, yet both reject that configuration with the identical `GAME PACK ERROR / TURN THE POWER OFF.` screen. Map 4 works normally.
 
-Until the capacity hypothesis and a generic ROM detector are validated against
-additional cases, the writer requires explicit `--mapN=4` or `--mapN=5`.
+If the selector exists without a recoverable capacity call, or if structural
+evidence conflicts, the writer requires explicit `--mapN=4` or `--mapN=5`.
 
 ### 40.5 Save-bank behavior in multi-ROM mode
 
@@ -3332,7 +3351,7 @@ ROM files
    |
    +--> identify save-library family / captured map class
    |       SRAM/other -> map 3
-   |       EEPROM     -> explicit map 4 or 5
+   |       EEPROM     -> structural capacity map 4/5, else explicit override
    |       FLASH      -> map 6
    |
    +--> derive ROM size class -> catalog type 0..9
@@ -3369,7 +3388,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.11.4**, the project has an object-oriented structural model:
+At shared toolset version **0.12.0**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,
@@ -3380,7 +3399,7 @@ At shared toolset version **0.11.4**, the project has an object-oriented structu
 - ROM ordering is stable largest-first and placement can reuse trailing/internal `FF`;
 - the same `0x7080` multi-loader with 125 relocations matches captured 2-8 ROM configurations;
 - catalog type is ROM-size based;
-- catalog map uses values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` alone does not distinguish them;
+- catalog map uses values `3`, `4`, `5`, and `6`; recognized EEPROM capacity initialization selects map 4 versus 5, while unresolved structures remain explicit;
 - map-4 versus map-5 is now proven to be functionally significant: both Classic NES `EEPROM_V124` titles work with map 4 but display an identical `GAME PACK ERROR / TURN THE POWER OFF.` runtime screen when forced to map 5, even after byte-perfect full verification;
 - partial-first-window verification, including explicit 1-/2-/4-MiB checkpoints, and exact 8-/16-/24-/32-MiB verification are capture-, transcript-, and hardware-proven for the tested layouts;
 - the explicit 12-MiB partial higher-window path is capture-, transcript-, and hardware-proven through all 192 reads, menu boot, and successful launch of both games;
@@ -3411,7 +3430,7 @@ checkpoints completed during this refactor covered card inspection, byte-stable
 save extraction, full-card wipe/blank verification, and write/full read-back
 verification.
 
-The next active engineering task is the EEPROM map-4/map-5 discriminator,
-using direct capture or controlled hardware evidence only. Remaining work also
+The next EEPROM task is expanding the structural detector to unresolved SDK or
+custom call forms, using direct capture or controlled hardware evidence only. Remaining work also
 includes 9+ menu counts, save-bank behavior, additional save-library families,
 and Linux/BSD hardware validation.

@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.11.4**.
+Current shared project/toolset version covered by this summary: **0.12.0**.
 
 All mainline utilities carry this same version:
 
@@ -372,7 +372,7 @@ Tales of Phantasia EEPROM_V124              -> map 5
 FLASH-family metadata                       -> map 6
 ```
 
-The same `EEPROM_V124` marker therefore occurs with both map 4 and map 5. The current writer does not guess between them; EEPROM ROMs require an explicit per-ROM `--mapN=4` or `--mapN=5` until a generic discriminator is recovered.
+The same `EEPROM_V124` marker therefore occurs with both map 4 and map 5. Version 0.12.0 does not guess from the marker or ROM size: it follows a structurally recognized Nintendo SDK capacity initializer. Argument `4` (4 Kbit/512 bytes) selects map 4 and `0x40` (64 Kbit/8 KiB) selects map 5. Unresolved ROMs retain explicit `--mapN=4` or `--mapN=5`.
 
 Controlled hardware A/B tests show that the distinction is functionally significant. Both Classic NES titles work with map 4. When either one is forced to map 5, programming and full read-back verification still succeed, but the game displays the same runtime error screen:
 
@@ -426,7 +426,7 @@ map 6                           != proof of active FLASH saving
 SRAM patch state                != a reason to change this ROM to map 3
 ```
 
-For metadata families with a generic captured rule, classification should remain metadata-faithful rather than attempting runtime save-code detection. EEPROM remains explicit because its map-4/map-5 discriminator is not yet known.
+For metadata families with a generic captured rule, classification remains metadata-faithful. EEPROM is the exception: the marker is ambiguous, so the writer follows structurally visible SDK capacity initialization and otherwise requires an override.
 
 `FLASH1M_V... -> map 6` remains a generic metadata-based implementation rule that still deserves dedicated capture validation.
 
@@ -693,7 +693,7 @@ ezfadvanceIII_multirom_writer \
 
 ### Manual catalog overrides
 
-Supported for protocol experiments; multi-digit slot numbers are accepted. EEPROM ROMs currently require an explicit map 4 or map 5 override:
+Supported for protocol experiments; multi-digit slot numbers are accepted. EEPROM ROMs with unresolved initialization require an explicit map 4 or map 5 override:
 
 ```text
 --typeN=VALUE
@@ -779,11 +779,15 @@ Classic NES EEPROM_V124 -> 512-byte EEPROM -> map 4
 Tales of Phantasia      -> 8-KiB EEPROM    -> map 5
 ```
 
-This is direct evidence of a strong capacity/map correlation in the known
-samples and makes EEPROM capacity the leading candidate discriminator. It is
-not yet a generic rule: the Classic NES titles also have special runtime
-mapping behavior, so another controlled EEPROM case is needed to separate
-capacity from that family-specific behavior.
+Super Monkey Ball Jr. supplies the independent controlled case: its V122 SDK
+wrapper passes capacity argument `4`; map 4 boots and saves, while map 5 boots
+but the game rejects saving. TOF directly calls the V124 identifier with
+`0x40`, and its native 8-KiB EEPROM save works with map 5. This establishes the
+capacity/map rule for those structurally visible SDK forms.
+
+Both 0.12.0 automatic paths are hardware-qualified. The writer selected map 4
+for Super Monkey and map 5 for TOF without overrides; each game booted and
+saved successfully.
 
 The `EEPROM_V124` marker does not encode capacity. A static ROM analyzer may be
 able to distinguish the formats by recognizing the EEPROM command widths: the
@@ -791,14 +795,14 @@ able to distinguish the formats by recognizing the EEPROM command widths: the
 command), while the 8-KiB device uses 14 address bits (17-bit read command and
 81-bit write command). Compiler variation, dynamically selected capacity, and
 custom routines make searches for those numeric constants alone unreliable.
-Until a structural detector is validated against additional ROMs, dependable
-evidence remains an observed EEPROM transaction, recognized/disassembled save
-routine, trusted game-code database, or genuine unpadded save size.
+Version 0.12.0 recognizes the direct TOF initializer and the one-level Super
+Monkey wrapper. A selector without a recoverable capacity call remains
+unknown; the detector does not use absence of a call as 512-byte evidence.
 
 The Classic NES A/B tests prove map 4 and map 5 are not interchangeable: map 4 works, while map 5 still writes and fully verifies but is rejected at runtime with the same `GAME PACK ERROR / TURN THE POWER OFF.` screen in both tested titles.
 
-Until the capacity hypothesis and a generic detector are independently
-validated, EEPROM map selection remains explicit.
+EEPROM map selection is automatic for recognized SDK initialization and
+remains explicit for unresolved or contradictory structures.
 
 ### Multi-ROM save-bank behavior
 
@@ -830,7 +834,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
 
 ```text
-macOS       target; current 0.11.4 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.12.0 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1252,7 +1256,7 @@ At shared version **0.9.0**, the project has an object-oriented structural model
 - placement is size-class based and reuses erased padding/internal `FF` runs;
 - single and multi loaders are capture-derived and relocatable; the same `0x7080` multi-loader with 125 relocations matches captured 2–8 ROM configurations;
 - catalog `type` is ROM-size based;
-- catalog `map` uses capture-derived values `3`, `4`, `5`, and `6`; EEPROM map 4 versus 5 is explicit because `EEPROM_V124` occurs with both;
+- catalog `map` uses capture-derived values `3`, `4`, `5`, and `6`; recognized 4-Kbit/64-Kbit EEPROM initialization selects map 4/5, while unresolved structures remain explicit;
 - hardware A/B testing proves map correctness is independent of flash verification: both Classic NES map-5 images fully verify but fail at runtime with an identical Game Pak error screen, whereas map 4 works;
 - 0.7.14 no-unplug transition tests pass for card-reader-to-wipe and save-reader-to-writer workflows;
 - 0.7.15 official-ROM detection/header inspection is hardware-proven on macOS;
@@ -1274,7 +1278,7 @@ At shared version **0.9.0**, the project has an object-oriented structural model
 - native scope is macOS/Linux/BSD through libusb; Windows users should use a Linux VM with USB passthrough;
 - real hardware now validates 1-/2-/4-MiB partial-first-window checkpoints, exact 8-/16-/24-/32-MiB paths, explicit partial 12-/20-/28-MiB paths, and the Fire-Emblem-style tiny-tail checkpoint, plus the documented map and multi-ROM layouts.
 
-The next active engineering task is the **EEPROM map-4/map-5 discriminator**,
+The next EEPROM task is broadening the **map-4/map-5 structural detector**,
 which requires direct capture or controlled hardware evidence. Later work
 includes 9+ menu counts, save-bank behavior, and Linux/BSD hardware validation.
 

@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.11.4` toolset, including guarded
+**Specification baseline:** shared `0.12.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -82,8 +82,10 @@ Writer metadata rules are:
   `64 KiB -> 9`) unless explicitly overridden;
 - SRAM/other ROMs use map `3` and FLASH-family ROMs use map `6` under the
   current capture-derived classifier;
-- EEPROM requires an explicit per-slot map `4` or `5` because
-  `EEPROM_V124` alone does not distinguish the required hardware behavior;
+- EEPROM map selection uses a structurally recovered Nintendo SDK capacity
+  argument when present: 4-Kbit/512-byte EEPROM selects map `4`, while
+  64-Kbit/8-KiB EEPROM selects map `5`. Marker revision and ROM size are not
+  substitutes; unresolved call structures still require an explicit map;
 - FLASH/FLASH512/FLASH1M/EEPROM signatures require an interactive warning
   acknowledgement, and save routines are never patched automatically;
 - `--typeN=VALUE` and `--mapN=VALUE` accept structural slots `1..120` and
@@ -626,8 +628,9 @@ physical 2-MiB official-cartridge extraction.
 6. Read-only programs must not expose destructive methods.
 7. Unsupported mappings and save configurations must fail conservatively.
 8. No ROM save routine may be silently patched.
-9. EEPROM map selection must remain explicit when map `4` versus `5` cannot be
-   derived from evidence.
+9. EEPROM map selection may be automatic only when ROM structure proves the
+   SDK capacity argument. It must remain explicit when the structure is
+   unresolved or contradictory.
 10. Resource cleanup must occur on every return path through RAII.
 11. Official-ROM extraction must refuse an existing destination and must not
     create the output until the complete read and read-session cleanup succeed.
@@ -820,17 +823,15 @@ The current durable support boundary is:
 | Representative 12/20/28-MiB verification | yes | yes | yes |
 | Other arbitrary partial higher extents | no | no | no |
 | `SRAM_V111` 32-KiB save extraction | yes | protocol component coverage | yes |
-| EEPROM map-4/map-5 generic discriminator | capacity correlation established, generic detector incomplete | no | 512-byte/map-4 and 8-KiB/map-5 in known samples; explicit override required |
+| EEPROM map-4/map-5 structural discriminator | TOF direct 64-Kbit initialization and Super Monkey wrapped 4-Kbit initialization recognized | focused fixtures | automatic Super Monkey map 4 and TOF map 5 both boot and save on hardware; unresolved ROMs retain explicit override |
 | More than 8 active menu entries | structural slots only | parser bound | pending |
 | Linux/BSD physical hardware operation | applicable | build target | pending |
 
 Known open boundaries include the original manager's official-ROM size
 algorithm, general EZ3 density detection, multi-ROM save-bank switching,
-EEPROM map-4 versus map-5 discrimination, FLASH1M-specific save-cycle
-validation, menu behavior above eight active entries, and Linux/BSD hardware
-qualification. EEPROM map-4/map-5 discrimination is the next active engineering
-task. The known samples correlate a 512-byte Classic NES save with map 4 and an
-8-KiB Tales of Phantasia save with map 5, but `EEPROM_V124` itself carries no
-capacity. A generic rule still requires additional controlled evidence and a
-validated structural detector; it must not be inferred from ROM titles or the
-save-library string alone.
+EEPROM call structures not covered by the structural detector,
+FLASH1M-specific save-cycle validation, menu behavior above eight active
+entries, and Linux/BSD hardware qualification. The known samples correlate a
+512-byte save with map 4 and an 8-KiB save with map 5, but `EEPROM_V124` itself
+carries no capacity. Version 0.12.0 follows only a recognized SDK initializer;
+it never infers capacity from ROM title, ROM size, or the library string.
