@@ -214,11 +214,12 @@ static constexpr const char* host_platform_name()
 // response aborts safely before USB access or cartridge modification.
 //
 // 0.5.6 adds a per-ROM save-compatibility warning for non-SRAM save libraries.
-// FLASH_V/FLASH512_V/FLASH1M_V and EEPROM_V ROMs now emit a prominent warning
-// advising an SRAM save patch when working save games are required on the
-// EZ-Flash Advance III. SRAM/SRAM_F and ROMs without a recognized non-SRAM
-// save-library marker do not emit this warning. EEPROM is now supported through
-// the capture-derived map-5 path added in 0.5.8.
+// FLASH512_V/FLASH1M_V and EEPROM_V ROMs emit a prominent warning advising an
+// SRAM save patch when working save games are required on the EZ-Flash Advance
+// III. Generic FLASH_V markers no longer emit it because those families have
+// established SRAM conversion paths. SRAM/SRAM_F and ROMs without a recognized
+// non-SRAM save-library marker also do not emit this warning. EEPROM is now
+// supported through the capture-derived map-5 path added in 0.5.8.
 //
 // 0.5.5 replaces the old save-signature-based catalog type classifier with
 // the ROM-size-class rule exposed by 4MiB-4MiB.pcap and 4_4_8MiB.pcap and
@@ -357,8 +358,8 @@ static std::optional<std::string> detect_ascii_library_signature(
 static std::optional<NonSramSaveInfo> detect_non_sram_save_library(
     const std::vector<uint8_t>& rom)
 {
-    // Check the more-specific FLASH prefixes first because FLASH1M_V and
-    // FLASH512_V are separate SDK library families from the generic FLASH_V.
+    // Generic FLASH_V libraries are intentionally excluded. Keep warnings for
+    // the distinct FLASH1M_V and FLASH512_V families and for EEPROM.
     struct Candidate {
         const char* prefix;
         size_t len;
@@ -367,7 +368,6 @@ static std::optional<NonSramSaveInfo> detect_non_sram_save_library(
     static constexpr Candidate candidates[] = {
         {"FLASH1M_V",  9, "FLASH1M (128 KiB Flash)"},
         {"FLASH512_V", 10, "FLASH512 (64 KiB Flash)"},
-        {"FLASH_V",     7, "FLASH (64 KiB Flash)"},
         {"EEPROM_V",    8, "EEPROM"},
     };
 
