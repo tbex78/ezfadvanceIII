@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.13.0` toolset, including guarded
+**Specification baseline:** shared `0.13.1` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -39,8 +39,9 @@ The native targets are:
 - Windows 11
 
 macOS on Apple Silicon is the current compile, transcript, and physical-device
-validation baseline. Linux CI covers the Makefile build. Version 0.13.0 adds a
-CMake/MSVC Windows build and offline-test target; Windows CI and physical USB
+validation baseline. Linux CI covers the Makefile build. Version 0.13.0 added a
+CMake/MSVC Windows build and offline-test target; version 0.13.1 disables the
+Win32 `min`/`max` macros for every Windows target. Windows CI and physical USB
 qualification must be recorded before calling a particular binary release
 hardware-proven.
 
