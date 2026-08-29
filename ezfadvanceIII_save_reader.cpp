@@ -1,7 +1,3 @@
-#if defined(_WIN32)
-#error "Native Windows builds are intentionally unsupported. Use macOS, Linux, BSD, or a Linux VM on Windows."
-#endif
-
 #if defined(__has_include)
 #  if __has_include(<libusb-1.0/libusb.h>)
 #    include <libusb-1.0/libusb.h>
@@ -32,6 +28,7 @@
 
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/protocol.hpp"
+#include "ezfadvance/platform.hpp"
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/ez3_catalog.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
@@ -58,10 +55,10 @@
 //   OpenBSD
 //   NetBSD
 //   DragonFly BSD
+//   Windows 10/11
 //
-// Native Windows support is intentionally out of scope. Windows users should
-// run the Linux build in a VM with direct USB passthrough for VID 0x0E6A /
-// PID 0x5088.
+// Windows 10/11 is supported through libusb with a compatible WinUSB/libusbK
+// device driver. Unix-like targets retain their existing native paths.
 //
 // Recognized catalog layouts:
 //   single ROM: loader-relative header 0x4E8, entry 0x4F8
@@ -78,25 +75,6 @@
 // The paired FFTA + DumpRom captures additionally expose four shared 32-KiB
 // banks. This tool assigns them cumulatively in catalog order so a later ROM
 // does not overwrite banks reserved by an earlier ROM.
-
-static constexpr const char* host_platform_name()
-{
-#if defined(__APPLE__) && defined(__MACH__)
-    return "macOS";
-#elif defined(__linux__)
-    return "Linux";
-#elif defined(__FreeBSD__)
-    return "FreeBSD";
-#elif defined(__OpenBSD__)
-    return "OpenBSD";
-#elif defined(__NetBSD__)
-    return "NetBSD";
-#elif defined(__DragonFly__)
-    return "DragonFly BSD";
-#else
-    return "Unix-like OS";
-#endif
-}
 
 static constexpr uint32_t CARD_IMAGE_SIZE = 0x02000000u;
 
@@ -603,7 +581,7 @@ static void usage(const char* argv0)
               << "  " << argv0 << " --rom N [--output file.sav]\n\n"
               << "  " << argv0 << " --write file.sav --backup original.sav "
                  "--yes-really-write [--rom N]\n\n"
-              << "EZF Advance III save reader/writer (" << host_platform_name() << ").\n"
+              << "EZF Advance III save reader/writer (" << ezfadvance::hostPlatformName() << ").\n"
               << "Supported paths: 32-KiB SRAM_V111 and 64-KiB FLASH512 with cumulative four-bank "
                  "allocation beginning at selector 0x0900.\n"
               << "On a multi-ROM card, --rom N is required; the reader will not "
@@ -716,7 +694,7 @@ int main(int argc, char** argv)
     }
     libusb_device_handle* h = device.handle();
 
-    std::cout << "EZF Advance III opened on " << host_platform_name()
+    std::cout << "EZF Advance III opened on " << ezfadvance::hostPlatformName()
               << "; interface 0 claimed.\n";
 
     int result = 2;

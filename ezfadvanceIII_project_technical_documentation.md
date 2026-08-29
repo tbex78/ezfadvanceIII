@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.12.0`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.12.0`<br>
+**Current project/toolset version:** `0.13.0`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.13.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native project scope is macOS, Linux, and BSD. The current shared 0.12.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI compiles and runs the offline suite. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux physical-USB and BSD build/hardware validation remain pending.
+**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared 0.13.0 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI covers the existing Makefile path, and Windows CMake/MSVC CI is defined for the new port. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD/Windows physical-USB validation remains pending.
 
 ---
 
@@ -2935,24 +2935,39 @@ map 4 through the wrapped V122 structure, and TOF selected map 5 through the
 direct V124 structure. Neither used an override; both games booted and saved
 successfully.
 
+### 36.65 0.13.0 — Windows 10/11 source and build support
+
+The deliberate `_WIN32` build blockers were removed. Platform naming,
+interactive-terminal detection, terminal width, and in-place progress-line
+setup now live in a shared module with Win32 Console and retained POSIX
+implementations. USB transport remains libusb and no capture-derived command,
+timing, image, save, erase, or verification sequence changes by host OS.
+
+CMake 3.20+ builds all four tools and all offline tests with MSVC, MinGW-w64,
+or the existing Unix compilers. The Unix Makefile remains supported. Windows
+uses libusb with a WinUSB/libusbK-compatible driver association; Windows CI
+builds through vcpkg. Physical Windows 10/11 USB qualification is still a
+separate hardware checkpoint.
+
 ---
 
 ## 37. Build environment and native platform scope
 
-The current source targets C++17 and libusb on Unix-like systems. The portable
-Makefile selects only the support modules required by each executable and
-prefers `pkg-config`, with fallbacks for common system and Homebrew prefixes.
+The current source targets C++17 and libusb on Unix-like systems and Windows
+10/11. The portable Makefile remains the Unix-native path and prefers
+`pkg-config`, with fallbacks for common system and Homebrew prefixes. CMake is
+the cross-platform path and builds the same four executables and offline suite.
 
 Native project scope:
 
 ```text
-macOS       supported target; current 0.12.0 baseline compiled and transcript-tested; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.13.0 baseline compiled and transcript-tested; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
 NetBSD      supported target; validation pending
 DragonFly   supported target; validation pending
-Windows     no native mainline support; use a Linux VM with USB passthrough
+Windows 10/11 CMake/MSVC or MinGW-w64 source target; CI and physical USB qualification pending
 ```
 
 Build all four programs:
@@ -2966,6 +2981,24 @@ Run syntax checks and offline regression tests:
 ```bash
 make check
 make test
+```
+
+Cross-platform CMake build and test:
+
+```bash
+cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build/cmake
+ctest --test-dir build/cmake --output-on-failure
+```
+
+Windows with vcpkg and Visual Studio:
+
+```powershell
+vcpkg install libusb:x64-windows
+cmake -S . -B build/windows -A x64 `
+  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build/windows --config Release
+ctest --test-dir build/windows -C Release --output-on-failure
 ```
 
 The offline tests do not initialize libusb or access a cartridge. They cover
@@ -2986,7 +3019,7 @@ Callers may override `CPPFLAGS`, `CXXFLAGS`, `WARNFLAGS`, `LDFLAGS`, and
 
 The exact BSD linker/include flags may vary with the base system or package installation and should be documented only after each target is compiled successfully.
 
-Windows XP `usbscan.sys` experiments remain useful historical reverse-engineering material, but they are not maintained as a native backend for the current writer. Windows users are expected to pass VID `0x0E6A` / PID `0x5088` through to a Linux VM and run the Linux build there.
+Windows XP `usbscan.sys` experiments remain useful historical reverse-engineering material, but they are not used as the modern backend. Windows 10/11 uses libusb over a WinUSB/libusbK-compatible driver association for VID `0x0E6A` / PID `0x5088`.
 
 Warnings-enabled development builds are recommended while modifying protocol code.
 
@@ -3388,7 +3421,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.12.0**, the project has an object-oriented structural model:
+At shared toolset version **0.13.0**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,
@@ -3410,7 +3443,9 @@ At shared toolset version **0.12.0**, the project has an object-oriented structu
 - EZ3 catalogued-ROM extraction is hardware-qualified on a two-ROM layout: ROM 1 matches its original after entry-branch reconstruction, and ROM 2 matches with its entry bytes unchanged;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write reporting uses progress bars; `--verbose` restores detailed diagnostics;
-- native code scope remains macOS/Linux/BSD via libusb; native Windows remains out of scope;
+- native source scope is macOS/Linux/BSD/Windows via libusb; Windows 10/11
+  uses the CMake build and Win32 console layer, with physical USB qualification
+  pending;
 - official GBA cartridge classification, header inspection, and read-session
   cleanup are transcript-tested and hardware-confirmed on macOS with Golden
   Sun; guarded full-address-space extraction, correct 8-MiB trimming, trusted

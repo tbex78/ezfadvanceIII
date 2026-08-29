@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.12.0` toolset, including guarded
+**Specification baseline:** shared `0.13.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -15,7 +15,7 @@ This document specifies the architecture, behavior, safety properties, and
 validation requirements of the EZF Advance III command-line toolset.
 
 The software provides an independent, capture-derived interface to an
-EZ-Flash Advance III Game Boy Advance flash cartridge on modern Unix-like
+EZ-Flash Advance III Game Boy Advance flash cartridge on modern desktop
 systems. It reproduces only behavior supported by USB captures and real-device
 tests. Unproven flash mappings and save-slot operations must not be guessed.
 
@@ -35,20 +35,25 @@ The native targets are:
 - OpenBSD
 - NetBSD
 - DragonFly BSD
+- Windows 10
+- Windows 11
 
 macOS on Apple Silicon is the current compile, transcript, and physical-device
-validation baseline. Linux and BSD are supported source/build targets, but
-their hardware qualification remains pending unless a later durable test
-record states otherwise.
+validation baseline. Linux CI covers the Makefile build. Version 0.13.0 adds a
+CMake/MSVC Windows build and offline-test target; Windows CI and physical USB
+qualification must be recorded before calling a particular binary release
+hardware-proven.
 
 The project requires:
 
 - a C++17 compiler;
 - libusb 1.0 headers and library;
-- a POSIX-compatible `make` and shell environment.
+- either a POSIX-compatible `make`/shell environment or CMake 3.20+;
+- on Windows, a libusb-compatible WinUSB/libusbK device-driver association.
 
-Native Windows builds are intentionally unsupported. Windows users may use a
-Linux virtual machine with USB passthrough.
+The Unix Makefile remains supported and unchanged in purpose. Windows 10/11
+uses CMake with MSVC or MinGW-w64; no Windows-specific USB protocol sequence is
+introduced.
 
 ## 3. Programs
 

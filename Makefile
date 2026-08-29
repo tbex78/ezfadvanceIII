@@ -39,7 +39,7 @@ SAVE_READER = ezfadvanceIII_save_reader
 WIPE = ezfadvanceIII_wipe_card
 
 PROGRAMS = $(WRITER) $(CARD_READER) $(SAVE_READER) $(WIPE)
-TRANSPORT_SOURCES = src/usb_device.cpp src/protocol.cpp
+TRANSPORT_SOURCES = src/usb_device.cpp src/protocol.cpp src/platform.cpp
 WRITER_SOURCES = $(TRANSPORT_SOURCES) src/card_writer.cpp src/libusb_writer_backend.cpp src/cartridge_format.cpp src/cartridge_image_builder.cpp src/eeprom_mapping.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 READ_ONLY_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/ez3_catalog.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp
 CARD_READER_SOURCES = $(READ_ONLY_SOURCES) src/card_reader_options.cpp
@@ -133,6 +133,8 @@ test: check
 	./build/card_reader_options_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/protocol_test.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/protocol_test
 	./build/protocol_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/platform_test.cpp src/platform.cpp -o build/platform_test
+	./build/platform_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/read_session_transition_test.cpp src/read_session_transition.cpp -o build/read_session_transition_test
 	./build/read_session_transition_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/official_cartridge_read_test.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/official_cartridge_read_test
@@ -178,6 +180,6 @@ print-config:
 	done
 
 clean:
-	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/cartridge_image_builder_test build/card_writer_test build/ez3_catalog_test build/eeprom_mapping_test build/card_reader_options_test build/protocol_test build/read_session_transition_test build/official_cartridge_read_test build/verification_exact_8mib_test build/verification_partial_12mib_test build/verification_exact_16mib_test build/verification_tiny_tail_above_16mib_test build/verification_partial_20mib_test build/verification_exact_24mib_test build/verification_partial_28mib_test build/verification_exact_32mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test build/version_test build/save_selection_test build/save_memory_test
+	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/cartridge_image_builder_test build/card_writer_test build/ez3_catalog_test build/eeprom_mapping_test build/card_reader_options_test build/protocol_test build/platform_test build/read_session_transition_test build/official_cartridge_read_test build/verification_exact_8mib_test build/verification_partial_12mib_test build/verification_exact_16mib_test build/verification_tiny_tail_above_16mib_test build/verification_partial_20mib_test build/verification_exact_24mib_test build/verification_partial_28mib_test build/verification_exact_32mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test build/version_test build/save_selection_test build/save_memory_test
 
 FORCE:

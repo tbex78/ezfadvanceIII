@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.12.0**.
+version is **0.13.0**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.12.0
+“pending,” and “next” describe the named review point, not the present 0.13.0
 support boundary.
 
 ## Build and test
@@ -31,11 +31,30 @@ cartridge:
 make test
 ```
 
-The native source/build targets are macOS, Linux, FreeBSD, OpenBSD, NetBSD,
-and DragonFly BSD. macOS on Apple Silicon is the current compile and physical
-hardware validation baseline. Linux and BSD hardware qualification remains
-pending. Native Windows builds are unsupported; use a Linux virtual machine
-with USB passthrough if required.
+The existing Makefile remains the native build path for macOS, Linux, FreeBSD,
+OpenBSD, NetBSD, and DragonFly BSD. The same targets may use CMake:
+
+```sh
+cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build/cmake
+ctest --test-dir build/cmake --output-on-failure
+```
+
+Windows 10/11 uses CMake, libusb from vcpkg, and a WinUSB/libusbK-compatible
+driver for the EZF Advance III USB interface:
+
+```powershell
+vcpkg install libusb:x64-windows
+cmake -S . -B build/windows -A x64 `
+  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build/windows --config Release
+ctest --test-dir build/windows -C Release --output-on-failure
+```
+
+Installing a replacement USB driver changes how Windows associates with this
+device; record the existing driver first if the original manager must remain
+usable. macOS on Apple Silicon remains the physical-hardware baseline. Linux,
+BSD, and Windows physical-device qualification remains pending.
 
 The code is organized in layers:
 

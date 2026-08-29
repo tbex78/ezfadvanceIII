@@ -28,3 +28,29 @@ jobs:
 
       - name: Check whitespace
         run: git diff --check
+
+  windows-build-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install libusb
+        shell: pwsh
+        run: vcpkg install libusb:x64-windows
+
+      - name: Configure
+        shell: pwsh
+        run: >-
+          cmake -S . -B build/windows -A x64
+          -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+          -DBUILD_TESTING=ON
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build/windows --config Release --parallel
+
+      - name: Run offline tests
+        shell: pwsh
+        run: ctest --test-dir build/windows -C Release --output-on-failure

@@ -1,7 +1,3 @@
-#if defined(_WIN32)
-#error "Native Windows builds are intentionally unsupported. Use macOS, Linux, BSD, or a Linux VM on Windows."
-#endif
-
 #if defined(__has_include)
 #  if __has_include(<libusb-1.0/libusb.h>)
 #    include <libusb-1.0/libusb.h>
@@ -30,11 +26,9 @@
 #include <utility>
 #include <vector>
 
-#include <sys/ioctl.h>
-#include <unistd.h>
-
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/protocol.hpp"
+#include "ezfadvance/platform.hpp"
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/card_reader_options.hpp"
 #include "ezfadvance/ez3_catalog.hpp"
@@ -58,10 +52,10 @@
 //   OpenBSD
 //   NetBSD
 //   DragonFly BSD
+//   Windows 10/11
 //
-// Native Windows support is intentionally out of scope. Windows users should
-// run the Linux build in a VM with direct USB passthrough for VID 0x0E6A /
-// PID 0x5088.
+// Windows 10/11 is supported through libusb with a compatible WinUSB/libusbK
+// device driver. Unix-like targets retain their existing native paths.
 //
 // Recognized catalog layouts:
 //   single ROM: loader-relative header 0x4E8, entry 0x4F8
@@ -83,25 +77,6 @@
 //     the current writer and independently reconfirmed by the 6/7/8-ROM captures.
 // The utility remains strictly read-only: no erase commands and no ROM
 // programming are performed.
-
-static constexpr const char* host_platform_name()
-{
-#if defined(__APPLE__) && defined(__MACH__)
-    return "macOS";
-#elif defined(__linux__)
-    return "Linux";
-#elif defined(__FreeBSD__)
-    return "FreeBSD";
-#elif defined(__OpenBSD__)
-    return "OpenBSD";
-#elif defined(__NetBSD__)
-    return "NetBSD";
-#elif defined(__DragonFly__)
-    return "DragonFly BSD";
-#else
-    return "Unix-like OS";
-#endif
-}
 
 static constexpr uint32_t FLASH_WINDOW_SIZE = 0x00800000u; // 8 MiB
 static constexpr uint32_t LINEAR16_LIMIT     = 0x01000000u; // 16 MiB
@@ -125,20 +100,6 @@ static std::string progress_duration(double seconds)
         output << minutes << ':' << std::setw(2) << std::setfill('0') << secs;
     }
     return output.str();
-}
-
-static std::string fit_progress_to_terminal(std::string line)
-{
-    if (!::isatty(STDOUT_FILENO)) return line;
-
-    struct winsize terminal_size {};
-    if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &terminal_size) != 0 ||
-        terminal_size.ws_col < 2)
-        return line;
-
-    const std::size_t maximum = terminal_size.ws_col - 1;
-    if (line.size() > maximum) line.resize(maximum);
-    return line;
 }
 
 class ProgressBar final {
@@ -184,11 +145,8 @@ public:
                    << "  ETA " << progress_duration(remaining);
         }
 
-        const std::string line = fit_progress_to_terminal(output.str());
-        if (::isatty(STDOUT_FILENO))
-            std::cout << "\r\033[2K";
-        else
-            std::cout << '\r';
+        const std::string line = ezfadvance::fitProgressToTerminal(output.str());
+        ezfadvance::beginProgressLine(std::cout);
         std::cout << line;
         if (last_width_ > line.size())
             std::cout << std::string(last_width_ - line.size(), ' ');
@@ -784,7 +742,7 @@ static void usage(const char* argv0)
               << "  " << argv0 << " --version\n"
               << "  " << argv0 << " --extract OUTPUT.gba [--verbose]\n"
               << "  " << argv0 << " --extract N OUTPUT.gba [--verbose]\n\n"
-              << "Read-only EZF Advance III card inspector (" << host_platform_name() << ").\n"
+              << "Read-only EZF Advance III card inspector (" << ezfadvance::hostPlatformName() << ").\n"
               << "--extract reads 32 MiB and writes a trimmed .gba dump of a detected "
                  "official GBA cartridge.\n"
               << "--verbose replaces the extraction progress bar with per-block "
@@ -840,7 +798,7 @@ int main(int argc, char** argv)
     }
     libusb_device_handle* h = device.handle();
 
-    std::cout << "EZF Advance III opened on " << host_platform_name()
+    std::cout << "EZF Advance III opened on " << ezfadvance::hostPlatformName()
               << "; interface 0 claimed.\n";
 
     int result = 2;

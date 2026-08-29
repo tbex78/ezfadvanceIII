@@ -2,7 +2,7 @@
 
 ## Project goal
 
-This project reconstructs the behavior of the original Windows **EZ3Manager** software for the **EZ-Flash Advance III** GBA flash cartridge, with the goal of reproducing its cartridge image-building rules and USB flash-management protocol on Unix-like systems using C++17 and libusb. The native project scope is macOS, Linux, and BSD; Windows users are expected to use a Linux VM with USB passthrough.
+This project reconstructs the behavior of the original Windows **EZ3Manager** software for the **EZ-Flash Advance III** GBA flash cartridge, with the goal of reproducing its cartridge image-building rules and USB flash-management protocol using C++17 and libusb. The native source scope is macOS, Linux, BSD, and Windows 10/11; physical Windows USB qualification remains separate from source/build support.
 
 The project is intentionally **evidence-driven**:
 
@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.12.0**.
+Current shared project/toolset version covered by this summary: **0.13.0**.
 
 All mainline utilities carry this same version:
 
@@ -831,19 +831,21 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 
 ## Current native platform scope
 
-Shared version 0.6.0 keeps the toolset on the same C++17/libusb Unix-like platform policy:
+Shared version 0.13.0 extends the C++17/libusb platform policy while preserving
+the established Unix-like build path:
 
 ```text
-macOS       target; current 0.12.0 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.13.0 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
 NetBSD      target; validation pending
 DragonFly   target; validation pending
-Windows     no native mainline support; use a Linux VM with USB passthrough
+Windows 10/11 CMake/MSVC or MinGW-w64 source target; CI and physical USB qualification pending
 ```
 
-The portability foundation remains the same. The 0.6.0 version synchronization changes release/version policy, not the Unix-like platform scope.
+The USB protocol remains shared across platforms. Windows-specific code is
+limited to console handling and build/driver integration.
 
 ---
 
@@ -1275,7 +1277,7 @@ At shared version **0.9.0**, the project has an object-oriented structural model
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;
 - paired FFTA evidence proves that non-SRAM save-library signatures may survive SRAM patching while runtime save code changes;
-- native scope is macOS/Linux/BSD through libusb; Windows users should use a Linux VM with USB passthrough;
+- native scope is macOS/Linux/BSD/Windows through libusb; Windows 10/11 uses CMake and WinUSB/libusbK, with physical qualification pending;
 - real hardware now validates 1-/2-/4-MiB partial-first-window checkpoints, exact 8-/16-/24-/32-MiB paths, explicit partial 12-/20-/28-MiB paths, and the Fire-Emblem-style tiny-tail checkpoint, plus the documented map and multi-ROM layouts.
 
 The next EEPROM task is broadening the **map-4/map-5 structural detector**,

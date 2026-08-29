@@ -1,7 +1,3 @@
-#if defined(_WIN32)
-#error "Native Windows builds are intentionally unsupported. Use macOS, Linux, BSD, or a Linux VM on Windows."
-#endif
-
 #if defined(__has_include)
 #  if __has_include(<libusb-1.0/libusb.h>)
 #    include <libusb-1.0/libusb.h>
@@ -37,6 +33,7 @@
 #include "ezfadvance/eeprom_mapping.hpp"
 #include "ezfadvance/libusb_writer_backend.hpp"
 #include "ezfadvance/protocol.hpp"
+#include "ezfadvance/platform.hpp"
 #include "ezfadvance/verification_session.hpp"
 #include "ezfadvance/writer_options.hpp"
 #include "ezfadvance/verification_policy.hpp"
@@ -68,27 +65,7 @@ static void print_hex(const uint8_t* p, size_t n, size_t max = 64)
     std::cout << std::dec << '\n';
 }
 
-static constexpr const char* host_platform_name()
-{
-#if defined(__APPLE__) && defined(__MACH__)
-    return "macOS";
-#elif defined(__linux__)
-    return "Linux";
-#elif defined(__FreeBSD__)
-    return "FreeBSD";
-#elif defined(__OpenBSD__)
-    return "OpenBSD";
-#elif defined(__NetBSD__)
-    return "NetBSD";
-#elif defined(__DragonFly__)
-    return "DragonFly BSD";
-#else
-    return "Unix-like OS";
-#endif
-}
-
-
-// ezfadvanceIII multi-ROM writer 0.9.0 for macOS, Linux and BSD.
+// ezfadvanceIII multi-ROM writer for macOS, Linux, BSD, and Windows 10/11.
 //
 // 0.6.2 removes hard-coded project-version text from runtime banners.
 // synchronization. Verification behavior remains evidence-bounded:
@@ -186,8 +163,8 @@ static constexpr const char* host_platform_name()
 //   * Linux-only automatic kernel-driver detach is isolated behind __linux__;
 //   * std::filesystem is no longer required for deriving catalog names;
 //   * platform reporting covers macOS, Linux, FreeBSD, OpenBSD, NetBSD and DragonFly BSD;
-//   * native Windows builds are intentionally unsupported; Windows users should use
-//     a Linux VM with USB passthrough for VID 0x0E6A / PID 0x5088.
+//   * at that release, native Windows builds were intentionally unsupported and
+//     Windows users were directed to a Linux VM with USB passthrough.
 //   * warning wording now says "embedded save-library signature" because a manually
 //     SRAM-patched ROM may retain its original FLASH/EEPROM marker (as observed with FFTA).
 //
@@ -601,7 +578,7 @@ static void print_layout(const std::vector<RomInfo>& roms,
 static void usage(const char* argv0)
 {
     std::cerr
-        << "ezfadvanceIII manager-primed ROM writer (" << host_platform_name() << ")\n\n"
+        << "ezfadvanceIII manager-primed ROM writer (" << ezfadvance::hostPlatformName() << ")\n\n"
         << "Version:\n"
         << "  " << argv0 << " --version\n\n"
         << "Dry run / inspect layout only:\n"

@@ -1,7 +1,3 @@
-#if defined(_WIN32)
-#error "Native Windows builds are intentionally unsupported. Use macOS, Linux, BSD, or a Linux VM on Windows."
-#endif
-
 #if defined(__has_include)
 #  if __has_include(<libusb-1.0/libusb.h>)
 #    include <libusb-1.0/libusb.h>
@@ -25,26 +21,8 @@
 
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/protocol.hpp"
+#include "ezfadvance/platform.hpp"
 #include "ezfadvance/version.hpp"
-
-static constexpr const char* host_platform_name()
-{
-#if defined(__APPLE__) && defined(__MACH__)
-    return "macOS";
-#elif defined(__linux__)
-    return "Linux";
-#elif defined(__FreeBSD__)
-    return "FreeBSD";
-#elif defined(__OpenBSD__)
-    return "OpenBSD";
-#elif defined(__NetBSD__)
-    return "NetBSD";
-#elif defined(__DragonFly__)
-    return "DragonFly BSD";
-#else
-    return "Unix-like OS";
-#endif
-}
 
 static constexpr unsigned READINESS_ATTEMPTS = 5;
 static constexpr auto READINESS_RETRY_DELAY = std::chrono::milliseconds(100);
@@ -59,9 +37,7 @@ static constexpr auto READINESS_RETRY_DELAY = std::chrono::milliseconds(100);
 // unchanged. 0.5.10 changes naming and Unix-like portability only.
 //
 // Supported native targets: macOS, Linux, FreeBSD, OpenBSD, NetBSD,
-// DragonFly BSD. Native Windows support is intentionally out of scope;
-// Windows users should use a Linux VM with direct USB passthrough for
-// VID 0x0E6A / PID 0x5088.
+// DragonFly BSD, and Windows 10/11 through libusb with WinUSB/libusbK.
 
 static void print_hex(const uint8_t* p, size_t n, size_t max = 64)
 {
@@ -544,7 +520,7 @@ int main(int argc, char** argv)
 
     if (argc != 2 || std::string(argv[1]) != "--yes-really-wipe") {
         std::cerr
-            << "EZF Advance III card wipe utility (" << host_platform_name() << ")\n\n"
+            << "EZF Advance III card wipe utility (" << ezfadvance::hostPlatformName() << ")\n\n"
             << "WARNING: This operation is destructive and erases cartridge "
                "flash and all four save banks.\n\n"
             << "RECOMMENDED BEFORE USE:\n"
@@ -580,7 +556,7 @@ int main(int argc, char** argv)
     }
     libusb_device_handle* h = device.handle();
 
-    std::cout << "EZF Advance III opened on " << host_platform_name()
+    std::cout << "EZF Advance III opened on " << ezfadvance::hostPlatformName()
               << "; interface 0 claimed.\n";
 
     CardEraser eraser(h);
