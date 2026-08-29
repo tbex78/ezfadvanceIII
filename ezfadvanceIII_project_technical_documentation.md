@@ -3258,18 +3258,36 @@ The writer maps `FLASH1M_V...` to 6, consistent with the FLASH family, but a ded
 `EEPROM_V124` is capture-proven with **both map 4 and map 5**:
 
 ```text
-Classic NES Super Mario / Castlevania -> map 4
-Tales of Phantasia                    -> map 5
+Classic NES Super Mario / Castlevania -> 512-byte (4-Kbit) save -> map 4
+Tales of Phantasia                    -> 8-KiB (64-Kbit) save   -> map 5
 ```
 
-The discriminator used by original EZ3Manager remains unknown. Recovering it is
-the next active engineering task, and any generic rule must come from direct
-capture or controlled hardware evidence. ROM titles, save-library strings, and
-assumptions are not sufficient.
+The save sizes were confirmed from the produced save files. They establish a
+strong capacity/map correlation in the current samples and make EEPROM
+capacity the leading candidate for the discriminator used by original
+EZ3Manager. They do not yet prove a generic rule because the Classic NES family
+also has special runtime mapping behavior. At least one additional controlled
+non-Classic EEPROM case is required to distinguish a capacity rule from a
+Classic-specific configuration rule.
+
+The ASCII `EEPROM_V124` library marker does not carry the capacity. The
+underlying serial command shape does: 512-byte EEPROM uses a 6-bit address,
+giving a 9-bit read command and 73-bit write command; 8-KiB EEPROM uses a
+14-bit address, giving a 17-bit read command and 81-bit write command. A future
+offline analyzer can attempt to recognize these transfer lengths in the ROM's
+EEPROM routines. Searching for the numbers alone is not sufficient because
+compiler transformations, custom implementations, and runtime capacity
+selection can obscure them or create false positives.
+
+The dependable evidence sources are, in descending directness: observed EEPROM
+transactions, structural recognition or disassembly of the ROM save routines,
+a trusted game-code/save-capacity database, and the unpadded size of a genuine
+save file.
 
 The Classic NES A/B tests prove the distinction is runtime-significant rather than cosmetic catalog metadata: both titles fully verify when forced to map 5, yet both reject that configuration with the identical `GAME PACK ERROR / TURN THE POWER OFF.` screen. Map 4 works normally.
 
-Until that discriminator is recovered, the writer requires explicit `--mapN=4` or `--mapN=5`.
+Until the capacity hypothesis and a generic ROM detector are validated against
+additional cases, the writer requires explicit `--mapN=4` or `--mapN=5`.
 
 ### 40.5 Save-bank behavior in multi-ROM mode
 

@@ -820,7 +820,7 @@ The current durable support boundary is:
 | Representative 12/20/28-MiB verification | yes | yes | yes |
 | Other arbitrary partial higher extents | no | no | no |
 | `SRAM_V111` 32-KiB save extraction | yes | protocol component coverage | yes |
-| EEPROM map-4/map-5 generic discriminator | incomplete | no | explicit override required |
+| EEPROM map-4/map-5 generic discriminator | capacity correlation established, generic detector incomplete | no | 512-byte/map-4 and 8-KiB/map-5 in known samples; explicit override required |
 | More than 8 active menu entries | structural slots only | parser bound | pending |
 | Linux/BSD physical hardware operation | applicable | build target | pending |
 
@@ -829,5 +829,8 @@ algorithm, general EZ3 density detection, multi-ROM save-bank switching,
 EEPROM map-4 versus map-5 discrimination, FLASH1M-specific save-cycle
 validation, menu behavior above eight active entries, and Linux/BSD hardware
 qualification. EEPROM map-4/map-5 discrimination is the next active engineering
-task; a generic rule requires direct capture or controlled hardware evidence
-and must not be inferred from ROM titles, save-library strings, or assumptions.
+task. The known samples correlate a 512-byte Classic NES save with map 4 and an
+8-KiB Tales of Phantasia save with map 5, but `EEPROM_V124` itself carries no
+capacity. A generic rule still requires additional controlled evidence and a
+validated structural detector; it must not be inferred from ROM titles or the
+save-library string alone.

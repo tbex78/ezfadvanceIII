@@ -770,14 +770,35 @@ higher-window extents remain deliberately unproven.
 
 ### EEPROM map-4 / map-5 discriminator
 
-`EEPROM_V124` is proven with both map 4 and map 5. The missing discriminator is
-the next active engineering task. Any generic rule must come from direct
-original-manager capture or controlled hardware evidence; ROM titles,
-save-library strings, and assumptions are not sufficient.
+`EEPROM_V124` is proven with both map 4 and map 5. Save files from the tested
+Classic NES samples are 512 bytes (4 Kbit), while the Tales of Phantasia save
+is 8 KiB (64 Kbit):
+
+```text
+Classic NES EEPROM_V124 -> 512-byte EEPROM -> map 4
+Tales of Phantasia      -> 8-KiB EEPROM    -> map 5
+```
+
+This is direct evidence of a strong capacity/map correlation in the known
+samples and makes EEPROM capacity the leading candidate discriminator. It is
+not yet a generic rule: the Classic NES titles also have special runtime
+mapping behavior, so another controlled EEPROM case is needed to separate
+capacity from that family-specific behavior.
+
+The `EEPROM_V124` marker does not encode capacity. A static ROM analyzer may be
+able to distinguish the formats by recognizing the EEPROM command widths: the
+512-byte device uses 6 address bits (9-bit read command and 73-bit write
+command), while the 8-KiB device uses 14 address bits (17-bit read command and
+81-bit write command). Compiler variation, dynamically selected capacity, and
+custom routines make searches for those numeric constants alone unreliable.
+Until a structural detector is validated against additional ROMs, dependable
+evidence remains an observed EEPROM transaction, recognized/disassembled save
+routine, trusted game-code database, or genuine unpadded save size.
 
 The Classic NES A/B tests prove map 4 and map 5 are not interchangeable: map 4 works, while map 5 still writes and fully verifies but is rejected at runtime with the same `GAME PACK ERROR / TURN THE POWER OFF.` screen in both tested titles.
 
-Until the discriminator is recovered, EEPROM map selection remains explicit.
+Until the capacity hypothesis and a generic detector are independently
+validated, EEPROM map selection remains explicit.
 
 ### Multi-ROM save-bank behavior
 
