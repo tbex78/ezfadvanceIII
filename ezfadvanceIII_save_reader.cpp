@@ -88,28 +88,6 @@ static uint32_t read_le32(const uint8_t* p)
          | (static_cast<uint32_t>(p[3]) << 24);
 }
 
-static bool read_card(libusb_device_handle* h,
-                      uint32_t byte_address,
-                      std::vector<uint8_t>& out,
-                      size_t length)
-{
-    return ezfadvance::ReadOnlyCartridge(h).read(byte_address, out, length);
-}
-
-static bool initialize_ez3_read_session(libusb_device_handle* h)
-{
-    ezfadvance::ReadOnlyCartridge cartridge(h);
-    if (!cartridge.initialize()) return false;
-    if (ezfadvance::hasEz3Catalog(cartridge.kind())) return true;
-
-    std::cerr << "Save extraction requires an EZ3 flash cartridge; refusing "
-                 "EZ3 catalog/save processing for an official or unknown "
-                 "cartridge.\n";
-    if (!cartridge.finishSession())
-        std::cerr << "Read-session cleanup after cartridge rejection failed.\n";
-    return false;
-}
-
 static std::optional<uint32_t> arm_branch_target(uint32_t ins)
 {
     return ezfadvance::CartridgeFormat::armBranchTarget(ins);
@@ -117,10 +95,11 @@ static std::optional<uint32_t> arm_branch_target(uint32_t ins)
 
 using GbaHeader = ezfadvance::GbaHeader;
 
-static GbaHeader read_gba_header(libusb_device_handle* h, uint32_t start)
+static GbaHeader read_gba_header(ezfadvance::ReadOnlyCartridge& cartridge,
+                                 uint32_t start)
 {
     std::vector<uint8_t> b;
-    if (!read_card(h,start,b,0xC0)) return {};
+    if (!cartridge.read(start,b,0xC0)) return {};
     return GbaHeader::parse(b);
 }
 
@@ -140,12 +119,12 @@ static std::string hex16(uint16_t v)
     return s.str();
 }
 
-static bool read_save_capture(libusb_device_handle* h,
+static bool read_save_capture(ezfadvance::SaveMemoryReader& reader,
                               size_t save_size,
                               uint16_t first_bank,
                               std::vector<uint8_t>& save)
 {
-    return ezfadvance::SaveMemoryReader(h).read(save_size, save, first_bank);
+    return reader.read(save_size, save, first_bank);
 }
 
 static bool write_binary_file_without_overwrite(
@@ -187,7 +166,8 @@ struct SaveSignature {
     std::string text;
 };
 
-static SaveSignature detect_save_signature(libusb_device_handle* h,
+static SaveSignature detect_save_signature(
+                                           ezfadvance::ReadOnlyCartridge& cartridge,
                                            uint32_t start,
                                            uint32_t span)
 {
@@ -212,7 +192,7 @@ static SaveSignature detect_save_signature(libusb_device_handle* h,
     while (pos < span) {
         const size_t n = std::min<size_t>(CHUNK,static_cast<size_t>(span-pos));
         std::vector<uint8_t> b;
-        if (!read_card(h,start+pos,b,n))
+        if (!cartridge.read(start+pos,b,n))
             return {};
 
         std::vector<uint8_t> joined;
@@ -247,14 +227,16 @@ static std::string safe_filename_component(std::string s)
     return s.empty() ? "gba_save" : s;
 }
 
-static int inspect_and_dump_save(libusb_device_handle* h,
+static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
+                                 ezfadvance::SaveMemoryReader& save_reader,
+                                 ezfadvance::SaveMemoryWriter& save_writer,
                                  const std::optional<std::string>& requested_output,
                                  const std::optional<size_t>& requested_rom,
                                  const std::optional<std::vector<uint8_t>>& write_save,
                                  const std::optional<std::string>& backup_path)
 {
     std::vector<uint8_t> first;
-    if (!read_card(h,0,first,4)) return 2;
+    if (!cartridge.read(0,first,4)) return 2;
 
     const uint32_t first_word = read_le32(first.data());
     const auto loader_target = arm_branch_target(first_word);
@@ -276,10 +258,10 @@ static int inspect_and_dump_save(libusb_device_handle* h,
         static_cast<size_t>(CARD_IMAGE_SIZE-loader_start));
     const auto loader_end = loader_start +
         static_cast<uint32_t>(loader_read_len - 1);
-    if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(loader_end))
+    if (!cartridge.prepareLinearForAddress(loader_end))
         return 2;
     std::vector<uint8_t> loader;
-    if (!read_card(h,loader_start,loader,loader_read_len)) return 2;
+    if (!cartridge.read(loader_start,loader,loader_read_len)) return 2;
 
     const auto catalog =
         ezfadvance::Ez3CatalogParser::parse(loader, CARD_IMAGE_SIZE);
@@ -297,8 +279,7 @@ static int inspect_and_dump_save(libusb_device_handle* h,
         if (end && *end > catalog->entries[i].start)
             highest_scan_address = std::max(highest_scan_address, *end - 1);
     }
-    if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(
-            highest_scan_address))
+    if (!cartridge.prepareLinearForAddress(highest_scan_address))
         return 2;
 
     struct DetectedRom {
@@ -313,12 +294,12 @@ static int inspect_and_dump_save(libusb_device_handle* h,
     for (size_t i=0;i<rom_count;++i) {
         DetectedRom r;
         r.e = catalog->entries[i];
-        r.g = read_gba_header(h,r.e.start);
+        r.g = read_gba_header(cartridge,r.e.start);
         const auto end = catalog->allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
         r.span = end ? static_cast<uint32_t>(ezfadvance::boundedSaveScanSpan(
                            r.e.start, *end, CARD_IMAGE_SIZE)) : 0;
         if (r.span)
-            r.sig = detect_save_signature(h,r.e.start,r.span);
+            r.sig = detect_save_signature(cartridge,r.e.start,r.span);
         roms.push_back(std::move(r));
     }
 
@@ -424,7 +405,7 @@ static int inspect_and_dump_save(libusb_device_handle* h,
               << chosen.e.name << "\n";
 
     std::vector<uint8_t> save;
-    if (!read_save_capture(h,*selected_save_size,save_selector,save)) {
+    if (!read_save_capture(save_reader,*selected_save_size,save_selector,save)) {
         std::cerr << "Save read failed.\n";
         return 2;
     }
@@ -445,7 +426,7 @@ static int inspect_and_dump_save(libusb_device_handle* h,
             return 5;
 
         std::cout << "Existing save backed up to: " << *backup_path << "\n";
-        if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+        if (!cartridge.finishSession()) {
             std::cerr << "Pre-write readiness transition failed. No save-write "
                          "payload was sent. Backup: " << *backup_path << '\n';
             return 2;
@@ -456,14 +437,13 @@ static int inspect_and_dump_save(libusb_device_handle* h,
                   << "-byte save across " << bank_count
                   << " bank" << (bank_count == 1 ? "" : "s")
                   << " beginning at selector " << hex16(save_selector) << "...\n";
-        ezfadvance::SaveMemoryWriter writer(h);
-        if (!writer.write(save_selector, *write_save)) {
+        if (!save_writer.write(save_selector, *write_save)) {
             std::cerr << "Save write failed. The original backup is available at "
                       << *backup_path << ".\n";
             return 2;
         }
 
-        if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+        if (!cartridge.finishSession()) {
             std::cerr << "Post-write readiness transition failed. The save was "
                          "not verified. Backup: " << *backup_path << '\n';
             return 2;
@@ -471,7 +451,7 @@ static int inspect_and_dump_save(libusb_device_handle* h,
 
         std::vector<uint8_t> verification;
         std::cout << "Reading save back for byte-for-byte verification...\n";
-        if (!read_save_capture(h, *selected_save_size, save_selector, verification)) {
+        if (!read_save_capture(save_reader, *selected_save_size, save_selector, verification)) {
             std::cerr << "Save read-back failed. Backup: " << *backup_path << '\n';
             return 2;
         }
@@ -545,12 +525,16 @@ static int inspect_and_dump_save(libusb_device_handle* h,
 
 class SaveExtractor final {
 public:
-    SaveExtractor(libusb_device_handle* handle,
+    SaveExtractor(ezfadvance::ReadOnlyCartridge& cartridge,
+                  ezfadvance::SaveMemoryReader& save_reader,
+                  ezfadvance::SaveMemoryWriter& save_writer,
                   std::optional<std::string> output,
                   std::optional<size_t> requested_rom,
                   std::optional<std::vector<uint8_t>> write_save,
                   std::optional<std::string> backup_path)
-        : handle_(handle),
+        : cartridge_(cartridge),
+          save_reader_(save_reader),
+          save_writer_(save_writer),
           output_(std::move(output)),
           requested_rom_(requested_rom),
           write_save_(std::move(write_save)),
@@ -560,12 +544,15 @@ public:
 
     int run()
     {
-        return inspect_and_dump_save(handle_, output_, requested_rom_,
+        return inspect_and_dump_save(cartridge_, save_reader_, save_writer_,
+                                     output_, requested_rom_,
                                      write_save_, backup_path_);
     }
 
 private:
-    libusb_device_handle* handle_;
+    ezfadvance::ReadOnlyCartridge& cartridge_;
+    ezfadvance::SaveMemoryReader& save_reader_;
+    ezfadvance::SaveMemoryWriter& save_writer_;
     std::optional<std::string> output_;
     std::optional<size_t> requested_rom_;
     std::optional<std::vector<uint8_t>> write_save_;
@@ -692,24 +679,34 @@ int main(int argc, char** argv)
         }
         return 1;
     }
-    libusb_device_handle* h = device.handle();
+    ezfadvance::BulkTransport transport(device.handle());
+    ezfadvance::ReadOnlyCartridge cartridge(transport);
+    ezfadvance::SaveMemoryReader save_reader(transport);
+    ezfadvance::SaveMemoryWriter save_writer(transport);
 
     std::cout << "EZF Advance III opened on " << ezfadvance::hostPlatformName()
               << "; interface 0 claimed.\n";
 
     int result = 2;
-    if (initialize_ez3_read_session(h)) {
-        SaveExtractor extractor(h, output, requested_rom, write_save, backup_path);
+    if (cartridge.initialize() && ezfadvance::hasEz3Catalog(cartridge.kind())) {
+        SaveExtractor extractor(cartridge, save_reader, save_writer,
+                                output, requested_rom, write_save, backup_path);
         result = extractor.run();
-        if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+        if (!cartridge.finishSession()) {
             std::cerr << "Save-reader operation finished, but the "
                          "capture-derived read-session close transition "
                          "failed.\n";
             if (result == 0) result = 2;
         }
-    }
-    else
+    } else if (cartridge.kind() != ezfadvance::CartridgeKind::unknown) {
+        std::cerr << "Save extraction requires an EZ3 flash cartridge; refusing "
+                     "EZ3 catalog/save processing for an official or unknown "
+                     "cartridge.\n";
+        if (!cartridge.finishSession())
+            std::cerr << "Read-session cleanup after cartridge rejection failed.\n";
+    } else {
         std::cerr << "EZ3 card initialization/read-prime failed.\n";
+    }
 
     return result;
 }

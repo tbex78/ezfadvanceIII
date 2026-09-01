@@ -176,23 +176,6 @@ static uint32_t read_le32(const uint8_t* p)
          | (static_cast<uint32_t>(p[3]) << 24);
 }
 
-static bool read_card(libusb_device_handle* h,
-                      uint32_t byte_address,
-                      std::vector<uint8_t>& out,
-                      size_t length)
-{
-    return ezfadvance::ReadOnlyCartridge(h).read(byte_address, out, length);
-}
-
-static bool initialize_read_session(libusb_device_handle* h,
-                                    ezfadvance::CartridgeKind& kind)
-{
-    ezfadvance::ReadOnlyCartridge cartridge(h);
-    const bool initialized = cartridge.initialize();
-    kind = cartridge.kind();
-    return initialized;
-}
-
 static std::optional<uint32_t> arm_branch_target(uint32_t ins)
 {
     return ezfadvance::CartridgeFormat::armBranchTarget(ins);
@@ -200,17 +183,18 @@ static std::optional<uint32_t> arm_branch_target(uint32_t ins)
 
 using GbaHeader = ezfadvance::GbaHeader;
 
-static GbaHeader read_gba_header(libusb_device_handle* h, uint32_t start)
+static GbaHeader read_gba_header(ezfadvance::ReadOnlyCartridge& cartridge,
+                                 uint32_t start)
 {
     std::vector<uint8_t> b;
-    if (!read_card(h,start,b,0xC0)) return {};
+    if (!cartridge.read(start,b,0xC0)) return {};
     return GbaHeader::parse(b);
 }
 
-static int inspect_official_cartridge(libusb_device_handle* h)
+static int inspect_official_cartridge(ezfadvance::ReadOnlyCartridge& cartridge)
 {
     std::vector<std::uint8_t> header_bytes;
-    const bool read_ok = read_card(h, 0, header_bytes, 0xC0);
+    const bool read_ok = cartridge.read(0, header_bytes, 0xC0);
     const bool header_ok = read_ok &&
         ezfadvance::CartridgeFormat::validGbaRomHeader(header_bytes);
     const GbaHeader header = read_ok ? GbaHeader::parse(header_bytes)
@@ -219,7 +203,7 @@ static int inspect_official_cartridge(libusb_device_handle* h)
         std::cerr << "Official-ROM probe behavior was detected, but the GBA "
                      "fixed header byte/checksum validation failed; the "
                      "cartridge is not confirmed as an official GBA ROM.\n";
-        if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+        if (!cartridge.finishSession()) {
             std::cerr << "Read-session cleanup after header rejection failed.\n";
             return 2;
         }
@@ -233,12 +217,12 @@ static int inspect_official_cartridge(libusb_device_handle* h)
               << "Maker code   : " << (header.maker_code.empty() ? "(blank)" : header.maker_code) << '\n'
               << "ROM version  : " << static_cast<unsigned>(header.version) << '\n'
               << "Header check : " << (header.checksum_ok ? "OK" : "FAILED") << '\n';
-    if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) return 2;
+    if (!cartridge.finishSession()) return 2;
     std::cout << "\nNo erase or ROM programming operation was performed.\n";
     return 0;
 }
 
-static int extract_official_cartridge(libusb_device_handle* h,
+static int extract_official_cartridge(ezfadvance::ReadOnlyCartridge& cartridge,
                                       const std::string& output_path,
                                       bool verbose)
 {
@@ -251,7 +235,6 @@ static int extract_official_cartridge(libusb_device_handle* h,
     bool read_ok = true;
     bool header_checked = false;
     bool header_ok = false;
-    ezfadvance::ReadOnlyCartridge cartridge(h);
     const auto extraction_started = std::chrono::steady_clock::now();
     {
         ProgressBar progress("Extract", dump_size);
@@ -302,7 +285,7 @@ static int extract_official_cartridge(libusb_device_handle* h,
                   << std::fixed << std::setprecision(3) << seconds << " s ("
                   << std::setprecision(2) << mib_per_second << " MiB/s).\n";
     }
-    const bool finish_ok = ezfadvance::ReadOnlyCartridge(h).finishSession();
+    const bool finish_ok = cartridge.finishSession();
     if (header_checked && !header_ok) {
         std::cerr << "Official cartridge classification was not sufficient: "
                      "the GBA header checksum/fixed value is invalid. "
@@ -411,15 +394,15 @@ static bool write_binary_file(const std::string& path,
     return true;
 }
 
-static int extract_ez3_rom(libusb_device_handle* h,
+static int extract_ez3_rom(ezfadvance::ReadOnlyCartridge& cartridge,
                            const std::vector<CatalogEntry>& entries,
                            uint32_t loader_start,
                            bool is_single,
                            const Ez3ExtractionRequest& request,
                            bool verbose)
 {
-    const auto fail_after_cleanup = [h](int status) {
-        if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+    const auto fail_after_cleanup = [&cartridge](int status) {
+        if (!cartridge.finishSession()) {
             std::cerr << "Read-session cleanup also failed.\n";
             return 2;
         }
@@ -449,8 +432,7 @@ static int extract_ez3_rom(libusb_device_handle* h,
         ezfadvance::CartridgeFormat::requiredLinearReadLimit(*inclusive_end);
     if (!required_limit)
         return fail_after_cleanup(3);
-    if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(
-            *inclusive_end))
+    if (!cartridge.prepareLinearForAddress(*inclusive_end))
         return fail_after_cleanup(2);
 
     std::vector<std::uint8_t> image;
@@ -468,7 +450,7 @@ static int extract_ez3_rom(libusb_device_handle* h,
              offset += block_size) {
             const std::size_t length = std::min(block_size, size - offset);
             const auto block_started = std::chrono::steady_clock::now();
-            read_ok = ezfadvance::ReadOnlyCartridge(h).read(
+            read_ok = cartridge.read(
                 entry.start + static_cast<std::uint32_t>(offset),
                 image.data() + offset, length);
             if (!read_ok) continue;
@@ -536,7 +518,7 @@ static int extract_ez3_rom(libusb_device_handle* h,
                      "file was written.\n";
         return fail_after_cleanup(3);
     }
-    if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+    if (!cartridge.finishSession()) {
         std::cerr << "ROM data was read, but read-session cleanup failed; "
                      "no output file was written.\n";
         return 2;
@@ -586,12 +568,12 @@ static void print_rom(size_t index,
     }
 }
 
-static int inspect_card(libusb_device_handle* h,
+static int inspect_card(ezfadvance::ReadOnlyCartridge& cartridge,
                         const std::optional<Ez3ExtractionRequest>& extraction,
                         bool verbose)
 {
     std::vector<uint8_t> first;
-    if (!read_card(h,0,first,4)) return 2;
+    if (!cartridge.read(0,first,4)) return 2;
 
     const uint32_t first_word = read_le32(first.data());
     const auto loader_target = arm_branch_target(first_word);
@@ -632,14 +614,14 @@ static int inspect_card(libusb_device_handle* h,
     } else if (loader_start >= FLASH_WINDOW_SIZE) {
         mapping_mode = ReadMappingMode::Linear16MiB;
     }
-    if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(loader_start))
+    if (!cartridge.prepareLinearForAddress(loader_start))
         return 2;
 
     const size_t loader_read_len = std::min<size_t>(
         ezfadvance::Ez3CatalogParser::loader_read_size,
         static_cast<size_t>(CARD_IMAGE_LIMIT - loader_start));
     std::vector<uint8_t> loader;
-    if (!read_card(h,loader_start,loader,loader_read_len)) return 2;
+    if (!cartridge.read(loader_start,loader,loader_read_len)) return 2;
 
     const auto catalog =
         ezfadvance::Ez3CatalogParser::parse(loader, CARD_IMAGE_LIMIT);
@@ -661,19 +643,16 @@ static int inspect_card(libusb_device_handle* h,
 
     if (highest_start >= LINEAR24_LIMIT &&
         mapping_mode != ReadMappingMode::Linear32MiB) {
-        if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(
-                highest_start)) return 2;
+        if (!cartridge.prepareLinearForAddress(highest_start)) return 2;
         mapping_mode = ReadMappingMode::Linear32MiB;
     } else if (highest_start >= LINEAR16_LIMIT &&
                mapping_mode != ReadMappingMode::Linear24MiB &&
                mapping_mode != ReadMappingMode::Linear32MiB) {
-        if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(
-                highest_start)) return 2;
+        if (!cartridge.prepareLinearForAddress(highest_start)) return 2;
         mapping_mode = ReadMappingMode::Linear24MiB;
     } else if (highest_start >= FLASH_WINDOW_SIZE &&
                mapping_mode == ReadMappingMode::Lower8MiB) {
-        if (!ezfadvance::ReadOnlyCartridge(h).prepareLinearForAddress(
-                highest_start)) return 2;
+        if (!cartridge.prepareLinearForAddress(highest_start)) return 2;
         mapping_mode = ReadMappingMode::Linear16MiB;
     }
 
@@ -700,15 +679,15 @@ static int inspect_card(libusb_device_handle* h,
     for (size_t i=0;i<entries.size();++i) {
         const std::optional<uint32_t> span_end = is_single ? std::nullopt :
             catalog->allocationEnd(i, loader_start, CARD_IMAGE_LIMIT);
-        const GbaHeader g = read_gba_header(h,entries[i].start);
+        const GbaHeader g = read_gba_header(cartridge,entries[i].start);
         print_rom(i+1,entries[i],g,span_end);
     }
 
     if (extraction)
-        return extract_ez3_rom(h, entries, loader_start, is_single,
+        return extract_ez3_rom(cartridge, entries, loader_start, is_single,
                                *extraction, verbose);
 
-    if (!ezfadvance::ReadOnlyCartridge(h).finishSession()) {
+    if (!cartridge.finishSession()) {
         std::cerr << "Card inspection succeeded, but the capture-derived "
                      "read-session close transition failed.\n";
         return 2;
@@ -720,17 +699,17 @@ static int inspect_card(libusb_device_handle* h,
 
 class CardInspector final {
 public:
-    CardInspector(libusb_device_handle* handle,
+    CardInspector(ezfadvance::ReadOnlyCartridge& cartridge,
                   std::optional<Ez3ExtractionRequest> extraction,
                   bool verbose) noexcept
-        : handle_(handle), extraction_(std::move(extraction)), verbose_(verbose)
+        : cartridge_(cartridge), extraction_(std::move(extraction)), verbose_(verbose)
     {
     }
 
-    int run() { return inspect_card(handle_, extraction_, verbose_); }
+    int run() { return inspect_card(cartridge_, extraction_, verbose_); }
 
 private:
-    libusb_device_handle* handle_;
+    ezfadvance::ReadOnlyCartridge& cartridge_;
     std::optional<Ez3ExtractionRequest> extraction_;
     bool verbose_ = false;
 };
@@ -796,25 +775,25 @@ int main(int argc, char** argv)
         }
         return 1;
     }
-    libusb_device_handle* h = device.handle();
+    ezfadvance::ReadOnlyCartridge cartridge(device.handle());
 
     std::cout << "EZF Advance III opened on " << ezfadvance::hostPlatformName()
               << "; interface 0 claimed.\n";
 
     int result = 2;
-    ezfadvance::CartridgeKind kind = ezfadvance::CartridgeKind::unknown;
-    if (initialize_read_session(h, kind)) {
-        const auto decision = ezfadvance::decideCardReaderAction(kind, options);
+    if (cartridge.initialize()) {
+        const auto decision = ezfadvance::decideCardReaderAction(
+            cartridge.kind(), options);
         switch (decision.action) {
         case ezfadvance::CardReaderAction::inspect_official:
-            result = inspect_official_cartridge(h);
+            result = inspect_official_cartridge(cartridge);
             break;
         case ezfadvance::CardReaderAction::extract_official:
             result = extract_official_cartridge(
-                h, options.output_path, options.verbose);
+                cartridge, options.output_path, options.verbose);
             break;
         case ezfadvance::CardReaderAction::inspect_ez3: {
-            CardInspector inspector(h, std::nullopt, options.verbose);
+            CardInspector inspector(cartridge, std::nullopt, options.verbose);
             result = inspector.run();
             break;
         }
@@ -824,7 +803,7 @@ int main(int argc, char** argv)
                              "catalog ROM 1.\n";
             }
             CardInspector inspector(
-                h, Ez3ExtractionRequest{decision.rom_number,
+                cartridge, Ez3ExtractionRequest{decision.rom_number,
                                         options.output_path},
                 options.verbose);
             result = inspector.run();
@@ -832,7 +811,7 @@ int main(int argc, char** argv)
         }
         case ezfadvance::CardReaderAction::reject:
             std::cerr << decision.error << '\n';
-            result = ezfadvance::ReadOnlyCartridge(h).finishSession() ? 1 : 2;
+            result = cartridge.finishSession() ? 1 : 2;
             break;
         }
     }
