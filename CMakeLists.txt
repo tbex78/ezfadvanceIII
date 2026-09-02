@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.15.1 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.15.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -66,6 +66,7 @@ set(EZF_READ_ONLY_SOURCES
     ${EZF_TRANSPORT_SOURCES}
     src/cartridge_format.cpp
     src/ez3_catalog.cpp
+    src/ez3_catalog_reader.cpp
     src/read_only_cartridge.cpp
     src/read_session_transition.cpp)
 
@@ -112,6 +113,7 @@ if(BUILD_TESTING)
     ezf_add_test(card_writer_test tests/card_writer_test.cpp src/card_writer.cpp src/verification_policy.cpp)
     ezf_add_test(card_write_presenter_test tests/card_write_presenter_test.cpp src/card_write_presenter.cpp)
     ezf_add_test(ez3_catalog_test tests/ez3_catalog_test.cpp src/ez3_catalog.cpp src/cartridge_format.cpp)
+    ezf_add_usb_test(ez3_catalog_reader_test tests/ez3_catalog_reader_test.cpp src/ez3_catalog_reader.cpp src/ez3_catalog.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp)
     ezf_add_test(eeprom_mapping_test tests/eeprom_mapping_test.cpp src/eeprom_mapping.cpp)
     ezf_add_test(rom_analyzer_test tests/rom_analyzer_test.cpp src/rom_analyzer.cpp src/cartridge_format.cpp src/eeprom_mapping.cpp)
     ezf_add_test(card_reader_options_test tests/card_reader_options_test.cpp src/card_reader_options.cpp)

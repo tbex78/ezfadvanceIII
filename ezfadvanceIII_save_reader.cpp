@@ -31,6 +31,7 @@
 #include "ezfadvance/platform.hpp"
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/ez3_catalog.hpp"
+#include "ezfadvance/ez3_catalog_reader.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"
 #include "ezfadvance/save_memory_writer.hpp"
@@ -217,45 +218,39 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
                                  const std::optional<std::vector<uint8_t>>& write_save,
                                  const std::optional<std::string>& backup_path)
 {
-    const auto branch = cartridge.readArmBranch();
-    if (!branch) return 2;
-    if (!branch->target) {
+    ezfadvance::Ez3CatalogReader catalog_reader(
+        cartridge, CARD_IMAGE_SIZE, MAX_CAPTURED_ROMS);
+    const auto discovery = catalog_reader.read();
+    if (discovery.status == ezfadvance::Ez3CatalogReadStatus::read_failed)
+        return 2;
+    if (discovery.status == ezfadvance::Ez3CatalogReadStatus::missing_branch) {
         std::cerr << "Card byte 0 is not an ARM unconditional branch.\n"
                   << "This does not look like a recognized capture-derived EZ3 image.\n";
         return 3;
     }
 
-    const uint32_t loader_start = *branch->target;
-    if (loader_start < 0xC0 || loader_start >= CARD_IMAGE_SIZE) {
-        std::cerr << "Patched branch points to " << hex32(loader_start)
+    if (discovery.status ==
+        ezfadvance::Ez3CatalogReadStatus::branch_out_of_range) {
+        std::cerr << "Patched branch points to " << hex32(discovery.loader_start)
                   << ", outside the understood 32-MiB cartridge layout.\n";
         return 3;
     }
 
-    const size_t loader_read_len = std::min<size_t>(
-        ezfadvance::Ez3CatalogParser::loader_read_size,
-        static_cast<size_t>(CARD_IMAGE_SIZE-loader_start));
-    const auto loader_end = loader_start +
-        static_cast<uint32_t>(loader_read_len - 1);
-    if (!cartridge.prepareLinearForAddress(loader_end))
-        return 2;
-    std::vector<uint8_t> loader;
-    if (!cartridge.read(loader_start,loader,loader_read_len)) return 2;
-
-    const auto catalog =
-        ezfadvance::Ez3CatalogParser::parse(loader, CARD_IMAGE_SIZE);
-    if (!catalog || catalog->entries.size() > MAX_CAPTURED_ROMS) {
-        std::cerr << "Found loader branch at " << hex32(loader_start)
+    const uint32_t loader_start = discovery.loader_start;
+    const uint32_t loader_end = discovery.loader_end;
+    if (!discovery) {
+        std::cerr << "Found loader branch at " << hex32(discovery.loader_start)
                   << " but no recognized EZ3 catalog.\n";
         return 3;
     }
-    const bool is_single = catalog->isSingle();
-    const std::size_t rom_count = catalog->entries.size();
+    const auto& catalog = *discovery.catalog;
+    const bool is_single = catalog.isSingle();
+    const std::size_t rom_count = catalog.entries.size();
 
     uint32_t highest_scan_address = loader_end;
     for (size_t i = 0; i < rom_count; ++i) {
-        const auto end = catalog->allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
-        if (end && *end > catalog->entries[i].start)
+        const auto end = catalog.allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
+        if (end && *end > catalog.entries[i].start)
             highest_scan_address = std::max(highest_scan_address, *end - 1);
     }
     if (!cartridge.prepareLinearForAddress(highest_scan_address))
@@ -272,9 +267,9 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
 
     for (size_t i=0;i<rom_count;++i) {
         DetectedRom r;
-        r.e = catalog->entries[i];
+        r.e = catalog.entries[i];
         r.g = cartridge.readGbaHeader(r.e.start).value_or(GbaHeader{});
-        const auto end = catalog->allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
+        const auto end = catalog.allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
         r.span = end ? static_cast<uint32_t>(ezfadvance::boundedSaveScanSpan(
                            r.e.start, *end, CARD_IMAGE_SIZE)) : 0;
         if (r.span)

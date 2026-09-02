@@ -32,6 +32,7 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/card_reader_options.hpp"
 #include "ezfadvance/ez3_catalog.hpp"
+#include "ezfadvance/ez3_catalog_reader.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/progress_bar.hpp"
 #include "ezfadvance/version.hpp"
@@ -469,11 +470,15 @@ static int inspect_card(ezfadvance::ReadOnlyCartridge& cartridge,
                         const std::optional<Ez3ExtractionRequest>& extraction,
                         bool verbose)
 {
-    const auto branch = cartridge.readArmBranch();
-    if (!branch) return 2;
-    if (!branch->target) {
+    ezfadvance::Ez3CatalogReader catalog_reader(
+        cartridge, CARD_IMAGE_LIMIT,
+        ezfadvance::Ez3CatalogParser::structural_slot_count);
+    const auto discovery = catalog_reader.read();
+    if (discovery.status == ezfadvance::Ez3CatalogReadStatus::read_failed)
+        return 2;
+    if (discovery.status == ezfadvance::Ez3CatalogReadStatus::missing_branch) {
         const bool first_word_erased =
-            std::all_of(branch->bytes.begin(), branch->bytes.end(),
+            std::all_of(discovery.first_bytes.begin(), discovery.first_bytes.end(),
                         [](uint8_t b) { return b == 0xFF; });
 
         if (first_word_erased) {
@@ -493,40 +498,32 @@ static int inspect_card(ezfadvance::ReadOnlyCartridge& cartridge,
         return 3;
     }
 
-    const uint32_t loader_start = *branch->target;
-    if (loader_start < 0xC0 || loader_start >= CARD_IMAGE_LIMIT) {
-        std::cerr << "Patched branch points to " << hex32(loader_start)
+    if (discovery.status ==
+        ezfadvance::Ez3CatalogReadStatus::branch_out_of_range) {
+        std::cerr << "Patched branch points to " << hex32(discovery.loader_start)
                   << ", outside the currently understood 32-MiB / 256-Mbit layout.\n";
         return 3;
     }
 
+    const uint32_t loader_start = discovery.loader_start;
+
     ReadMappingMode mapping_mode = ReadMappingMode::Lower8MiB;
-    if (loader_start >= LINEAR24_LIMIT) {
+    if (discovery.loader_end >= LINEAR24_LIMIT) {
         mapping_mode = ReadMappingMode::Linear32MiB;
-    } else if (loader_start >= LINEAR16_LIMIT) {
+    } else if (discovery.loader_end >= LINEAR16_LIMIT) {
         mapping_mode = ReadMappingMode::Linear24MiB;
-    } else if (loader_start >= FLASH_WINDOW_SIZE) {
+    } else if (discovery.loader_end >= FLASH_WINDOW_SIZE) {
         mapping_mode = ReadMappingMode::Linear16MiB;
     }
-    if (!cartridge.prepareLinearForAddress(loader_start))
-        return 2;
-
-    const size_t loader_read_len = std::min<size_t>(
-        ezfadvance::Ez3CatalogParser::loader_read_size,
-        static_cast<size_t>(CARD_IMAGE_LIMIT - loader_start));
-    std::vector<uint8_t> loader;
-    if (!cartridge.read(loader_start,loader,loader_read_len)) return 2;
-
-    const auto catalog =
-        ezfadvance::Ez3CatalogParser::parse(loader, CARD_IMAGE_LIMIT);
-    if (!catalog) {
+    if (!discovery) {
         std::cerr << "Found loader branch at " << hex32(loader_start)
                   << " but no recognized capture-derived single/multi-ROM catalog.\n";
         return 3;
     }
-    const bool is_single = catalog->isSingle();
-    const std::size_t rom_count = catalog->entries.size();
-    const std::vector<CatalogEntry>& entries = catalog->entries;
+    const auto& catalog = *discovery.catalog;
+    const bool is_single = catalog.isSingle();
+    const std::size_t rom_count = catalog.entries.size();
+    const std::vector<CatalogEntry>& entries = catalog.entries;
 
     // If any cataloged ROM header lies beyond the currently selected read
     // window, upgrade to the smallest capture-proven linear mapping that covers
@@ -572,7 +569,7 @@ static int inspect_card(ezfadvance::ReadOnlyCartridge& cartridge,
 
     for (size_t i=0;i<entries.size();++i) {
         const std::optional<uint32_t> span_end = is_single ? std::nullopt :
-            catalog->allocationEnd(i, loader_start, CARD_IMAGE_LIMIT);
+            catalog.allocationEnd(i, loader_start, CARD_IMAGE_LIMIT);
         const GbaHeader g =
             cartridge.readGbaHeader(entries[i].start).value_or(GbaHeader{});
         print_rom(i+1,entries[i],g,span_end);
