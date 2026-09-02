@@ -11,6 +11,7 @@
 #endif
 
 #include "ezfadvance/libusb_writer_backend.hpp"
+#include "ezfadvance/flash_window_selector.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/platform.hpp"
 #include "ezfadvance/progress_bar.hpp"
@@ -524,136 +525,6 @@ static bool initialize_bridge(libusb_device_handle* h)
     return true;
 }
 
-// Bank-0 setup/unlock sequence. This exact sequence occurs before selective
-// erases and again immediately before programming in the writer captures.
-static bool flash_bank0_setup(libusb_device_handle* h,
-                              uint32_t pre_aa55_delay_us = 125000,
-                              bool verbose_delay = false)
-{
-    if (!tx92_2(h,0x55,0xAA,"BANK0 55AA")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK0 0000 A")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK0 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK0 0000 C")) return false;
-
-    // Every successful Windows writer capture has a repeatable ~125 ms
-    // quiet interval here, immediately before AA55.  Earlier macOS writers
-    // reproduced the bytes but not this state-settle interval.
-    if (pre_aa55_delay_us != 0) {
-        if (verbose_delay)
-            std::cout << "    pre-AA55 unlock settle: "
-                      << pre_aa55_delay_us << " us\n";
-        std::this_thread::sleep_for(
-            std::chrono::microseconds(pre_aa55_delay_us));
-    }
-
-    if (!tx92_2(h,0xAA,0x55,"BANK0 AA55")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK0 0000 D")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK0 0000 E")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK0 0000 F")) return false;
-    if (!tx92_1(h,0x00,0xAA,"BANK0 AA")) return false;
-    if (!tx92_1(h,0x00,0x55,"BANK0 55")) return false;
-    if (!tx92_1(h,0x01,0x06,"BANK0 06")) return false;
-    return true;
-}
-
-// Second 8-MiB program/erase window from writerom128Mb.pcap.
-//
-// The capture switches into this window with:
-//   55AA, 0200, 0040, 0000, ~125 ms, AA55, 0000 x3, AA,55,06.
-//
-// Program addresses then restart from local word address 0x000000.
-// Captured exact-boundary verification may use a global-linear mapping.
-// 0.5.2 deliberately does not invent a local-read mapping for partial BANK1:
-// the 0.5.1 experiment proved that selecting the program window does not make
-// subsequent local 0x91 reads address that physical window.
-static bool flash_bank1_setup(libusb_device_handle* h,
-                              uint32_t pre_aa55_delay_us = 125000,
-                              bool verbose_delay = false)
-{
-    if (!tx92_2(h,0x55,0xAA,"BANK1 55AA")) return false;
-    if (!tx92_2(h,0x02,0x00,"BANK1 0200")) return false;
-    if (!tx92_2(h,0x00,0x40,"BANK1 0040")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK1 0000 A")) return false;
-
-    if (pre_aa55_delay_us != 0) {
-        if (verbose_delay)
-            std::cout << "    BANK1 pre-AA55 unlock settle: "
-                      << pre_aa55_delay_us << " us\n";
-        std::this_thread::sleep_for(
-            std::chrono::microseconds(pre_aa55_delay_us));
-    }
-
-    if (!tx92_2(h,0xAA,0x55,"BANK1 AA55")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK1 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK1 0000 C")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK1 0000 D")) return false;
-    if (!tx92_1(h,0x00,0xAA,"BANK1 AA")) return false;
-    if (!tx92_1(h,0x00,0x55,"BANK1 55")) return false;
-    if (!tx92_1(h,0x01,0x06,"BANK1 06")) return false;
-    return true;
-}
-
-// Third and fourth 8-MiB windows proven by fireemblem.pcap and
-// 256MBits-rom.pcap. They use the same unlock sequence as BANK1, changing
-// only the 0x0080 / 0x00C0 window-select data word.
-static bool flash_bank2_setup(libusb_device_handle* h,
-                              uint32_t pre_aa55_delay_us = 125000,
-                              bool verbose_delay = false)
-{
-    if (!tx92_2(h,0x55,0xAA,"BANK2 55AA")) return false;
-    if (!tx92_2(h,0x02,0x00,"BANK2 0200")) return false;
-    if (!tx92_2(h,0x00,0x80,"BANK2 0080")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK2 0000 A")) return false;
-    if (pre_aa55_delay_us != 0) {
-        if (verbose_delay)
-            std::cout << "    BANK2 pre-AA55 unlock settle: "
-                      << pre_aa55_delay_us << " us\n";
-        std::this_thread::sleep_for(std::chrono::microseconds(pre_aa55_delay_us));
-    }
-    if (!tx92_2(h,0xAA,0x55,"BANK2 AA55")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK2 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK2 0000 C")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK2 0000 D")) return false;
-    if (!tx92_1(h,0x00,0xAA,"BANK2 AA")) return false;
-    if (!tx92_1(h,0x00,0x55,"BANK2 55")) return false;
-    if (!tx92_1(h,0x01,0x06,"BANK2 06")) return false;
-    return true;
-}
-
-static bool flash_bank3_setup(libusb_device_handle* h,
-                              uint32_t pre_aa55_delay_us = 125000,
-                              bool verbose_delay = false)
-{
-    if (!tx92_2(h,0x55,0xAA,"BANK3 55AA")) return false;
-    if (!tx92_2(h,0x02,0x00,"BANK3 0200")) return false;
-    if (!tx92_2(h,0x00,0xC0,"BANK3 00C0")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK3 0000 A")) return false;
-    if (pre_aa55_delay_us != 0) {
-        if (verbose_delay)
-            std::cout << "    BANK3 pre-AA55 unlock settle: "
-                      << pre_aa55_delay_us << " us\n";
-        std::this_thread::sleep_for(std::chrono::microseconds(pre_aa55_delay_us));
-    }
-    if (!tx92_2(h,0xAA,0x55,"BANK3 AA55")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK3 0000 B")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK3 0000 C")) return false;
-    if (!tx92_2(h,0x00,0x00,"BANK3 0000 D")) return false;
-    if (!tx92_1(h,0x00,0xAA,"BANK3 AA")) return false;
-    if (!tx92_1(h,0x00,0x55,"BANK3 55")) return false;
-    if (!tx92_1(h,0x01,0x06,"BANK3 06")) return false;
-    return true;
-}
-
-static bool flash_status_sequence(libusb_device_handle* h)
-{
-    if (!tx92_2(h,0xFF,0xFF,"STATUS FFFF")) return false;
-    if (!tx92_1(h,0x01,0x04,"STATUS 04")) return false;
-    if (!tx92_1(h,0x00,0x00,"STATUS 00 A")) return false;
-    if (!tx92_1(h,0x00,0x00,"STATUS 00 B")) return false;
-    return true;
-}
-
-
 // fireemblem.pcap ends programming in window 0x0080 with only a short
 // loader tail beyond 16 MiB. The original manager then performs status/reset
 // plus the four-write linear-read prefix before 0x91 verification. Keep this
@@ -757,6 +628,7 @@ static std::vector<uint32_t> full_128mb_bank1_erase_addresses()
 }
 
 static bool erase_image_capture_faithful(libusb_device_handle* h,
+                                         ezfadvance::FlashWindowSelector& windows,
                                          size_t programmed_size,
                                          bool verbose)
 {
@@ -813,18 +685,15 @@ static bool erase_image_capture_faithful(libusb_device_handle* h,
     for (size_t gi = 0; gi < groups.size(); ++gi) {
         const unsigned window = groups[gi].first;
         if (gi != 0) {
-            if (!flash_status_sequence(h)) return false;
+            if (!windows.finishOperation()) return false;
             if (verbose) {
                 std::cout << "switching erase window to " << window
                           << " (card byte 0x" << std::hex
                           << (static_cast<size_t>(window) * FLASH_WINDOW_SIZE)
                           << std::dec << ")...\n";
             }
-            bool ok = false;
-            if (window == 1) ok = flash_bank1_setup(h, 125000, verbose);
-            else if (window == 2) ok = flash_bank2_setup(h, 125000, verbose);
-            else if (window == 3) ok = flash_bank3_setup(h, 125000, verbose);
-            if (!ok) return false;
+            if (!windows.select(window, verbose ? &std::cout : nullptr))
+                return false;
         }
         for (uint32_t a : groups[gi].second) {
             if (!erase_sector(h, a, index, total, verbose)) return false;
@@ -899,6 +768,7 @@ static bool program_transaction_single(libusb_device_handle* h,
 }
 
 static bool program_image(libusb_device_handle* h,
+                          ezfadvance::FlashWindowSelector& windows,
                           const std::vector<uint8_t>& image,
                           bool verbose)
 {
@@ -916,17 +786,14 @@ static bool program_image(libusb_device_handle* h,
                 std::cerr << "Program window index exceeds captured 256-Mbit geometry.\n";
                 return false;
             }
-            if (!flash_status_sequence(h)) return false;
+            if (!windows.finishOperation()) return false;
             if (verbose) {
                 std::cout << "\nSwitching program window to " << window
                           << " (card byte 0x" << std::hex << off << std::dec
                           << ")...\n";
             }
-            bool ok = false;
-            if (window == 1) ok = flash_bank1_setup(h, 125000, verbose);
-            else if (window == 2) ok = flash_bank2_setup(h, 125000, verbose);
-            else if (window == 3) ok = flash_bank3_setup(h, 125000, verbose);
-            if (!ok) return false;
+            if (!windows.select(window, verbose ? &std::cout : nullptr))
+                return false;
         }
 
         const size_t n = std::min(PROGRAM_BLOCK, image.size() - off);
@@ -952,7 +819,9 @@ class LibusbWriterBackend final : public ezfadvance::WriterBackend {
 public:
     LibusbWriterBackend(libusb_device_handle* handle, bool verbose)
         : handle_(handle), verbose_(verbose), transport_(handle),
-          save_bank_cleaner_(transport_), verification_(transport_)
+          save_bank_cleaner_(transport_),
+          flash_windows_(transport_, ezfadvance::FlashWindowSelector::writerTiming()),
+          verification_(transport_)
     {
     }
 
@@ -972,17 +841,18 @@ public:
         return save_bank_cleaner_.clearAll(std::cout, verbose_);
     }
     bool selectWindowZeroForErase() override {
-        return flash_bank0_setup(handle_, 125000, false);
+        return flash_windows_.select(0);
     }
     bool erase(std::size_t image_size) override {
-        return erase_image_capture_faithful(handle_, image_size, verbose_);
+        return erase_image_capture_faithful(
+            handle_, flash_windows_, image_size, verbose_);
     }
-    bool finalizeFlashState() override { return flash_status_sequence(handle_); }
+    bool finalizeFlashState() override { return flash_windows_.finishOperation(); }
     bool selectWindowZeroForProgram() override {
-        return flash_bank0_setup(handle_, 125000, verbose_);
+        return flash_windows_.select(0, verbose_ ? &std::cout : nullptr);
     }
     bool program(const std::vector<uint8_t>& image) override {
-        return program_image(handle_, image, verbose_);
+        return program_image(handle_, flash_windows_, image, verbose_);
     }
     bool verify(ezfadvance::VerificationMode mode,
                 const std::vector<uint8_t>& image) override {
@@ -1209,6 +1079,7 @@ private:
     bool verbose_;
     ezfadvance::BulkTransport transport_;
     ezfadvance::SaveBankCleaner save_bank_cleaner_;
+    ezfadvance::FlashWindowSelector flash_windows_;
     ezfadvance::VerificationSession verification_;
 };
 

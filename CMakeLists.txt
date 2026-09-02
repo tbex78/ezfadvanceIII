@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.14.2 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.14.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,6 +50,7 @@ set(EZF_WRITER_SOURCES
     ${EZF_TRANSPORT_SOURCES}
     src/progress_bar.cpp
     src/card_write_presenter.cpp
+    src/flash_window_selector.cpp
     src/save_bank_access.cpp
     src/save_bank_cleaner.cpp
     src/card_writer.cpp
@@ -89,7 +90,8 @@ ezf_add_tool(ezfadvanceIII_save_reader
     src/save_bank_selector.cpp)
 ezf_add_tool(ezfadvanceIII_wipe_card
     ezfadvanceIII_wipe_card.cpp ${EZF_TRANSPORT_SOURCES}
-    src/save_bank_access.cpp src/save_bank_cleaner.cpp)
+    src/flash_window_selector.cpp src/save_bank_access.cpp
+    src/save_bank_cleaner.cpp)
 
 include(CTest)
 if(BUILD_TESTING)
@@ -112,6 +114,7 @@ if(BUILD_TESTING)
     ezf_add_test(eeprom_mapping_test tests/eeprom_mapping_test.cpp src/eeprom_mapping.cpp)
     ezf_add_test(card_reader_options_test tests/card_reader_options_test.cpp src/card_reader_options.cpp)
     ezf_add_usb_test(protocol_test tests/protocol_test.cpp src/protocol.cpp src/usb_device.cpp)
+    ezf_add_usb_test(flash_window_selector_test tests/flash_window_selector_test.cpp src/flash_window_selector.cpp src/protocol.cpp src/usb_device.cpp)
     ezf_add_usb_test(usb_device_test tests/usb_device_test.cpp src/usb_device.cpp)
     ezf_add_test(platform_test tests/platform_test.cpp src/platform.cpp)
     ezf_add_test(progress_bar_test tests/progress_bar_test.cpp src/progress_bar.cpp src/platform.cpp)

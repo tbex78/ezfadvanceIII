@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "ezfadvance/usb_device.hpp"
+#include "ezfadvance/flash_window_selector.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/platform.hpp"
 #include "ezfadvance/save_bank_cleaner.hpp"
@@ -168,13 +169,6 @@ static std::vector<uint8_t> cmd92_2()
     return ezfadvance::Protocol::command92Two();
 }
 
-static std::vector<uint8_t> cmd92_1(uint8_t selector)
-{
-    // selector=0 for AA/55/00 operations
-    // selector=1 for 06/04 operations
-    return ezfadvance::Protocol::command92One(selector);
-}
-
 static bool command_data_echo(libusb_device_handle* h,
                               const std::vector<uint8_t>& command,
                               const std::vector<uint8_t>& data,
@@ -190,53 +184,6 @@ static bool tx92_2(libusb_device_handle* h,
                    const char* label)
 {
     return command_data_echo(h, cmd92_2(), {a,b}, label);
-}
-
-static bool tx92_1(libusb_device_handle* h,
-                   uint8_t selector, uint8_t value,
-                   const char* label)
-{
-    return command_data_echo(h, cmd92_1(selector), {value}, label);
-}
-
-static bool flash_bank_setup(libusb_device_handle* h, unsigned bank)
-{
-    // Exact per-bank setup derived from delete.pcap.
-    // bank 0: 55AA, 0000, 0000, 0000, AA55, 0000, 0000, 0000, AA,55,06
-    // bank 1: 55AA, 0200, 0040, 0000, AA55, ...
-    // bank 2: 55AA, 0200, 0080, 0000, AA55, ...
-    // bank 3: 55AA, 0200, 00C0, 0000, AA55, ...
-    const uint8_t bank_select_hi = static_cast<uint8_t>(bank * 0x40);
-
-    if (!tx92_2(h, 0x55,0xAA, "SETUP 55AA")) return false;
-    if (bank == 0) {
-        if (!tx92_2(h, 0x00,0x00, "SETUP BANK MODE 0000")) return false;
-    } else {
-        if (!tx92_2(h, 0x02,0x00, "SETUP BANK MODE 0200")) return false;
-    }
-    if (!tx92_2(h, 0x00,bank_select_hi, "SETUP BANK SELECT")) return false;
-    if (!tx92_2(h, 0x00,0x00, "SETUP 0000 A")) return false;
-
-    if (!tx92_2(h, 0xAA,0x55, "SETUP AA55")) return false;
-    if (!tx92_2(h, 0x00,0x00, "SETUP 0000 B")) return false;
-    if (!tx92_2(h, 0x00,0x00, "SETUP 0000 C")) return false;
-    if (!tx92_2(h, 0x00,0x00, "SETUP 0000 D")) return false;
-
-    if (!tx92_1(h, 0x00,0xAA, "SETUP AA")) return false;
-    if (!tx92_1(h, 0x00,0x55, "SETUP 55")) return false;
-    if (!tx92_1(h, 0x01,0x06, "SETUP 06")) return false;
-
-    return true;
-}
-
-static bool flash_status_sequence(libusb_device_handle* h)
-{
-    // Exact sequence after each 135-sector sweep in delete.pcap.
-    if (!tx92_2(h, 0xFF,0xFF, "STATUS FFFF")) return false;
-    if (!tx92_1(h, 0x01,0x04, "STATUS 04")) return false;
-    if (!tx92_1(h, 0x00,0x00, "STATUS 00 A")) return false;
-    if (!tx92_1(h, 0x00,0x00, "STATUS 00 B")) return false;
-    return true;
 }
 
 static bool final_cleanup(libusb_device_handle* h)
@@ -331,7 +278,9 @@ static bool erase_sector(libusb_device_handle* h,
     return true;
 }
 
-static bool erase_bank(libusb_device_handle* h, unsigned bank)
+static bool erase_bank(libusb_device_handle* h,
+                       ezfadvance::FlashWindowSelector& windows,
+                       unsigned bank)
 {
     const std::vector<uint32_t> sectors =
         (bank == 0 || bank == 2)
@@ -348,7 +297,7 @@ static bool erase_bank(libusb_device_handle* h, unsigned bank)
     std::cout << "ERASING FLASH BANK " << (bank + 1) << "/4\n";
     std::cout << "========================================\n";
 
-    if (!flash_bank_setup(h, bank)) {
+    if (!windows.select(bank)) {
         std::cerr << "Bank setup failed for bank " << bank << '\n';
         return false;
     }
@@ -358,7 +307,7 @@ static bool erase_bank(libusb_device_handle* h, unsigned bank)
             return false;
     }
 
-    if (!flash_status_sequence(h)) {
+    if (!windows.finishOperation()) {
         std::cerr << "Post-erase status sequence failed for bank " << bank << '\n';
         return false;
     }
@@ -437,7 +386,9 @@ static bool verify_blank_like_capture(libusb_device_handle* h)
 class CardEraser final {
 public:
     explicit CardEraser(libusb_device_handle* handle) noexcept
-        : handle_(handle), transport_(handle), save_bank_cleaner_(transport_)
+        : handle_(handle), transport_(handle),
+          flash_windows_(transport_, ezfadvance::FlashWindowSelector::wipeTiming()),
+          save_bank_cleaner_(transport_)
     {
     }
 
@@ -447,7 +398,7 @@ public:
         // cartridge has returned the proven 0x98 readiness byte.
         bool ok = cartridge_ready_preflight(handle_);
         for (unsigned bank = 0; bank < 4 && ok; ++bank)
-            ok = erase_bank(handle_, bank);
+            ok = erase_bank(handle_, flash_windows_, bank);
 
         if (ok) {
             std::cout << "\n========================================\n"
@@ -470,6 +421,7 @@ public:
 private:
     libusb_device_handle* handle_;
     ezfadvance::BulkTransport transport_;
+    ezfadvance::FlashWindowSelector flash_windows_;
     ezfadvance::SaveBankCleaner save_bank_cleaner_;
 };
 
