@@ -44,7 +44,7 @@ PRESENTATION_SOURCES = src/progress_bar.cpp
 WRITER_SOURCES = $(TRANSPORT_SOURCES) $(PRESENTATION_SOURCES) src/card_write_presenter.cpp src/flash_window_selector.cpp src/save_bank_access.cpp src/save_bank_cleaner.cpp src/card_writer.cpp src/libusb_writer_backend.cpp src/cartridge_format.cpp src/cartridge_image_builder.cpp src/eeprom_mapping.cpp src/rom_analyzer.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 READ_ONLY_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/ez3_catalog.cpp src/ez3_catalog_reader.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp
 CARD_READER_SOURCES = $(READ_ONLY_SOURCES) $(PRESENTATION_SOURCES) src/card_reader_options.cpp
-SAVE_READER_SOURCES = $(READ_ONLY_SOURCES) src/save_catalog_analyzer.cpp src/save_bank_access.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp src/save_bank_selector.cpp
+SAVE_READER_SOURCES = $(READ_ONLY_SOURCES) src/save_catalog_analyzer.cpp src/save_bank_access.cpp src/save_bank_cleaner.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp src/save_bank_selector.cpp
 WIPE_SOURCES = $(TRANSPORT_SOURCES) src/flash_window_selector.cpp src/save_bank_access.cpp src/save_bank_cleaner.cpp
 ALL_SUPPORT_SOURCES = $(SAVE_READER_SOURCES) src/card_reader_options.cpp src/card_writer.cpp src/libusb_writer_backend.cpp src/cartridge_image_builder.cpp src/eeprom_mapping.cpp src/rom_analyzer.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 

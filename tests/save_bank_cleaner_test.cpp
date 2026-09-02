@@ -49,9 +49,42 @@ void testCapturedFourBankCleanupTranscript()
     assert(transport.complete());
 }
 
+void testSelectedTwoBankCleanupTranscript()
+{
+    ezfadvance::test::TranscriptTransport transport;
+    const std::vector<std::uint8_t> command = {
+        0x5A, 0xA5, 0x92, 0x01, 0, 0, 0, 0,
+        0, 0x80, 0, 0, 0};
+    const std::vector<std::uint8_t> zeros(0x8000, 0);
+    for (const std::uint16_t selector : {0x0910, 0x0920}) {
+        expectSelector(transport, selector);
+        transport.expectOut(command, timeout_ms)
+                 .expectOut(zeros, timeout_ms)
+                 .expectInMax(command, 64, timeout_ms);
+    }
+    std::ostringstream output;
+    ezfadvance::SaveBankCleaner cleaner(transport);
+    assert(cleaner.clearRange(0x0910, 2, output));
+    assert(output.str().find("selector 0x0910") != std::string::npos);
+    assert(output.str().find("selector 0x0930") == std::string::npos);
+    assert(transport.complete());
+}
+
+void testInvalidRangeIsRejectedBeforeUsb()
+{
+    ezfadvance::test::TranscriptTransport transport;
+    std::ostringstream output;
+    ezfadvance::SaveBankCleaner cleaner(transport);
+    assert(!cleaner.clearRange(0x0920, 3, output));
+    assert(!cleaner.clearRange(0x0900, 0, output));
+    assert(transport.complete());
+}
+
 } // namespace
 
 int main()
 {
     testCapturedFourBankCleanupTranscript();
+    testSelectedTwoBankCleanupTranscript();
+    testInvalidRangeIsRejectedBeforeUsb();
 }

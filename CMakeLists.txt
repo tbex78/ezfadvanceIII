@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.16.2 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.17.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -89,7 +89,8 @@ ezf_add_tool(ezfadvanceIII_card_reader
 ezf_add_tool(ezfadvanceIII_save_reader
     ezfadvanceIII_save_reader.cpp ${EZF_READ_ONLY_SOURCES}
     src/save_catalog_analyzer.cpp
-    src/save_bank_access.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp
+    src/save_bank_access.cpp src/save_bank_cleaner.cpp
+    src/save_memory_reader.cpp src/save_memory_writer.cpp
     src/save_bank_selector.cpp)
 ezf_add_tool(ezfadvanceIII_wipe_card
     ezfadvanceIII_wipe_card.cpp ${EZF_TRANSPORT_SOURCES}

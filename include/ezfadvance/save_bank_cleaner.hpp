@@ -4,6 +4,8 @@
 #include "ezfadvance/save_bank_access.hpp"
 
 #include <iosfwd>
+#include <cstddef>
+#include <cstdint>
 
 namespace ezfadvance {
 
@@ -14,6 +16,10 @@ public:
         : bank_access_(transport), protocol_(transport) {}
 
     bool clearAll(std::ostream& output, bool report_progress = true) const;
+    bool clearRange(std::uint16_t first_selector,
+                    std::size_t bank_count,
+                    std::ostream& output,
+                    bool report_progress = true) const;
 
 private:
     SaveBankAccess bank_access_;

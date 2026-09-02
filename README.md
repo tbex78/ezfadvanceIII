@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.16.2**.
+version is **0.17.0**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.16.2
+“pending,” and “next” describe the named review point, not the present 0.17.0
 support boundary.
 
 ## Build and test
@@ -166,6 +166,24 @@ Direct-bank writing accepts one through four complete 32-KiB banks. When
 bytes; otherwise the input size selects the number of consecutive banks. The
 requested range must end at or before `0x0930`. Backup and full byte-for-byte
 read-back verification cover the same complete range.
+
+### Erase EZ3 saves
+
+Clear and verify all four 32-KiB save banks:
+
+```sh
+./ezfadvanceIII_save_reader --erase
+```
+
+Clear only a selected contiguous range:
+
+```sh
+./ezfadvanceIII_save_reader --erase \
+  --save-bank 0x0910 --consecutive-bank 2
+```
+
+With `--save-bank` but no count, only that bank is cleared. Erase mode cannot
+be combined with extraction, ROM selection, save writing, or backup options.
 
 ### Build or write a multi-ROM image
 

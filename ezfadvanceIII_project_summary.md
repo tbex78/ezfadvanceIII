@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.16.2**.
+Current shared project/toolset version covered by this summary: **0.17.0**.
 
 All mainline utilities carry this same version:
 
@@ -825,6 +825,10 @@ The input size must match an explicit write count. A direct four-bank
 extraction produced a working `BPEF` save; the matching four-bank write path
 awaits controlled hardware validation.
 
+Save erasure is also available independently of catalog selection. `--erase`
+zeroes and verifies all four banks, while `--save-bank` and an optional
+`--consecutive-bank` count restrict it to a validated contiguous range.
+
 ### Cartridge density probing
 
 Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a general density-identification algorithm for arbitrary EZ3 cartridge variants.
@@ -848,11 +852,11 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 
 ## Current native platform scope
 
-Shared version 0.16.2 follows the C++17/libusb platform policy while preserving
+Shared version 0.17.0 follows the C++17/libusb platform policy while preserving
 the established Unix-like build path:
 
 ```text
-macOS       target; 0.15.2 baseline compiled on Apple Silicon/Homebrew; current 0.16.2 source awaits validation
+macOS       target; 0.15.2 baseline compiled on Apple Silicon/Homebrew; current 0.17.0 source awaits validation
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending

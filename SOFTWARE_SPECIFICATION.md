@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.16.2` toolset, including guarded
+**Specification baseline:** shared `0.17.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -311,6 +311,9 @@ ezfadvanceIII_save_reader --write FILE.sav --backup ORIGINAL.sav \
     --yes-really-write [--rom N]
 ezfadvanceIII_save_reader --write FILE.sav --backup ORIGINAL.sav \
     --yes-really-write --save-bank 0x09X0 [--consecutive-bank N]
+ezfadvanceIII_save_reader --erase
+ezfadvanceIII_save_reader --erase --save-bank 0x09X0 \
+    [--consecutive-bank N]
 ```
 
 The supported application paths are `SRAM_V111` with one 32-KiB bank and
@@ -337,6 +340,12 @@ or writes `N * 32768` bytes beginning at `--save-bank`. It requires
 last selector would exceed `0x0930`. For writing, the input size must exactly
 match the requested count. Without this option, direct writing derives the
 count from an exact 32-/64-/96-/128-KiB input.
+
+`--erase` directly fills save memory with zero bytes and verifies the complete
+range by read-back. Without a selector it clears all four banks. With
+`--save-bank`, it clears one bank by default or the explicit 1–4-bank
+`--consecutive-bank` range. It must reject ranges beyond `0x0930` and cannot be
+combined with extraction, ROM selection, save writing, or backup options.
 
 ### 3.4 Card eraser
 

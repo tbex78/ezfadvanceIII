@@ -36,6 +36,7 @@
 #include "ezfadvance/save_memory_reader.hpp"
 #include "ezfadvance/save_memory_writer.hpp"
 #include "ezfadvance/save_bank_layout.hpp"
+#include "ezfadvance/save_bank_cleaner.hpp"
 #include "ezfadvance/save_bank_selector.hpp"
 #include "ezfadvance/save_catalog_analyzer.hpp"
 #include "ezfadvance/save_selection.hpp"
@@ -510,7 +511,9 @@ static void usage(const char* argv0)
                  "--yes-really-write [--rom N]\n"
               << "  " << argv0 << " --write file.sav --backup original.sav "
                  "--yes-really-write --save-bank 0x09X0 "
-                 "[--consecutive-bank N]\n\n"
+                 "[--consecutive-bank N]\n"
+              << "  " << argv0 << " --erase [--save-bank 0x09X0 "
+                 "[--consecutive-bank N]]\n\n"
               << "EZF Advance III save reader/writer (" << ezfadvance::hostPlatformName() << ").\n"
               << "Supported paths: 32-KiB SRAM_V111 and 64-KiB FLASH512 with cumulative four-bank "
                  "allocation beginning at selector 0x0900.\n"
@@ -519,7 +522,8 @@ static void usage(const char* argv0)
                  "automatic allocation and accepts 0x0900, 0x0910, 0x0920, "
                  "or 0x0930. --consecutive-bank reads or writes 1 to 4 "
                  "consecutive 32-KiB banks in direct-bank mode. For writes, "
-                 "the input size must match the requested bank count.\n";
+                 "the input size must match the requested bank count. --erase "
+                 "clears all four banks unless a direct bank range is supplied.\n";
 }
 
 int main(int argc, char** argv)
@@ -536,6 +540,7 @@ int main(int argc, char** argv)
     std::optional<std::string> write_path;
     std::optional<std::string> backup_path;
     bool yes_really_write = false;
+    bool erase = false;
 
     for (int i=1;i<argc;++i) {
         const std::string a = argv[i];
@@ -592,6 +597,8 @@ int main(int argc, char** argv)
             backup_path = argv[++i];
         } else if (a == "--yes-really-write") {
             yes_really_write = true;
+        } else if (a == "--erase") {
+            erase = true;
         } else if (a == "--help" || a == "-h") {
             usage(argv[0]);
             return 0;
@@ -604,6 +611,12 @@ int main(int argc, char** argv)
 
     if (write_path && output) {
         std::cerr << "--output is for extraction and cannot be combined with --write.\n";
+        return 1;
+    }
+    if (erase && (write_path || output || requested_rom || backup_path ||
+                  yes_really_write)) {
+        std::cerr << "--erase cannot be combined with --write, --output, "
+                     "--rom, --backup, or --yes-really-write.\n";
         return 1;
     }
     if (requested_bank_count && !requested_bank) {
@@ -672,9 +685,48 @@ int main(int argc, char** argv)
     ezfadvance::ReadOnlyCartridge cartridge(transport);
     ezfadvance::SaveMemoryReader save_reader(transport);
     ezfadvance::SaveMemoryWriter save_writer(transport);
+    ezfadvance::SaveBankCleaner save_bank_cleaner(transport);
 
     std::cout << "EZF Advance III opened on " << ezfadvance::hostPlatformName()
               << "; interface 0 claimed.\n";
+
+    if (erase) {
+        const auto first_selector = requested_bank
+            ? requested_bank->value()
+            : ezfadvance::SaveBankSelector::first;
+        const auto bank_count = requested_bank
+            ? requested_bank_count.value_or(1)
+            : 4;
+        std::cout << "WARNING: --erase will overwrite " << bank_count
+                  << " save bank" << (bank_count == 1 ? "" : "s")
+                  << " with zero bytes, beginning at " << hex16(first_selector)
+                  << ".\n";
+        if (!save_bank_cleaner.clearRange(
+                first_selector, bank_count, std::cout)) {
+            std::cerr << "Save-bank erase failed.\n";
+            return 2;
+        }
+        std::vector<std::uint8_t> verification;
+        std::cout << "Reading cleared save range back for verification...\n";
+        if (!read_save_capture(save_reader,
+                               bank_count * ezfadvance::SaveBankSelector::bank_size,
+                               first_selector, verification) ||
+            std::any_of(verification.begin(), verification.end(),
+                        [](std::uint8_t value) { return value != 0; })) {
+            std::cerr << "SAVE-BANK ERASE VERIFICATION FAILED.\n";
+            return 6;
+        }
+        std::cout << "\n========================================\n"
+                  << "SAVE-BANK ERASE COMPLETE\n"
+                  << "========================================\n"
+                  << "First bank   : " << hex16(first_selector) << "\n"
+                  << "Bank count   : " << bank_count << "\n"
+                  << "Size         : "
+                  << bank_count * ezfadvance::SaveBankSelector::bank_size
+                  << " bytes\n"
+                  << "Verification : every byte is zero\n";
+        return 0;
+    }
 
     int result = 2;
     if (cartridge.initialize() && ezfadvance::hasEz3Catalog(cartridge.kind())) {
