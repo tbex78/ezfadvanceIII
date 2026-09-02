@@ -85,6 +85,7 @@ private:
     std::optional<std::array<std::uint8_t, 4>> read91Sub2Four();
     bool flashStatus();
     bool finishReadMapping(const char* prefix);
+    CartridgeKind classifyCartridgeContent();
 
     std::unique_ptr<BulkTransport> owned_transport_;
     Transport& transport_;

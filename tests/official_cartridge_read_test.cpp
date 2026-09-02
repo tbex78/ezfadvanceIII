@@ -74,7 +74,7 @@ void testProbeClassification()
     const Probe captured_rom = {0xEE,0x00,0x00,0xEA};
 
     assert(ezfadvance::ReadOnlyCartridge::classifyProbeBehavior(
-               captured_rom, captured_rom) == CartridgeKind::official_gba_rom);
+               captured_rom, captured_rom) == CartridgeKind::unknown);
     assert(ezfadvance::ReadOnlyCartridge::classifyProbeBehavior(
                captured_rom, Probe{0x1C,0x00,0xB8,0x00}) ==
            CartridgeKind::ez3_flash);
@@ -88,7 +88,7 @@ void testProbeClassification()
     // Classification depends on probe behavior, not an ARM branch value.
     const Probe another_rom = {0x00,0x00,0xA0,0xE1};
     assert(ezfadvance::ReadOnlyCartridge::classifyProbeBehavior(
-               another_rom, another_rom) == CartridgeKind::official_gba_rom);
+               another_rom, another_rom) == CartridgeKind::unknown);
 
     assert(ezfadvance::hasEz3Catalog(CartridgeKind::ez3_flash));
     assert(!ezfadvance::hasEz3Catalog(CartridgeKind::official_gba_rom));
@@ -98,7 +98,7 @@ void testProbeClassification()
 void testOfficialDetectionStopsEz3Path()
 {
     ezfadvance::test::TranscriptTransport transcript;
-    const std::array<std::uint8_t, 4> rom_word = {0xEE,0x00,0x00,0xEA};
+    const std::array<std::uint8_t, 4> rom_word = {0x00,0x00,0xA0,0xE1};
     const std::vector<std::uint8_t> c97 =
         {0x5A,0xA5,0x97,0,0,0,0,0,0,0,0,0,0};
     const std::vector<std::uint8_t> c98 =
@@ -121,11 +121,28 @@ void testOfficialDetectionStopsEz3Path()
     expectSub2(transcript, rom_word);
     expectReset(transcript, false);
 
+    auto branch_command = std::vector<std::uint8_t>{
+        0x5A,0xA5,0x91,0x00, 0,0,0,0, 4,0,0,0, 0};
+    transcript.expectOut(branch_command, timeout_ms)
+              .expectInExact(std::vector<std::uint8_t>(rom_word.begin(),
+                                                       rom_word.end()),
+                             4, timeout_ms);
+    std::vector<std::uint8_t> header(0xC0, 0);
+    header[0xB2] = 0x96;
+    std::uint8_t checksum = 0;
+    for (std::size_t index = 0xA0; index <= 0xBC; ++index)
+        checksum = static_cast<std::uint8_t>(checksum - header[index]);
+    header[0xBD] = static_cast<std::uint8_t>(checksum - 0x19);
+    auto header_command = std::vector<std::uint8_t>{
+        0x5A,0xA5,0x91,0x00, 0,0,0,0, 0xC0,0,0,0, 0};
+    transcript.expectOut(header_command, timeout_ms)
+              .expectInExact(header, header.size(), timeout_ms);
+
     ezfadvance::ReadOnlyCartridge cartridge(transcript);
     assert(cartridge.initialize());
     assert(cartridge.kind() == ezfadvance::CartridgeKind::official_gba_rom);
     // Completing here proves no 0040/0080/00c0/0200 probe or 0x95 prime
-    // occurred after official-cartridge classification.
+    // occurred after structural official-cartridge classification.
     assert(transcript.complete());
     for (const auto& command : transcript.observedOut())
         assert(command != ezfadvance::Protocol::command92One(0) &&

@@ -1,5 +1,6 @@
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/cartridge_format.hpp"
+#include "ezfadvance/ez3_catalog_reader.hpp"
 #include "ezfadvance/read_session_transition.hpp"
 
 #include <algorithm>
@@ -196,7 +197,19 @@ CartridgeKind ReadOnlyCartridge::classifyProbeBehavior(
         after_flash_id == std::array<std::uint8_t, 4>{0x1C,0x00,0xB8,0x00} ||
         after_flash_id == std::array<std::uint8_t, 4>{0x1C,0x00,0xB9,0x00};
     if (known_ez3_id) return CartridgeKind::ez3_flash;
-    if (after_flash_id == before_flash_id)
+    return CartridgeKind::unknown;
+}
+
+CartridgeKind ReadOnlyCartridge::classifyCartridgeContent()
+{
+    constexpr std::uint32_t image_limit = 0x02000000u;
+    Ez3CatalogReader catalog_reader(*this, image_limit,
+                                    Ez3CatalogParser::structural_slot_count);
+    if (catalog_reader.read().status == Ez3CatalogReadStatus::loaded)
+        return CartridgeKind::ez3_flash;
+
+    std::vector<std::uint8_t> header;
+    if (read(0, header, 0xC0) && CartridgeFormat::validGbaRomHeader(header))
         return CartridgeKind::official_gba_rom;
     return CartridgeKind::unknown;
 }
@@ -220,6 +233,8 @@ bool ReadOnlyCartridge::initialize()
     if (!after_flash_id || !probeReset(false)) return false;
 
     kind_ = classifyProbeBehavior(*before_flash_id, *after_flash_id);
+    if (kind_ == CartridgeKind::unknown)
+        kind_ = classifyCartridgeContent();
     if (kind_ == CartridgeKind::official_gba_rom) {
         std::cout << "Official GBA ROM detected; using ordinary ROM reads.\n";
         return true;
@@ -235,6 +250,11 @@ bool ReadOnlyCartridge::initialize()
         !flashIdProbe(2,0,0,0xC0,0,0) ||
         !flashIdProbe(0,0,0,0,2,0) ||
         !probePrefix(0,0,0,0,0,0,false)) return false;
+
+    // The content classifier may have prepared a mapping before the remaining
+    // probe sequence reset it. Force later callers to establish their required
+    // mapping explicitly.
+    linear_read_limit_ = default_linear_read_limit;
 
     const std::vector<std::uint8_t> c95 = {
         0x5A,0xA5,0x95,0, 0x80,0,0,0, 0,0,0,0,0};

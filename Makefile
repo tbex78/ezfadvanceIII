@@ -150,7 +150,7 @@ test: check
 	./build/progress_bar_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/read_session_transition_test.cpp src/read_session_transition.cpp -o build/read_session_transition_test
 	./build/read_session_transition_test
-	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/official_cartridge_read_test.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/official_cartridge_read_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/official_cartridge_read_test.cpp src/ez3_catalog_reader.cpp src/ez3_catalog.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/official_cartridge_read_test
 	./build/official_cartridge_read_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/verification_policy_test.cpp src/verification_policy.cpp -o build/verification_policy_test
 	./build/verification_policy_test
@@ -180,7 +180,7 @@ test: check
 	./build/save_selection_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_bank_selector_test.cpp src/save_bank_selector.cpp -o build/save_bank_selector_test
 	./build/save_bank_selector_test
-	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_catalog_analyzer_test.cpp src/save_catalog_analyzer.cpp src/ez3_catalog.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/save_catalog_analyzer_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_catalog_analyzer_test.cpp src/save_catalog_analyzer.cpp src/ez3_catalog_reader.cpp src/ez3_catalog.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/save_catalog_analyzer_test
 	./build/save_catalog_analyzer_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_memory_test.cpp src/save_bank_access.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/save_memory_test
 	./build/save_memory_test
