@@ -31,7 +31,7 @@ inline bool saveWritePathsConflict(
     return input && backup && *input == *backup;
 }
 
-inline bool confirmsSaveWriteWithoutBackup(std::string_view answer) noexcept
+inline bool confirmsDestructiveOperation(std::string_view answer) noexcept
 {
     while (!answer.empty() &&
            std::isspace(static_cast<unsigned char>(answer.front())))

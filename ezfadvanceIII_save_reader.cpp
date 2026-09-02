@@ -687,7 +687,8 @@ static void usage(const char* argv0)
               << "  " << argv0 << " --write file.sav [--backup original.sav] "
                  "--yes-really-write --save-bank 0x09X0 "
                  "[--consecutive-bank N]\n"
-              << "  " << argv0 << " --erase [--save-bank 0x09X0 "
+              << "  " << argv0 << " --erase [--backup original.sav] "
+                 "[--save-bank 0x09X0 "
                  "[--consecutive-bank N]]\n\n"
               << "EZF Advance III save reader/writer (" << ezfadvance::hostPlatformName() << ").\n"
               << "Supported paths: 32-KiB SRAM_V111 and 64-KiB FLASH512 with cumulative four-bank "
@@ -698,7 +699,9 @@ static void usage(const char* argv0)
                  "or 0x0930. --consecutive-bank reads or writes 1 to 4 "
                  "consecutive 32-KiB banks in direct-bank mode. For writes, "
                  "the input size must match the requested bank count. --erase "
-                 "clears all four banks unless a direct bank range is supplied.\n";
+                 "clears all four banks unless a direct bank range is supplied. "
+                 "--backup is optional; omitting it requires interactive "
+                 "confirmation before the device is opened.\n";
 }
 
 int main(int argc, char** argv)
@@ -788,10 +791,9 @@ int main(int argc, char** argv)
         std::cerr << "--output is for extraction and cannot be combined with --write.\n";
         return 1;
     }
-    if (erase && (write_path || output || requested_rom || backup_path ||
-                  yes_really_write)) {
+    if (erase && (write_path || output || requested_rom || yes_really_write)) {
         std::cerr << "--erase cannot be combined with --write, --output, "
-                     "--rom, --backup, or --yes-really-write.\n";
+                     "--rom, or --yes-really-write.\n";
         return 1;
     }
     if (requested_bank_count && !requested_bank) {
@@ -810,7 +812,7 @@ int main(int argc, char** argv)
                      "save bank 0x0930.\n";
         return 1;
     }
-    if (!write_path && (backup_path || yes_really_write)) {
+    if (!write_path && !erase && (backup_path || yes_really_write)) {
         std::cerr << "--backup and --yes-really-write require --write FILE.\n";
         return 1;
     }
@@ -860,7 +862,25 @@ int main(int argc, char** argv)
             << "Continue without a backup? [y/N]: " << std::flush;
         std::string answer;
         if (!std::getline(std::cin, answer) ||
-            !ezfadvance::confirmsSaveWriteWithoutBackup(answer)) {
+            !ezfadvance::confirmsDestructiveOperation(answer)) {
+            std::cerr << "No selected; aborting without opening the device.\n";
+            return 1;
+        }
+        std::cerr << "Yes selected; continuing without a backup.\n";
+    }
+
+    if (erase && !backup_path) {
+        std::cerr
+            << "\n========================================\n"
+            << "WARNING: ERASE WITHOUT BACKUP\n"
+            << "========================================\n"
+            << "The selected save-bank range will be overwritten with zero "
+               "bytes without creating a backup file. The previous save data "
+               "will be unrecoverable.\n"
+            << "Continue without a backup? [y/N]: " << std::flush;
+        std::string answer;
+        if (!std::getline(std::cin, answer) ||
+            !ezfadvance::confirmsDestructiveOperation(answer)) {
             std::cerr << "No selected; aborting without opening the device.\n";
             return 1;
         }
@@ -889,6 +909,20 @@ int main(int argc, char** argv)
         const auto bank_count = requested_bank
             ? requested_bank_count.value_or(1)
             : 4;
+        if (backup_path) {
+            std::vector<std::uint8_t> current;
+            std::cout << "Reading selected save range for backup...\n";
+            if (!read_save_capture(
+                    save_reader,
+                    bank_count * ezfadvance::SaveBankSelector::bank_size,
+                    first_selector, current)) {
+                std::cerr << "Could not read the save range; nothing was erased.\n";
+                return 2;
+            }
+            if (!write_binary_file_without_overwrite(*backup_path, current))
+                return 5;
+            std::cout << "Existing save backed up to: " << *backup_path << "\n";
+        }
         std::cout << "WARNING: --erase will overwrite " << bank_count
                   << " save bank" << (bank_count == 1 ? "" : "s")
                   << " with zero bytes, beginning at " << hex16(first_selector)
@@ -913,6 +947,8 @@ int main(int argc, char** argv)
                   << "========================================\n"
                   << "First bank   : " << hex16(first_selector) << "\n"
                   << "Bank count   : " << bank_count << "\n"
+                  << "Backup       : "
+                  << (backup_path ? *backup_path : "(not requested)") << "\n"
                   << "Size         : "
                   << bank_count * ezfadvance::SaveBankSelector::bank_size
                   << " bytes\n"

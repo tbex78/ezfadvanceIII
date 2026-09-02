@@ -13,11 +13,11 @@ int main()
     assert(!ezfadvance::saveWritePathsConflict(std::nullopt, "backup.sav"));
     assert(!ezfadvance::saveWritePathsConflict("input.sav", "backup.sav"));
     assert(ezfadvance::saveWritePathsConflict("same.sav", "same.sav"));
-    assert(ezfadvance::confirmsSaveWriteWithoutBackup("y"));
-    assert(ezfadvance::confirmsSaveWriteWithoutBackup(" YES "));
-    assert(!ezfadvance::confirmsSaveWriteWithoutBackup(""));
-    assert(!ezfadvance::confirmsSaveWriteWithoutBackup("no"));
-    assert(!ezfadvance::confirmsSaveWriteWithoutBackup("yeah"));
+    assert(ezfadvance::confirmsDestructiveOperation("y"));
+    assert(ezfadvance::confirmsDestructiveOperation(" YES "));
+    assert(!ezfadvance::confirmsDestructiveOperation(""));
+    assert(!ezfadvance::confirmsDestructiveOperation("no"));
+    assert(!ezfadvance::confirmsDestructiveOperation("yeah"));
     assert(ezfadvance::directSaveAccessSize(std::nullopt) == 0x8000);
     assert(ezfadvance::directSaveAccessSize(0x8000) == 0x8000);
     assert(ezfadvance::directSaveAccessSize(0x10000) == 0x10000);

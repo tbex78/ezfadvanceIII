@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.18.2`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.18.2`<br>
+**Current project/toolset version:** `0.19.0`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.19.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.18.2; its latest changes await compilation and validation. The 0.15.2 baseline was compiled and transcript-tested on macOS / Apple Silicon. Linux CI covers the existing Makefile path, and Windows CMake/MSVC CI is defined for the new port. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality with both original files. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD/Windows physical-USB validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.19.0; its latest changes await compilation and validation. The 0.15.2 baseline was compiled and transcript-tested on macOS / Apple Silicon. Linux CI covers the existing Makefile path, and Windows CMake/MSVC CI is defined for the new port. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality with both original files. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD/Windows physical-USB validation remains pending.
 
 ---
 
@@ -3185,6 +3185,19 @@ to the selected ROM plus any catalog predecessors required to compute its
 cumulative save-bank selector. A multi-ROM operation without `--rom` is
 rejected immediately after catalog discovery, before metadata scanning.
 
+### 36.88 0.19.0 — guarded erase with an optional exact-range backup
+
+Save erasure now accepts `--backup FILE`. Before sending the first zero-filled
+save transfer, the application reads the complete selected range and writes it
+to a new backup file; existing backup files are never overwritten. The default
+range is all four observed 32-KiB banks, while direct-bank mode backs up exactly
+the range selected by `--save-bank` and `--consecutive-bank`.
+
+When `--backup` is omitted, the application displays a permanent-data-loss
+warning and accepts only an explicit interactive `y` or `yes`. Refusal or end
+of input aborts before the USB device is opened. The shared confirmation policy
+is used by both unbacked save writing and unbacked erasure.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -3197,7 +3210,7 @@ the cross-platform path and builds the same four executables and offline suite.
 Native project scope:
 
 ```text
-macOS       supported target; 0.15.2 baseline compiled and transcript-tested; current 0.18.2 source awaits validation; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; 0.15.2 baseline compiled and transcript-tested; current 0.19.0 source awaits validation; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3664,7 +3677,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared source version **0.18.2**, the project has an object-oriented structural model:
+At shared source version **0.19.0**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,
