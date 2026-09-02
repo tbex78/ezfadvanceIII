@@ -1,10 +1,12 @@
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "transcript_transport.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace {
@@ -199,6 +201,45 @@ void testReadUsesFinalPartialBlock()
     assert(transcript.complete());
 }
 
+void testDecodedCartridgeReads()
+{
+    ezfadvance::test::TranscriptTransport transcript;
+
+    auto branch_command = std::vector<std::uint8_t>{
+        0x5A,0xA5,0x91,0x00, 0,0,0,0, 4,0,0,0, 0};
+    const auto instruction =
+        ezfadvance::CartridgeFormat::makeArmBranch(0x00100000);
+    const std::vector<std::uint8_t> branch_bytes = {
+        static_cast<std::uint8_t>(instruction),
+        static_cast<std::uint8_t>(instruction >> 8),
+        static_cast<std::uint8_t>(instruction >> 16),
+        static_cast<std::uint8_t>(instruction >> 24)};
+    transcript.expectOut(branch_command, timeout_ms)
+              .expectInExact(branch_bytes, branch_bytes.size(), timeout_ms);
+
+    constexpr std::uint32_t header_address = 0x00200000;
+    auto header_command = std::vector<std::uint8_t>{
+        0x5A,0xA5,0x91,0x00, 0,0,0,0, 0xC0,0,0,0, 0};
+    writeLe32(header_command, 4, header_address / 2);
+    std::vector<std::uint8_t> header_bytes(0xC0, 0);
+    const std::string title = "HEADER TEST";
+    std::copy(title.begin(), title.end(), header_bytes.begin() + 0xA0);
+    transcript.expectOut(header_command, timeout_ms)
+              .expectInExact(header_bytes, header_bytes.size(), timeout_ms);
+
+    ezfadvance::ReadOnlyCartridge cartridge(transcript);
+    const auto branch = cartridge.readArmBranch();
+    assert(branch);
+    const std::array<std::uint8_t, 4> expected_branch = {
+        branch_bytes[0], branch_bytes[1], branch_bytes[2], branch_bytes[3]};
+    assert(branch->bytes == expected_branch);
+    assert(branch->target == 0x00100000);
+    const auto header = cartridge.readGbaHeader(header_address);
+    assert(header);
+    assert(header->title == title);
+    assert(transcript.complete());
+}
+
 void expectSafeLinearMapping(ezfadvance::test::TranscriptTransport& transcript,
                              unsigned mapping_mib)
 {
@@ -249,5 +290,6 @@ int main()
     testOfficialDetectionStopsEz3Path();
     testFull32MiBExtractionTranscript();
     testReadUsesFinalPartialBlock();
+    testDecodedCartridgeReads();
     testHighMappingsContainNoSaveWrites();
 }

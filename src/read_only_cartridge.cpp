@@ -86,6 +86,26 @@ bool ReadOnlyCartridge::read(std::uint32_t byte_address,
     return read(byte_address, output.data(), output.size());
 }
 
+std::optional<ArmBranchProbe> ReadOnlyCartridge::readArmBranch(
+    std::uint32_t byte_address)
+{
+    std::vector<std::uint8_t> bytes;
+    if (!read(byte_address, bytes, 4)) return std::nullopt;
+    ArmBranchProbe probe;
+    std::copy(bytes.begin(), bytes.end(), probe.bytes.begin());
+    probe.target = CartridgeFormat::armBranchTarget(
+        CartridgeFormat::readLe32(probe.bytes.data()));
+    return probe;
+}
+
+std::optional<GbaHeader> ReadOnlyCartridge::readGbaHeader(
+    std::uint32_t byte_address)
+{
+    std::vector<std::uint8_t> bytes;
+    if (!read(byte_address, bytes, 0xC0)) return std::nullopt;
+    return GbaHeader::parse(bytes);
+}
+
 bool ReadOnlyCartridge::startup()
 {
     const std::vector<std::uint8_t> c97 = {0x5A,0xA5,0x97,0,0,0,0,0,0,0,0,0,0};

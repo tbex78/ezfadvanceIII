@@ -81,28 +81,7 @@ static constexpr uint32_t CARD_IMAGE_SIZE = 0x02000000u;
 
 static constexpr size_t MAX_CAPTURED_ROMS = 8;
 
-static uint32_t read_le32(const uint8_t* p)
-{
-    return static_cast<uint32_t>(p[0])
-         | (static_cast<uint32_t>(p[1]) << 8)
-         | (static_cast<uint32_t>(p[2]) << 16)
-         | (static_cast<uint32_t>(p[3]) << 24);
-}
-
-static std::optional<uint32_t> arm_branch_target(uint32_t ins)
-{
-    return ezfadvance::CartridgeFormat::armBranchTarget(ins);
-}
-
 using GbaHeader = ezfadvance::GbaHeader;
-
-static GbaHeader read_gba_header(ezfadvance::ReadOnlyCartridge& cartridge,
-                                 uint32_t start)
-{
-    std::vector<uint8_t> b;
-    if (!cartridge.read(start,b,0xC0)) return {};
-    return GbaHeader::parse(b);
-}
 
 using CatalogEntry = ezfadvance::CatalogEntry;
 
@@ -238,18 +217,15 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
                                  const std::optional<std::vector<uint8_t>>& write_save,
                                  const std::optional<std::string>& backup_path)
 {
-    std::vector<uint8_t> first;
-    if (!cartridge.read(0,first,4)) return 2;
-
-    const uint32_t first_word = read_le32(first.data());
-    const auto loader_target = arm_branch_target(first_word);
-    if (!loader_target) {
+    const auto branch = cartridge.readArmBranch();
+    if (!branch) return 2;
+    if (!branch->target) {
         std::cerr << "Card byte 0 is not an ARM unconditional branch.\n"
                   << "This does not look like a recognized capture-derived EZ3 image.\n";
         return 3;
     }
 
-    const uint32_t loader_start = *loader_target;
+    const uint32_t loader_start = *branch->target;
     if (loader_start < 0xC0 || loader_start >= CARD_IMAGE_SIZE) {
         std::cerr << "Patched branch points to " << hex32(loader_start)
                   << ", outside the understood 32-MiB cartridge layout.\n";
@@ -297,7 +273,7 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     for (size_t i=0;i<rom_count;++i) {
         DetectedRom r;
         r.e = catalog->entries[i];
-        r.g = read_gba_header(cartridge,r.e.start);
+        r.g = cartridge.readGbaHeader(r.e.start).value_or(GbaHeader{});
         const auto end = catalog->allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
         r.span = end ? static_cast<uint32_t>(ezfadvance::boundedSaveScanSpan(
                            r.e.start, *end, CARD_IMAGE_SIZE)) : 0;

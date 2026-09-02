@@ -86,28 +86,7 @@ static constexpr uint32_t CARD_IMAGE_LIMIT   = 0x02000000u; // 32 MiB / 256 Mbit
 
 static constexpr size_t CAPTURE_PROVEN_MAX_ROMS = 8;
 
-static uint32_t read_le32(const uint8_t* p)
-{
-    return static_cast<uint32_t>(p[0])
-         | (static_cast<uint32_t>(p[1]) << 8)
-         | (static_cast<uint32_t>(p[2]) << 16)
-         | (static_cast<uint32_t>(p[3]) << 24);
-}
-
-static std::optional<uint32_t> arm_branch_target(uint32_t ins)
-{
-    return ezfadvance::CartridgeFormat::armBranchTarget(ins);
-}
-
 using GbaHeader = ezfadvance::GbaHeader;
-
-static GbaHeader read_gba_header(ezfadvance::ReadOnlyCartridge& cartridge,
-                                 uint32_t start)
-{
-    std::vector<uint8_t> b;
-    if (!cartridge.read(start,b,0xC0)) return {};
-    return GbaHeader::parse(b);
-}
 
 static int inspect_official_cartridge(ezfadvance::ReadOnlyCartridge& cartridge)
 {
@@ -490,14 +469,11 @@ static int inspect_card(ezfadvance::ReadOnlyCartridge& cartridge,
                         const std::optional<Ez3ExtractionRequest>& extraction,
                         bool verbose)
 {
-    std::vector<uint8_t> first;
-    if (!cartridge.read(0,first,4)) return 2;
-
-    const uint32_t first_word = read_le32(first.data());
-    const auto loader_target = arm_branch_target(first_word);
-    if (!loader_target) {
+    const auto branch = cartridge.readArmBranch();
+    if (!branch) return 2;
+    if (!branch->target) {
         const bool first_word_erased =
-            std::all_of(first.begin(), first.end(),
+            std::all_of(branch->bytes.begin(), branch->bytes.end(),
                         [](uint8_t b) { return b == 0xFF; });
 
         if (first_word_erased) {
@@ -517,7 +493,7 @@ static int inspect_card(ezfadvance::ReadOnlyCartridge& cartridge,
         return 3;
     }
 
-    const uint32_t loader_start = *loader_target;
+    const uint32_t loader_start = *branch->target;
     if (loader_start < 0xC0 || loader_start >= CARD_IMAGE_LIMIT) {
         std::cerr << "Patched branch points to " << hex32(loader_start)
                   << ", outside the currently understood 32-MiB / 256-Mbit layout.\n";
@@ -597,7 +573,8 @@ static int inspect_card(ezfadvance::ReadOnlyCartridge& cartridge,
     for (size_t i=0;i<entries.size();++i) {
         const std::optional<uint32_t> span_end = is_single ? std::nullopt :
             catalog->allocationEnd(i, loader_start, CARD_IMAGE_LIMIT);
-        const GbaHeader g = read_gba_header(cartridge,entries[i].start);
+        const GbaHeader g =
+            cartridge.readGbaHeader(entries[i].start).value_or(GbaHeader{});
         print_rom(i+1,entries[i],g,span_end);
     }
 

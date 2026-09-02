@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/protocol.hpp"
 
 #include <cstddef>
@@ -24,6 +25,11 @@ constexpr bool hasEz3Catalog(CartridgeKind kind) noexcept
     return kind == CartridgeKind::ez3_flash;
 }
 
+struct ArmBranchProbe {
+    std::array<std::uint8_t, 4> bytes{};
+    std::optional<std::uint32_t> target;
+};
+
 // Capture-derived, non-destructive manager read session shared by the card
 // inspector and save reader. It has no erase or program operation.
 class ReadOnlyCartridge final {
@@ -44,6 +50,9 @@ public:
     bool read(std::uint32_t byte_address,
               std::vector<std::uint8_t>& output,
               std::size_t length);
+    std::optional<ArmBranchProbe> readArmBranch(
+        std::uint32_t byte_address = 0);
+    std::optional<GbaHeader> readGbaHeader(std::uint32_t byte_address);
 
     bool prepareLinear16MiB();
     bool prepareLinear24MiB();
