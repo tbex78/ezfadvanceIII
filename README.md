@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.15.2**.
+version is **0.15.3**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.15.2
+“pending,” and “next” describe the named review point, not the present 0.15.3
 support boundary.
 
 ## Build and test
@@ -63,6 +63,7 @@ The code is organized in layers:
 - `Protocol` implements shared EZ3 command/data/echo transactions.
 - `ReadOnlyCartridge` owns the capture-derived initialization and ROM-read state machine.
 - `GbaHeader`, `CatalogEntry`, and `CartridgeFormat` model cartridge metadata.
+- `SaveCatalogAnalyzer` owns save-oriented ROM header, allocation-span, and marker inspection.
 - `SaveMemoryReader` owns capture-proven save-bank reads.
 - `VerificationSession` owns all capture-supported post-program verification paths: partial first-window, explicit partial 12/20/28 MiB, exact 8/16/24/32 MiB, and tiny-tail-above-16-MiB.
 - `LibusbWriterBackend` owns the capture-derived destructive USB implementation behind a factory returning the `WriterBackend` interface.

@@ -37,6 +37,7 @@
 #include "ezfadvance/save_memory_writer.hpp"
 #include "ezfadvance/save_bank_layout.hpp"
 #include "ezfadvance/save_bank_selector.hpp"
+#include "ezfadvance/save_catalog_analyzer.hpp"
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
@@ -81,10 +82,6 @@
 static constexpr uint32_t CARD_IMAGE_SIZE = 0x02000000u;
 
 static constexpr size_t MAX_CAPTURED_ROMS = 8;
-
-using GbaHeader = ezfadvance::GbaHeader;
-
-using CatalogEntry = ezfadvance::CatalogEntry;
 
 static std::string hex32(uint32_t v)
 {
@@ -133,68 +130,6 @@ static bool write_binary_file_without_overwrite(
         return false;
     }
     return true;
-}
-
-static bool contains_pattern(const std::vector<uint8_t>& data,
-                             const std::string& pattern)
-{
-    if (pattern.empty() || data.size() < pattern.size()) return false;
-    return std::search(data.begin(),data.end(),
-                       pattern.begin(),pattern.end()) != data.end();
-}
-
-struct SaveSignature {
-    std::string text;
-};
-
-static SaveSignature detect_save_signature(
-                                           ezfadvance::ReadOnlyCartridge& cartridge,
-                                           uint32_t start,
-                                           uint32_t span)
-{
-    // Scan the ROM allocation in 64-KiB chunks.  Keep a small overlap so a
-    // marker split at a chunk boundary is still found.
-    static const std::vector<std::string> patterns = {
-        "SRAM_V111",
-        "SRAM_V112",
-        "SRAM_V",
-        std::string("SRAM\0",5),
-        "FLASH1M",
-        "FLASH512",
-        "FLASH_V",
-        "EEPROM_V"
-    };
-
-    constexpr size_t CHUNK = 0x10000;
-    constexpr size_t OVERLAP = 32;
-    std::vector<uint8_t> carry;
-
-    uint32_t pos = 0;
-    while (pos < span) {
-        const size_t n = std::min<size_t>(CHUNK,static_cast<size_t>(span-pos));
-        std::vector<uint8_t> b;
-        if (!cartridge.read(start+pos,b,n))
-            return {};
-
-        std::vector<uint8_t> joined;
-        joined.reserve(carry.size()+b.size());
-        joined.insert(joined.end(),carry.begin(),carry.end());
-        joined.insert(joined.end(),b.begin(),b.end());
-
-        for (const auto& pat : patterns) {
-            if (contains_pattern(joined,pat)) {
-                SaveSignature s;
-                s.text = (pat.size() == 5 && pat[4] == '\0') ? "SRAM" : pat;
-                return s;
-            }
-        }
-
-        const size_t keep = std::min(OVERLAP,joined.size());
-        carry.assign(joined.end()-static_cast<std::ptrdiff_t>(keep),
-                     joined.end());
-        pos += static_cast<uint32_t>(n);
-    }
-    return {};
 }
 
 static std::string safe_filename_component(std::string s)
@@ -247,35 +182,12 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     const bool is_single = catalog.isSingle();
     const std::size_t rom_count = catalog.entries.size();
 
-    uint32_t highest_scan_address = loader_end;
-    for (size_t i = 0; i < rom_count; ++i) {
-        const auto end = catalog.allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
-        if (end && *end > catalog.entries[i].start)
-            highest_scan_address = std::max(highest_scan_address, *end - 1);
-    }
-    if (!cartridge.prepareLinearForAddress(highest_scan_address))
+    ezfadvance::SaveCatalogAnalyzer analyzer(cartridge, CARD_IMAGE_SIZE);
+    const auto analysis = analyzer.analyze(
+        catalog, loader_start, loader_end);
+    if (!analysis)
         return 2;
-
-    struct DetectedRom {
-        CatalogEntry e;
-        GbaHeader g;
-        uint32_t span = 0;
-        SaveSignature sig;
-    };
-    std::vector<DetectedRom> roms;
-    roms.reserve(rom_count);
-
-    for (size_t i=0;i<rom_count;++i) {
-        DetectedRom r;
-        r.e = catalog.entries[i];
-        r.g = cartridge.readGbaHeader(r.e.start).value_or(GbaHeader{});
-        const auto end = catalog.allocationEnd(i, loader_start, CARD_IMAGE_SIZE);
-        r.span = end ? static_cast<uint32_t>(ezfadvance::boundedSaveScanSpan(
-                           r.e.start, *end, CARD_IMAGE_SIZE)) : 0;
-        if (r.span)
-            r.sig = detect_save_signature(cartridge,r.e.start,r.span);
-        roms.push_back(std::move(r));
-    }
+    const auto& roms = analysis.roms;
 
     std::cout << "\n========================================\n"
               << "EZF ADVANCE III SAVE TOOL - CARD CONTENTS\n"
@@ -287,26 +199,26 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     for (size_t i=0;i<roms.size();++i) {
         const auto& r = roms[i];
         std::cout << "\nROM " << (i+1) << "\n"
-                  << "  Catalog name : " << r.e.name << "\n"
-                  << "  Start        : " << hex32(r.e.start) << "\n"
-                  << "  Alloc. span  : " << r.span << " bytes\n"
-                  << "  EZ type      : " << static_cast<unsigned>(r.e.type) << "\n"
-                  << "  Mapping flag : " << static_cast<unsigned>(r.e.mapping) << "\n"
-                  << "  GBA title    : " << (r.g.title.empty() ? "(blank)" : r.g.title) << "\n"
-                  << "  Game code    : " << (r.g.game_code.empty() ? "(blank)" : r.g.game_code) << "\n"
-                  << "  Save marker  : " << (r.sig.text.empty() ? "(none found)" : r.sig.text) << "\n";
+                  << "  Catalog name : " << r.catalog_entry.name << "\n"
+                  << "  Start        : " << hex32(r.catalog_entry.start) << "\n"
+                  << "  Alloc. span  : " << r.allocation_span << " bytes\n"
+                  << "  EZ type      : " << static_cast<unsigned>(r.catalog_entry.type) << "\n"
+                  << "  Mapping flag : " << static_cast<unsigned>(r.catalog_entry.mapping) << "\n"
+                  << "  GBA title    : " << (r.header.title.empty() ? "(blank)" : r.header.title) << "\n"
+                  << "  Game code    : " << (r.header.game_code.empty() ? "(blank)" : r.header.game_code) << "\n"
+                  << "  Save marker  : " << (r.save_marker.empty() ? "(none found)" : r.save_marker) << "\n";
     }
 
     std::vector<size_t> supported_candidates;
     for (size_t i = 0; i < roms.size(); ++i) {
-        if (ezfadvance::supportedSaveSizeForMarker(roms[i].sig.text))
+        if (ezfadvance::supportedSaveSizeForMarker(roms[i].save_marker))
             supported_candidates.push_back(i);
     }
 
     std::vector<std::string> save_markers;
     save_markers.reserve(roms.size());
     for (const auto& rom : roms)
-        save_markers.push_back(rom.sig.text);
+        save_markers.push_back(rom.save_marker);
 
     const bool direct_bank_access = ezfadvance::isDirectSaveBankAccess(
         requested_rom, requested_bank.has_value());
@@ -360,7 +272,7 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
         }
         selected = selection.index;
         const auto selected_size =
-            ezfadvance::supportedSaveSizeForMarker(roms[*selected].sig.text);
+            ezfadvance::supportedSaveSizeForMarker(roms[*selected].save_marker);
         if (!selected_size) {
             std::cerr << "\nSelected ROM " << (*selected + 1)
                       << " has no supported save size.\n";
@@ -408,7 +320,7 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
 
     if (selected) {
         std::cout << "\nReading save for ROM " << (*selected + 1) << ": "
-                  << roms[*selected].e.name << "\n";
+                  << roms[*selected].catalog_entry.name << "\n";
     } else {
         std::cout << "\nReading explicitly selected save bank "
                   << hex16(save_selector) << "...\n";
@@ -498,10 +410,10 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
         output = *requested_output;
     } else if (!selected) {
         output = "save-bank-" + hex16(save_selector).substr(2) + ".sav";
-    } else if (!roms[*selected].g.game_code.empty()) {
-        output = safe_filename_component(roms[*selected].g.game_code)+".sav";
+    } else if (!roms[*selected].header.game_code.empty()) {
+        output = safe_filename_component(roms[*selected].header.game_code)+".sav";
     } else {
-        output = safe_filename_component(roms[*selected].e.name)+".sav";
+        output = safe_filename_component(roms[*selected].catalog_entry.name)+".sav";
     }
 
     std::ofstream f(output,std::ios::binary);

@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.15.2` toolset, including guarded
+**Specification baseline:** shared `0.15.3` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -501,6 +501,13 @@ checksum state.
 
 Models an EZ3 catalog entry and validates its decoded address against a caller-
 provided image limit.
+
+#### `SaveCatalogAnalyzer`
+
+Owns save-oriented inspection after catalog discovery: mapping through the
+highest allocation address, allocation-span calculation, GBA-header reads, and
+chunked save-marker detection. It does not select a ROM, allocate save banks,
+present output, or access save memory.
 
 #### `SaveMemoryReader`
 
