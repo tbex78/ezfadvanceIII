@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.14.3**.
+Current shared project/toolset version covered by this summary: **0.14.4**.
 
 All mainline utilities carry this same version:
 
@@ -831,11 +831,11 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 
 ## Current native platform scope
 
-Shared version 0.14.3 follows the C++17/libusb platform policy while preserving
+Shared version 0.14.4 follows the C++17/libusb platform policy while preserving
 the established Unix-like build path:
 
 ```text
-macOS       target; current 0.14.3 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.14.4 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending

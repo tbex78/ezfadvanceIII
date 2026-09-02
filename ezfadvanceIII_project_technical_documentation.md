@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.14.3`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.14.3`<br>
+**Current project/toolset version:** `0.14.4`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.14.4`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared 0.14.3 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI covers the existing Makefile path, and Windows CMake/MSVC CI is defined for the new port. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD/Windows physical-USB validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared 0.14.4 toolset has been compiled and transcript-tested on macOS / Apple Silicon. Linux CI covers the existing Makefile path, and Windows CMake/MSVC CI is defined for the new port. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD/Windows physical-USB validation remains pending.
 
 ---
 
@@ -2996,6 +2996,21 @@ pre-`AA55` settle while retaining the wipe tool's zero-delay capture behavior.
 Transcript tests cover all four windows, both timing profiles, status cleanup,
 and invalid-window rejection. No flash geometry or command ordering changed.
 
+The 0.14.3 hardware checkpoint used the 12-MiB Advance Wars/F-Zero layout:
+programming and full read-back verification passed, the menu loaded, and both
+games booted. The wipe profile subsequently passed its destructive erase and
+blank-verification checkpoint on the same physical cartridge.
+
+### 36.71 0.14.4 — reusable ROM analysis
+
+The writer now delegates ARM-entry decoding, ROM-size catalog classification,
+save-library recognition, and catalog-map selection to the cohesive
+`RomAnalyzer` component. The command-line layer retains file I/O, user
+confirmation, explicit EEPROM override policy, and presentation. Focused
+offline tests cover the default, generic FLASH, FLASH512, and unresolved
+EEPROM paths. No image-format rule, mapping decision, USB command, or writer
+workflow changed.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -3008,7 +3023,7 @@ the cross-platform path and builds the same four executables and offline suite.
 Native project scope:
 
 ```text
-macOS       supported target; current 0.14.3 baseline compiled and transcript-tested; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current 0.14.4 baseline compiled and transcript-tested; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3468,7 +3483,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared toolset version **0.14.3**, the project has an object-oriented structural model:
+At shared toolset version **0.14.4**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,

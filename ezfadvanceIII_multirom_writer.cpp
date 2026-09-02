@@ -27,33 +27,23 @@
 #include <vector>
 
 #include "ezfadvance/usb_device.hpp"
-#include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/cartridge_image_builder.hpp"
 #include "ezfadvance/card_writer.hpp"
 #include "ezfadvance/card_write_presenter.hpp"
-#include "ezfadvance/eeprom_mapping.hpp"
 #include "ezfadvance/libusb_writer_backend.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/platform.hpp"
+#include "ezfadvance/rom_analyzer.hpp"
 #include "ezfadvance/verification_session.hpp"
 #include "ezfadvance/writer_options.hpp"
 #include "ezfadvance/verification_policy.hpp"
 #include "ezfadvance/version.hpp"
 
-static constexpr size_t PROGRAM_BLOCK = 0x10000; // 64 KiB
 static constexpr size_t MAX_CARD_IMAGE = 0x2000000;   // 256 Mbit / 32 MiB card
 
 using RomInfo = ezfadvance::RomInfo;
 using BuiltCartridgeImage = ezfadvance::BuiltCartridgeImage;
 using CartridgeImageBuilder = ezfadvance::CartridgeImageBuilder;
-static uint32_t read_le32(const uint8_t* p)
-{
-    return static_cast<uint32_t>(p[0])
-         | (static_cast<uint32_t>(p[1]) << 8)
-         | (static_cast<uint32_t>(p[2]) << 16)
-         | (static_cast<uint32_t>(p[3]) << 24);
-}
-
 static void print_hex(const uint8_t* p, size_t n, size_t max = 64)
 {
     const size_t shown = std::min(n, max);
@@ -275,86 +265,8 @@ static void print_hex(const uint8_t* p, size_t n, size_t max = 64)
 //   * Kingdom Hearts' SRAM_F_V103 catalog entry is type 0 / mapping 3.
 // Existing v33 cartridge-readiness, EEPROM safety, loader templates, and all
 // previously hardware-proven <=16-MiB behaviors are preserved.
-static std::optional<uint32_t> arm_branch_target(const std::vector<uint8_t>& rom)
-{
-    if (rom.size() < 4) return std::nullopt;
-    return ezfadvance::CartridgeFormat::armBranchTarget(
-        read_le32(rom.data()));
-}
-
-static bool contains_bytes(const std::vector<uint8_t>& data,
-                           const std::string& needle)
-{
-    if (needle.empty() || data.size() < needle.size()) return false;
-    return std::search(data.begin(), data.end(),
-                       needle.begin(), needle.end()) != data.end();
-}
-
-// Catalog entry type is a ROM-size class, not a save-type code. Independent
-// original-manager captures now line up exactly with:
-//   32 MiB -> 0, 16 MiB -> 1, 8 MiB -> 2, 4 MiB -> 3, ... 64 KiB -> 9.
-//
-// In particular, 4MiB-4MiB.pcap uses type 3 for both F-Zero (SRAM_V111) and
-// Mario Kart (FLASH_V124), while 4_4_8MiB.pcap uses type 2 for 8-MiB Advance
-// Wars 2 (FLASH_V126) and type 3 for both 4-MiB games. The same rule explains
-// all older captured 8/16/32-MiB and small-homebrew entries without per-title
-// or per-save-signature exceptions.
-//
-// Official dumps are normally power-of-two sized. For an unusual non-power-of-
-// two file, use the next power-of-two class, matching the existing placement
-// allocator. --typeN remains available for protocol experiments.
-struct NonSramSaveInfo {
-    std::string family;
-    std::string signature;
-};
-
-static std::optional<std::string> detect_ascii_library_signature(
-    const std::vector<uint8_t>& rom,
-    const char* prefix,
-    size_t prefix_len)
-{
-    const auto it = std::search(rom.begin(), rom.end(), prefix, prefix + prefix_len);
-    if (it == rom.end())
-        return std::nullopt;
-
-    const size_t off = static_cast<size_t>(it - rom.begin());
-    std::string sig;
-    for (size_t i = off; i < rom.size() && sig.size() < 20; ++i) {
-        const uint8_t c = rom[i];
-        if (c < 0x20 || c > 0x7E)
-            break;
-        sig.push_back(static_cast<char>(c));
-    }
-    if (sig.empty())
-        sig.assign(prefix, prefix_len);
-    return sig;
-}
-
-static std::optional<NonSramSaveInfo> detect_non_sram_save_library(
-    const std::vector<uint8_t>& rom)
-{
-    // Generic FLASH_V libraries are intentionally excluded. Keep warnings for
-    // the distinct FLASH1M_V and FLASH512_V families and for EEPROM.
-    struct Candidate {
-        const char* prefix;
-        size_t len;
-        const char* family;
-    };
-    static constexpr Candidate candidates[] = {
-        {"FLASH1M_V",  9, "FLASH1M (128 KiB Flash)"},
-        {"FLASH512_V", 10, "FLASH512 (64 KiB Flash)"},
-        {"EEPROM_V",    8, "EEPROM"},
-    };
-
-    for (const auto& c : candidates) {
-        if (const auto sig = detect_ascii_library_signature(rom, c.prefix, c.len))
-            return NonSramSaveInfo{c.family, *sig};
-    }
-    return std::nullopt;
-}
-
 static bool warn_and_confirm_non_sram_save(const RomInfo& r,
-                                           const NonSramSaveInfo& info)
+                                           const ezfadvance::NonSramSaveInfo& info)
 {
     std::cerr
         << "\n========================================\n"
@@ -398,57 +310,6 @@ static bool warn_and_confirm_non_sram_save(const RomInfo& r,
 
     std::cerr << "No selected; aborting safely.\n";
     return false;
-}
-
-static uint8_t detect_entry_type(const std::vector<uint8_t>& rom)
-{
-    if (rom.size() > MAX_CARD_IMAGE)
-        throw std::runtime_error("ROM file exceeds 256-Mbit cartridge capacity");
-
-    // Type 9 is the 64-KiB class. Each doubling of the ROM size decreases the
-    // type by one, reaching type 0 at 32 MiB. Clamp tiny/homebrew files to the
-    // capture/program granularity and round unusual sizes up to the next class.
-    uint64_t size_class = PROGRAM_BLOCK;
-    uint8_t type = 9;
-    while (size_class < rom.size()) {
-        size_class <<= 1;
-        if (type == 0 || size_class > MAX_CARD_IMAGE)
-            throw std::runtime_error("ROM size class exceeds cartridge geometry");
-        --type;
-    }
-    return type;
-}
-
-static bool has_flash_save_library(const std::vector<uint8_t>& rom)
-{
-    // Captured original-manager cases:
-    //   FLASH_V121     -> map 6 (Advance Wars)
-    //   FLASH_V124     -> map 6 (Mario Kart)
-    //   FLASH_V126     -> map 6 (Advance Wars 2)
-    //   FLASH512_V130  -> map 6 (FFTA)
-    // FLASH1M_Vxxx is the same Nintendo/SDK FLASH save-library family and is
-    // handled generically here rather than adding version-specific exceptions.
-    return contains_bytes(rom, "FLASH_V") ||
-           contains_bytes(rom, "FLASH512_V") ||
-           contains_bytes(rom, "FLASH1M_V");
-}
-
-// The low byte of catalog entry bytes 20..23 is independent from ROM size.
-// Captured SRAM/non-FLASH cases use 3; captured FLASH save-library cases use 6.
-// EEPROM map 4/5 follows the ROM's SDK capacity initialization when that
-// structure can be recovered: 4 Kbit/512 bytes -> 4; 64 Kbit/8 KiB -> 5.
-// The marker version alone remains insufficient.
-static bool has_eeprom_save_library(const std::vector<uint8_t>& rom)
-{
-    return contains_bytes(rom, "EEPROM_V");
-}
-
-static uint8_t detect_mapping_flag(const std::vector<uint8_t>& rom)
-{
-    // EEPROM is intentionally handled separately by structural capacity
-    // detection, with explicit override as the unresolved fallback.
-    if (has_flash_save_library(rom)) return 6;
-    return 3;
 }
 
 static std::string derive_name(const std::string& path)
@@ -495,30 +356,30 @@ static bool load_rom(RomInfo& r)
         return false;
     }
 
-    const auto target = arm_branch_target(r.data);
-    if (!target) {
+    const auto analysis = ezfadvance::RomAnalyzer{}.analyze(r.data);
+    if (!analysis.original_entry_target) {
         std::cerr << "ROM does not begin with the capture-supported "
                      "EAxxxxxx ARM branch: " << r.path << '\n';
         return false;
     }
 
-    if (const auto non_sram = detect_non_sram_save_library(r.data)) {
-        if (!warn_and_confirm_non_sram_save(r, *non_sram)) {
+    if (analysis.non_sram_save) {
+        const auto& non_sram = *analysis.non_sram_save;
+        if (!warn_and_confirm_non_sram_save(r, non_sram)) {
             std::cerr << "ROM processing cancelled before image construction; "
                          "no USB write was attempted.\n";
             return false;
         }
     }
 
-    r.original_entry_target = *target;
+    r.original_entry_target = *analysis.original_entry_target;
     if (r.name.empty()) r.name = derive_name(r.path);
     if (!r.entry_type_overridden)
-        r.entry_type = detect_entry_type(r.data);
+        r.entry_type = analysis.entry_type;
 
     if (!r.mapping_flag_overridden) {
-        if (has_eeprom_save_library(r.data)) {
-            const auto detected = ezfadvance::detectEepromMapping(r.data);
-            r.mapping_flag = ezfadvance::catalogMapForEeprom(detected.capacity);
+        if (analysis.has_eeprom_library) {
+            r.mapping_flag = analysis.mapping_flag;
             if (r.mapping_flag == 0) {
                 std::cerr
                     << "EEPROM capacity could not be proven from ROM structure: "
@@ -536,7 +397,7 @@ static bool load_rom(RomInfo& r)
                       << " capacity; using catalog map "
                       << static_cast<unsigned>(r.mapping_flag) << ".\n";
         } else {
-            r.mapping_flag = detect_mapping_flag(r.data);
+            r.mapping_flag = analysis.mapping_flag;
         }
     }
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.14.3 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.14.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -58,6 +58,7 @@ set(EZF_WRITER_SOURCES
     src/cartridge_format.cpp
     src/cartridge_image_builder.cpp
     src/eeprom_mapping.cpp
+    src/rom_analyzer.cpp
     src/verification_policy.cpp
     src/verification_session.cpp
     src/writer_options.cpp)
@@ -112,6 +113,7 @@ if(BUILD_TESTING)
     ezf_add_test(card_write_presenter_test tests/card_write_presenter_test.cpp src/card_write_presenter.cpp)
     ezf_add_test(ez3_catalog_test tests/ez3_catalog_test.cpp src/ez3_catalog.cpp src/cartridge_format.cpp)
     ezf_add_test(eeprom_mapping_test tests/eeprom_mapping_test.cpp src/eeprom_mapping.cpp)
+    ezf_add_test(rom_analyzer_test tests/rom_analyzer_test.cpp src/rom_analyzer.cpp src/cartridge_format.cpp src/eeprom_mapping.cpp)
     ezf_add_test(card_reader_options_test tests/card_reader_options_test.cpp src/card_reader_options.cpp)
     ezf_add_usb_test(protocol_test tests/protocol_test.cpp src/protocol.cpp src/usb_device.cpp)
     ezf_add_usb_test(flash_window_selector_test tests/flash_window_selector_test.cpp src/flash_window_selector.cpp src/protocol.cpp src/usb_device.cpp)
