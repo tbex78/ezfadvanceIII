@@ -130,13 +130,12 @@ bool ReadOnlyCartridge::startup()
 
 bool ReadOnlyCartridge::probeUnlockTail()
 {
+    // The former one-byte AA, 55, and 06 operations address save memory.
+    // Retain only the save-safe two-byte control body.
     return protocol_.tx92Two(0xAA,0x55,"probe AA55") &&
            protocol_.tx92Two(0,0,"probe zero 1") &&
            protocol_.tx92Two(0,0,"probe zero 2") &&
-           protocol_.tx92Two(0,0,"probe zero 3") &&
-           protocol_.tx92One(0,0xAA,"probe selector0 AA") &&
-           protocol_.tx92One(0,0x55,"probe selector0 55") &&
-           protocol_.tx92One(1,0x06,"probe selector1 06");
+           protocol_.tx92Two(0,0,"probe zero 3");
 }
 
 bool ReadOnlyCartridge::probePrefix(std::uint8_t a0, std::uint8_t a1,
@@ -154,11 +153,10 @@ bool ReadOnlyCartridge::probePrefix(std::uint8_t a0, std::uint8_t a1,
 
 bool ReadOnlyCartridge::probeReset(bool use_f0)
 {
+    // The former one-byte 1/04 and 0/00 operations wrote save offsets 1 and 0.
+    // The two-byte flash-ID reset is the save-safe control operation.
     return protocol_.tx92Two(use_f0 ? 0xF0 : 0xFF,
-                             use_f0 ? 0x00 : 0xFF,"probe ID reset") &&
-           protocol_.tx92One(1,4,"probe status 1/04") &&
-           protocol_.tx92One(0,0,"probe status 0/00 #1") &&
-           protocol_.tx92One(0,0,"probe status 0/00 #2");
+                             use_f0 ? 0x00 : 0xFF,"probe ID reset");
 }
 
 bool ReadOnlyCartridge::tx92TwoAt(std::uint32_t address,

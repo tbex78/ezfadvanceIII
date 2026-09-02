@@ -44,30 +44,17 @@ void expect92Two(ezfadvance::test::TranscriptTransport& transcript,
     expectCommandData(transcript, std::move(command), {first, second});
 }
 
-void expect92One(ezfadvance::test::TranscriptTransport& transcript,
-                 std::uint8_t selector, std::uint8_t value)
-{
-    expectCommandData(transcript, ezfadvance::Protocol::command92One(selector),
-                      {value});
-}
-
 void expectPrefix(ezfadvance::test::TranscriptTransport& transcript)
 {
     expect92Two(transcript, 0x55,0xAA);
     for (unsigned i = 0; i < 3; ++i) expect92Two(transcript, 0,0);
     expect92Two(transcript, 0xAA,0x55);
     for (unsigned i = 0; i < 3; ++i) expect92Two(transcript, 0,0);
-    expect92One(transcript, 0,0xAA);
-    expect92One(transcript, 0,0x55);
-    expect92One(transcript, 1,0x06);
 }
 
 void expectReset(ezfadvance::test::TranscriptTransport& transcript, bool f0)
 {
     expect92Two(transcript, f0 ? 0xF0 : 0xFF, f0 ? 0x00 : 0xFF);
-    expect92One(transcript, 1,0x04);
-    expect92One(transcript, 0,0x00);
-    expect92One(transcript, 0,0x00);
 }
 
 void expectSub2(ezfadvance::test::TranscriptTransport& transcript,
@@ -140,6 +127,9 @@ void testOfficialDetectionStopsEz3Path()
     // Completing here proves no 0040/0080/00c0/0200 probe or 0x95 prime
     // occurred after official-cartridge classification.
     assert(transcript.complete());
+    for (const auto& command : transcript.observedOut())
+        assert(command != ezfadvance::Protocol::command92One(0) &&
+               command != ezfadvance::Protocol::command92One(1));
 }
 
 void testFull32MiBExtractionTranscript()
