@@ -23,18 +23,24 @@ bool containsPattern(const std::vector<std::uint8_t>& data,
 } // namespace
 
 SaveCatalogAnalyzer::SaveCatalogAnalyzer(ReadOnlyCartridge& cartridge,
-                                         std::uint32_t image_limit) noexcept
-    : cartridge_(cartridge), image_limit_(image_limit)
+                                         std::uint32_t image_limit,
+                                         SaveScanProgress progress) noexcept
+    : cartridge_(cartridge), image_limit_(image_limit),
+      progress_(std::move(progress))
 {
 }
 
 SaveCatalogAnalysis SaveCatalogAnalyzer::analyze(
     const Ez3CatalogLayout& catalog,
     std::uint32_t loader_start,
-    std::uint32_t loader_end)
+    std::uint32_t loader_end,
+    std::size_t entry_count)
 {
+    const std::size_t analyzed_count = entry_count == 0
+        ? catalog.entries.size()
+        : std::min(entry_count, catalog.entries.size());
     std::uint32_t highest_scan_address = loader_end;
-    for (std::size_t index = 0; index < catalog.entries.size(); ++index) {
+    for (std::size_t index = 0; index < analyzed_count; ++index) {
         const auto end = catalog.allocationEnd(
             index, loader_start, image_limit_);
         if (end && *end > catalog.entries[index].start)
@@ -46,8 +52,8 @@ SaveCatalogAnalysis SaveCatalogAnalyzer::analyze(
         return analysis;
 
     analysis.mapping_prepared = true;
-    analysis.roms.reserve(catalog.entries.size());
-    for (std::size_t index = 0; index < catalog.entries.size(); ++index) {
+    analysis.roms.reserve(analyzed_count);
+    for (std::size_t index = 0; index < analyzed_count; ++index) {
         SaveCatalogRom rom;
         rom.catalog_entry = catalog.entries[index];
         rom.header = cartridge_.readGbaHeader(rom.catalog_entry.start)
@@ -61,7 +67,8 @@ SaveCatalogAnalysis SaveCatalogAnalyzer::analyze(
             : 0;
         if (rom.allocation_span != 0) {
             rom.save_marker = detectSaveMarker(
-                rom.catalog_entry.start, rom.allocation_span);
+                rom.catalog_entry.start, rom.allocation_span,
+                index, analyzed_count);
         }
         analysis.roms.push_back(std::move(rom));
     }
@@ -69,7 +76,9 @@ SaveCatalogAnalysis SaveCatalogAnalyzer::analyze(
 }
 
 std::string SaveCatalogAnalyzer::detectSaveMarker(std::uint32_t start,
-                                                  std::uint32_t span)
+                                                  std::uint32_t span,
+                                                  std::size_t rom_index,
+                                                  std::size_t rom_count)
 {
     static const std::vector<std::string> patterns = {
         "SRAM_V111",
@@ -87,12 +96,15 @@ std::string SaveCatalogAnalyzer::detectSaveMarker(std::uint32_t start,
     std::vector<std::uint8_t> carry;
 
     std::uint32_t position = 0;
+    if (progress_) progress_(rom_index, rom_count, 0, span, false);
     while (position < span) {
         const auto length = std::min<std::size_t>(
             chunk_size, static_cast<std::size_t>(span - position));
         std::vector<std::uint8_t> chunk;
-        if (!cartridge_.read(start + position, chunk, length))
+        if (!cartridge_.read(start + position, chunk, length)) {
+            if (progress_) progress_(rom_index, rom_count, position, span, true);
             return {};
+        }
 
         std::vector<std::uint8_t> joined;
         joined.reserve(carry.size() + chunk.size());
@@ -101,6 +113,10 @@ std::string SaveCatalogAnalyzer::detectSaveMarker(std::uint32_t start,
 
         for (const auto& pattern : patterns) {
             if (containsPattern(joined, pattern)) {
+                if (progress_)
+                    progress_(rom_index, rom_count,
+                              position + static_cast<std::uint32_t>(length),
+                              span, true);
                 return pattern.size() == 5 && pattern[4] == '\0'
                     ? "SRAM"
                     : pattern;
@@ -111,6 +127,9 @@ std::string SaveCatalogAnalyzer::detectSaveMarker(std::uint32_t start,
         carry.assign(joined.end() - static_cast<std::ptrdiff_t>(keep),
                      joined.end());
         position += static_cast<std::uint32_t>(length);
+        if (progress_)
+            progress_(rom_index, rom_count, position, span,
+                      position == span);
     }
     return {};
 }

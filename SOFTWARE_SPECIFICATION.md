@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.18.0` toolset, including guarded
+**Specification baseline:** shared `0.18.2` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -225,6 +225,13 @@ choice even when exactly one `SRAM_V111` marker is present. A selected ROM
 must identify a supported `SRAM_V111` or `FLASH512` entry. Missing or mismatched candidates,
 unsupported save formats, unknown predecessor capacity, and cumulative layouts
 larger than four banks must be refused.
+
+With no arguments, the layout summary must be presented before save-marker
+scanning and visible per-ROM progress must update on one terminal line. When
+arguments are supplied, layout and scan-progress presentation must be
+suppressed. The analyzer must inspect only the selected ROM and any preceding
+entries needed for cumulative bank allocation; it must not scan unrelated
+following ROMs.
 
 Save writing must require `--write FILE` and `--yes-really-write`.
 `--backup FILE` is recommended but optional. If it is omitted, the tool must

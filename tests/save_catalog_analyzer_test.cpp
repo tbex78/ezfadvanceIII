@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -66,8 +67,17 @@ void testAnalyzesHeaderSpanAndBoundaryMarker()
     expectRead(transcript, 0, std::move(first_chunk));
     expectRead(transcript, 0x10000, std::move(tail));
 
+    std::vector<std::tuple<std::uint32_t, std::uint32_t, bool>> progress;
     ezfadvance::ReadOnlyCartridge cartridge(transcript);
-    ezfadvance::SaveCatalogAnalyzer analyzer(cartridge, image_limit);
+    ezfadvance::SaveCatalogAnalyzer analyzer(
+        cartridge, image_limit,
+        [&progress](std::size_t index, std::size_t count,
+                    std::uint32_t scanned, std::uint32_t total,
+                    bool finished) {
+            assert(index == 0);
+            assert(count == 1);
+            progress.emplace_back(scanned, total, finished);
+        });
     const auto analysis = analyzer.analyze(
         catalog, loader_start, loader_start + 0x7080 - 1);
 
@@ -79,6 +89,11 @@ void testAnalyzesHeaderSpanAndBoundaryMarker()
     assert(rom.header.game_code == game_code);
     assert(rom.allocation_span == loader_start);
     assert(rom.save_marker == "SRAM_V111");
+    assert(progress.size() == 3);
+    assert(progress.front() == std::make_tuple(
+        0u, loader_start, false));
+    assert(progress.back() == std::make_tuple(
+        loader_start, loader_start, true));
     assert(transcript.complete());
 }
 

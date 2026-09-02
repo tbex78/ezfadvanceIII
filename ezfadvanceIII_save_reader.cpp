@@ -152,7 +152,8 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
                                  const std::optional<ezfadvance::SaveBankSelector>& requested_bank,
                                  const std::optional<size_t>& requested_bank_count,
                                  const std::optional<std::vector<uint8_t>>& write_save,
-                                 const std::optional<std::string>& backup_path)
+                                 const std::optional<std::string>& backup_path,
+                                 bool show_catalog)
 {
     ezfadvance::Ez3CatalogReader catalog_reader(
         cartridge, CARD_IMAGE_SIZE, MAX_CAPTURED_ROMS);
@@ -183,31 +184,63 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     const bool is_single = catalog.isSingle();
     const std::size_t rom_count = catalog.entries.size();
 
-    ezfadvance::SaveCatalogAnalyzer analyzer(cartridge, CARD_IMAGE_SIZE);
+    if (!show_catalog && requested_rom && *requested_rom > rom_count) {
+        std::cerr << "--rom must be between 1 and " << rom_count << ".\n";
+        return 1;
+    }
+    if (!show_catalog && !requested_rom && !is_single) {
+        std::cerr << "This is a multi-ROM card. Specify --rom N, or use "
+                     "--save-bank 0x09X0 for direct bank access.\n";
+        return 4;
+    }
+
+    if (show_catalog) {
+        std::cout << "\n========================================\n"
+                  << "EZF ADVANCE III SAVE TOOL - CARD CONTENTS\n"
+                  << "========================================\n"
+                  << "Layout       : " << (is_single ? "single ROM" : "multi ROM") << "\n"
+                  << "ROM count    : " << rom_count << "\n"
+                  << "Loader/menu  : " << hex32(loader_start) << "\n\n";
+    }
+
+    ezfadvance::SaveCatalogAnalyzer analyzer(
+        cartridge, CARD_IMAGE_SIZE,
+        show_catalog ? ezfadvance::SaveScanProgress{
+        [](std::size_t index, std::size_t count, std::uint32_t scanned,
+           std::uint32_t total, bool finished) {
+            const unsigned percent = total == 0
+                ? 100u
+                : static_cast<unsigned>(
+                      (static_cast<std::uint64_t>(scanned) * 100u) / total);
+            std::cout << '\r' << "Scanning save metadata for ROM "
+                      << (index + 1) << '/' << count << ": "
+                      << std::setw(3) << percent << '%' << std::flush;
+            if (finished) std::cout << '\n';
+        }} : ezfadvance::SaveScanProgress{});
+    const std::size_t analyzed_count = show_catalog
+        ? rom_count
+        : requested_rom.value_or(1);
     const auto analysis = analyzer.analyze(
-        catalog, loader_start, loader_end);
+        catalog, loader_start, loader_end, analyzed_count);
     if (!analysis)
         return 2;
     const auto& roms = analysis.roms;
 
-    std::cout << "\n========================================\n"
-              << "EZF ADVANCE III SAVE TOOL - CARD CONTENTS\n"
-              << "========================================\n"
-              << "Layout       : " << (is_single ? "single ROM" : "multi ROM") << "\n"
-              << "ROM count    : " << rom_count << "\n"
-              << "Loader/menu  : " << hex32(loader_start) << "\n";
-
-    for (size_t i=0;i<roms.size();++i) {
-        const auto& r = roms[i];
-        std::cout << "\nROM " << (i+1) << "\n"
-                  << "  Catalog name : " << r.catalog_entry.name << "\n"
-                  << "  Start        : " << hex32(r.catalog_entry.start) << "\n"
-                  << "  Alloc. span  : " << r.allocation_span << " bytes\n"
-                  << "  EZ type      : " << static_cast<unsigned>(r.catalog_entry.type) << "\n"
-                  << "  Mapping flag : " << static_cast<unsigned>(r.catalog_entry.mapping) << "\n"
-                  << "  GBA title    : " << (r.header.title.empty() ? "(blank)" : r.header.title) << "\n"
-                  << "  Game code    : " << (r.header.game_code.empty() ? "(blank)" : r.header.game_code) << "\n"
-                  << "  Save marker  : " << (r.save_marker.empty() ? "(none found)" : r.save_marker) << "\n";
+    if (show_catalog) {
+        for (size_t i=0;i<roms.size();++i) {
+            const auto& r = roms[i];
+            std::cout << "\nROM " << (i+1) << "\n"
+                      << "  Catalog name : " << r.catalog_entry.name << "\n"
+                      << "  Start        : " << hex32(r.catalog_entry.start) << "\n"
+                      << "  Alloc. span  : " << r.allocation_span << " bytes\n"
+                      << "  EZ type      : " << static_cast<unsigned>(r.catalog_entry.type) << "\n"
+                      << "  Mapping flag : " << static_cast<unsigned>(r.catalog_entry.mapping) << "\n"
+                      << "  GBA title    : " << (r.header.title.empty() ? "(blank)" : r.header.title) << "\n"
+                      << "  Game code    : " << (r.header.game_code.empty() ? "(blank)" : r.header.game_code) << "\n"
+                      << "  Save marker  : "
+                      << (r.save_marker.empty() ? "(none found)" : r.save_marker)
+                      << "\n";
+        }
     }
 
     std::vector<size_t> supported_candidates;
@@ -466,7 +499,8 @@ public:
                   std::optional<ezfadvance::SaveBankSelector> requested_bank,
                   std::optional<size_t> requested_bank_count,
                   std::optional<std::vector<uint8_t>> write_save,
-                  std::optional<std::string> backup_path)
+                  std::optional<std::string> backup_path,
+                  bool show_catalog)
         : cartridge_(cartridge),
           save_reader_(save_reader),
           save_writer_(save_writer),
@@ -475,7 +509,8 @@ public:
           requested_bank_(requested_bank),
           requested_bank_count_(requested_bank_count),
           write_save_(std::move(write_save)),
-          backup_path_(std::move(backup_path))
+          backup_path_(std::move(backup_path)),
+          show_catalog_(show_catalog)
     {
     }
 
@@ -485,7 +520,7 @@ public:
                                      output_, requested_rom_,
                                      requested_bank_,
                                      requested_bank_count_,
-                                     write_save_, backup_path_);
+                                     write_save_, backup_path_, show_catalog_);
     }
 
 private:
@@ -498,6 +533,7 @@ private:
     std::optional<size_t> requested_bank_count_;
     std::optional<std::vector<uint8_t>> write_save_;
     std::optional<std::string> backup_path_;
+    bool show_catalog_;
 };
 
 // Explicit physical-bank access is intentionally independent of ROM probing,
@@ -900,7 +936,7 @@ int main(int argc, char** argv)
         SaveExtractor extractor(cartridge, save_reader, save_writer,
                                 output, requested_rom, requested_bank,
                                 requested_bank_count,
-                                write_save, backup_path);
+                                write_save, backup_path, argc == 1);
         result = extractor.run();
         if (!cartridge.finishSession()) {
             std::cerr << "Save-reader operation finished, but the "
