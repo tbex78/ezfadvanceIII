@@ -8,7 +8,9 @@
 
 namespace ezfadvance {
 
-// Capture-proven write access to consecutive 32-KiB EZ3 save windows.
+// Consecutive 32-KiB EZ3 save-window writes using the capture-proven per-bank
+// transaction. The caller validates that the requested 1..4-bank range stays
+// within the four known physical selectors.
 class SaveMemoryWriter final {
 public:
     explicit SaveMemoryWriter(libusb_device_handle* handle) noexcept;

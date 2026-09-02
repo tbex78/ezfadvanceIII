@@ -58,8 +58,9 @@ bool SaveMemoryWriter::write(
     std::uint16_t first_bank,
     const std::vector<std::uint8_t>& save)
 {
-    if (save.size() != save_size_32k && save.size() != 2 * save_size_32k) {
-        std::cerr << "save write requires exactly 32768 or 65536 bytes\n";
+    if (save.empty() || save.size() % save_size_32k != 0 ||
+        save.size() > 4 * save_size_32k) {
+        std::cerr << "save write requires 1 to 4 complete 32768-byte banks\n";
         return false;
     }
 

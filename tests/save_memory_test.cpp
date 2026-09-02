@@ -95,12 +95,30 @@ void testCaptured64KiBWriteTranscript()
     assert(transport.complete());
 }
 
+void testFourConsecutiveBankWriteTranscript()
+{
+    ezfadvance::test::TranscriptTransport transport;
+    std::vector<std::uint8_t> save;
+    for (std::size_t index = 0; index < 4; ++index) {
+        const auto selector = static_cast<std::uint16_t>(0x0900 + index * 0x10);
+        const std::vector<std::uint8_t> bank(
+            0x8000, static_cast<std::uint8_t>(index + 1));
+        expectWriteBank(transport, selector, bank);
+        save.insert(save.end(), bank.begin(), bank.end());
+    }
+
+    ezfadvance::SaveMemoryWriter writer(transport);
+    assert(writer.write(0x0900, save));
+    assert(transport.complete());
+}
+
 void testWrongSizeRejectedBeforeUsb()
 {
     ezfadvance::test::TranscriptTransport transport;
     ezfadvance::SaveMemoryWriter writer(transport);
     assert(!writer.write32KiB(0x0900, std::vector<std::uint8_t>(0x7fff)));
-    assert(!writer.write(0x0900, std::vector<std::uint8_t>(0x18000)));
+    assert(!writer.write(0x0900, std::vector<std::uint8_t>(0x18001)));
+    assert(!writer.write(0x0900, std::vector<std::uint8_t>(0x28000)));
     assert(transport.complete());
 }
 
@@ -196,6 +214,7 @@ int main()
     testCapturedWriteTranscript();
     testAllocatedThirdBankWriteTranscript();
     testCaptured64KiBWriteTranscript();
+    testFourConsecutiveBankWriteTranscript();
     testWrongSizeRejectedBeforeUsb();
     testWriteEchoMismatchRejected();
     testCapturedReadTranscript();

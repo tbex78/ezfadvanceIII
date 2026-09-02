@@ -507,15 +507,19 @@ static void usage(const char* argv0)
               << "  " << argv0 << " [--rom N] --save-bank 0x09X0 "
                  "[--consecutive-bank N] [--output file.sav]\n\n"
               << "  " << argv0 << " --write file.sav --backup original.sav "
-                 "--yes-really-write [--rom N]\n\n"
+                 "--yes-really-write [--rom N]\n"
+              << "  " << argv0 << " --write file.sav --backup original.sav "
+                 "--yes-really-write --save-bank 0x09X0 "
+                 "[--consecutive-bank N]\n\n"
               << "EZF Advance III save reader/writer (" << ezfadvance::hostPlatformName() << ").\n"
               << "Supported paths: 32-KiB SRAM_V111 and 64-KiB FLASH512 with cumulative four-bank "
                  "allocation beginning at selector 0x0900.\n"
               << "On a multi-ROM card, --rom N is required unless --save-bank "
                  "selects a physical bank directly. --save-bank overrides "
                  "automatic allocation and accepts 0x0900, 0x0910, 0x0920, "
-                 "or 0x0930. --consecutive-bank reads 1 to 4 consecutive "
-                 "32-KiB banks in direct-bank extraction mode.\n";
+                 "or 0x0930. --consecutive-bank reads or writes 1 to 4 "
+                 "consecutive 32-KiB banks in direct-bank mode. For writes, "
+                 "the input size must match the requested bank count.\n";
 }
 
 int main(int argc, char** argv)
@@ -611,10 +615,6 @@ int main(int argc, char** argv)
                      "be combined with --rom.\n";
         return 1;
     }
-    if (requested_bank_count && write_path) {
-        std::cerr << "--consecutive-bank currently supports extraction only.\n";
-        return 1;
-    }
     if (requested_bank_count &&
         !requested_bank->accommodates(
             *requested_bank_count * ezfadvance::SaveBankSelector::bank_size)) {
@@ -645,9 +645,19 @@ int main(int argc, char** argv)
         }
         write_save.emplace(std::istreambuf_iterator<char>(input),
                            std::istreambuf_iterator<char>());
-        if (write_save->size() != 0x8000 && write_save->size() != 0x10000) {
-            std::cerr << "Save input must be exactly 32768 or 65536 bytes; got "
+        if (write_save->empty() || write_save->size() % 0x8000 != 0 ||
+            write_save->size() > 0x20000) {
+            std::cerr << "Save input must contain 1 to 4 complete 32768-byte "
+                         "banks; got "
                       << write_save->size() << ".\n";
+            return 1;
+        }
+        if (requested_bank_count &&
+            write_save->size() != *requested_bank_count * 0x8000) {
+            std::cerr << "Save input size " << write_save->size()
+                      << " does not match --consecutive-bank "
+                      << *requested_bank_count << " ("
+                      << (*requested_bank_count * 0x8000) << " bytes).\n";
             return 1;
         }
     }

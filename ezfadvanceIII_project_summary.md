@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.15.4**.
+Current shared project/toolset version covered by this summary: **0.16.0**.
 
 All mainline utilities carry this same version:
 
@@ -817,10 +817,13 @@ remains explicit for unresolved or contradictory structures.
 Catalog mapping is much better understood than the mechanism that associates multiple save regions with menu entries.
 The save tool therefore keeps ROM-aware automatic allocation explicit, while
 `--save-bank` can independently select one physical 32-KiB bank without a ROM
-choice. A direct 64-KiB write spans two consecutive banks according to the
-input file size and remains bounded by the four observed selectors.
-For read-only recovery, `--consecutive-bank N` can export 1–4 consecutive
-32-KiB banks without assigning them to catalog entries.
+choice. Direct writing accepts an exact 32-/64-/96-/128-KiB input and spans
+one through four consecutive banks while remaining bounded by the four
+observed selectors. `--consecutive-bank N` can explicitly select the count for
+either extraction or writing without assigning the range to catalog entries.
+The input size must match an explicit write count. A direct four-bank
+extraction produced a working `BPEF` save; the matching four-bank write path
+awaits controlled hardware validation.
 
 ### Cartridge density probing
 
@@ -845,11 +848,11 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 
 ## Current native platform scope
 
-Shared version 0.15.4 follows the C++17/libusb platform policy while preserving
+Shared version 0.16.0 follows the C++17/libusb platform policy while preserving
 the established Unix-like build path:
 
 ```text
-macOS       target; 0.15.2 baseline compiled on Apple Silicon/Homebrew; current 0.15.4 source awaits validation
+macOS       target; 0.15.2 baseline compiled on Apple Silicon/Homebrew; current 0.16.0 source awaits validation
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending

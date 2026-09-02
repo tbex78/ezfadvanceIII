@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.15.4` toolset, including guarded
+**Specification baseline:** shared `0.16.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -206,9 +206,11 @@ Responsibilities:
 - scan ROM allocation spans for known save-library markers;
 - require either an explicit catalog-ROM choice or a physical save-bank choice
   for multi-ROM layouts;
-- read supported 32 KiB SRAM and 64 KiB FLASH512 save data;
+- read supported 32 KiB SRAM and 64 KiB FLASH512 save data, plus explicitly
+  selected direct ranges of one through four banks;
 - write extracted bytes to a local `.sav` file;
-- back up, write, and verify supported 32 KiB SRAM and 64 KiB FLASH512 data.
+- back up, write, and verify supported 32 KiB SRAM and 64 KiB FLASH512 data,
+  plus explicitly selected direct ranges of one through four banks.
 
 On single-ROM cards, the reader selects ROM 1 automatically. On multi-ROM
 cards, it must display the catalog and require `--rom N` unless an explicit
@@ -219,8 +221,10 @@ unsupported save formats, unknown predecessor capacity, and cumulative layouts
 larger than four banks must be refused.
 
 Save writing must require `--write FILE`, `--backup FILE`, and
-`--yes-really-write`. The input must be exactly 32768 or 65536 bytes and must
-equal the selected ROM's allocated capacity. The backup path must not already
+`--yes-really-write`. Catalog-selected input must equal the selected ROM's
+32768- or 65536-byte allocated capacity. Direct-bank input must contain one
+through four complete 32768-byte banks and fit within `0x0900` through
+`0x0930`. The backup path must not already
 exist. The current save must be read and the backup completed
 before the first save-write payload is sent. A bounded readiness transition is
 required before and after the captured `0x92/01` write. The tool must then read
@@ -299,6 +303,8 @@ ezfadvanceIII_save_reader --save-bank 0x09X0 --consecutive-bank N \
     [--output FILE.sav]
 ezfadvanceIII_save_reader --write FILE.sav --backup ORIGINAL.sav \
     --yes-really-write [--rom N]
+ezfadvanceIII_save_reader --write FILE.sav --backup ORIGINAL.sav \
+    --yes-really-write --save-bank 0x09X0 [--consecutive-bank N]
 ```
 
 The supported application paths are `SRAM_V111` with one 32-KiB bank and
@@ -316,15 +322,15 @@ investigation and recovery. It accepts only the four observed selectors
 `0x0900`, `0x0910`, `0x0920`, and `0x0930`. When `--rom N` is also present, ROM
 selection determines whether 32768 or 65536 bytes are accessed. Without
 `--rom`, extraction reads the selected 32768-byte physical bank directly, and
-save writing derives the one- or two-bank extent from the 32768- or 65536-byte
-input file. The tool must reject a 65536-byte access whose second consecutive
-bank would exceed `0x0930`.
+save writing derives a one- through four-bank extent from the input file. The
+tool must reject any direct range whose final bank would exceed `0x0930`.
 
-For direct extraction, `--consecutive-bank N` accepts values 1 through 4 and
-reads `N * 32768` bytes beginning at `--save-bank`. It requires
+For direct access, `--consecutive-bank N` accepts values 1 through 4 and reads
+or writes `N * 32768` bytes beginning at `--save-bank`. It requires
 `--save-bank`, cannot be combined with `--rom`, and must reject any range whose
-last selector would exceed `0x0930`. This option does not enable writing more
-than the existing supported one- or two-bank save extents.
+last selector would exceed `0x0930`. For writing, the input size must exactly
+match the requested count. Without this option, direct writing derives the
+count from an exact 32-/64-/96-/128-KiB input.
 
 ### 3.4 Card eraser
 
@@ -515,14 +521,16 @@ present output, or access save memory.
 
 #### `SaveMemoryReader`
 
-Owns capture-proven save-bank selection and 32/64 KiB save reads. Current
-application policy permits 32 KiB `SRAM_V111` and 64 KiB `FLASH512`.
+Owns capture-proven save-bank selection and consecutive 32-KiB save reads.
+Catalog policy permits 32 KiB `SRAM_V111` and 64 KiB `FLASH512`; explicit
+direct access permits one through four banks.
 
 #### `SaveMemoryWriter`
 
 Owns the capture-derived eight-transfer save-bank selection sequence and the
-exact 32 KiB `0x92/01` command, payload, and command-echo transaction. A
-64-KiB save is split into two consecutive bank transactions. It is
+exact 32 KiB `0x92/01` command, payload, and command-echo transaction. Direct
+32-/64-/96-/128-KiB writes are split into one through four consecutive bank
+transactions. It is
 transport-injectable so the destructive transcript can be tested offline.
 
 #### `VerificationPolicy`

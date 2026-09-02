@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.15.4**.
+version is **0.16.0**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.15.4
+“pending,” and “next” describe the named review point, not the present 0.16.0
 support boundary.
 
 ## Build and test
@@ -147,7 +147,20 @@ exceeding four banks are refused.
   --backup ORIGINAL.sav \
   --yes-really-write \
   [--rom N]
+
+./ezfadvanceIII_save_reader \
+  --write INPUT.sav \
+  --backup ORIGINAL.sav \
+  --yes-really-write \
+  --save-bank 0x0900 \
+  [--consecutive-bank N]
 ```
+
+Direct-bank writing accepts one through four complete 32-KiB banks. When
+`--consecutive-bank N` is supplied, the input must be exactly `N * 32768`
+bytes; otherwise the input size selects the number of consecutive banks. The
+requested range must end at or before `0x0930`. Backup and full byte-for-byte
+read-back verification cover the same complete range.
 
 ### Build or write a multi-ROM image
 
