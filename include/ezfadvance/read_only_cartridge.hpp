@@ -76,9 +76,6 @@ private:
                      std::uint8_t c0, std::uint8_t c1,
                      bool include_tail = true);
     bool probeReset(bool use_f0);
-    bool flashIdProbe(std::uint8_t a0, std::uint8_t a1,
-                      std::uint8_t b0, std::uint8_t b1,
-                      std::uint8_t c0, std::uint8_t c1);
     bool tx92TwoAt(std::uint32_t word_address,
                    std::uint8_t first, std::uint8_t second,
                    const char* label);

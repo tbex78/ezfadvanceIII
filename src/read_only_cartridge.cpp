@@ -180,15 +180,6 @@ std::optional<std::array<std::uint8_t, 4>> ReadOnlyCartridge::read91Sub2Four()
         response[0], response[1], response[2], response[3]};
 }
 
-bool ReadOnlyCartridge::flashIdProbe(std::uint8_t a0, std::uint8_t a1,
-                                     std::uint8_t b0, std::uint8_t b1,
-                                     std::uint8_t c0, std::uint8_t c1)
-{
-    return probePrefix(a0,a1,b0,b1,c0,c1) &&
-           protocol_.tx92Two(0x90,0,"probe 90/00") &&
-           read91Sub2Four().has_value() && probeReset(false);
-}
-
 CartridgeKind ReadOnlyCartridge::classifyProbeBehavior(
     const std::array<std::uint8_t, 4>& before_flash_id,
     const std::array<std::uint8_t, 4>& after_flash_id) noexcept
@@ -244,17 +235,10 @@ bool ReadOnlyCartridge::initialize()
         return false;
     }
 
-    if (
-        !flashIdProbe(2,0,0,0x40,0,0) ||
-        !flashIdProbe(2,0,0,0x80,0,0) ||
-        !flashIdProbe(2,0,0,0xC0,0,0) ||
-        !flashIdProbe(0,0,0,0,2,0) ||
-        !probePrefix(0,0,0,0,0,0,false)) return false;
-
-    // The content classifier may have prepared a mapping before the remaining
-    // probe sequence reset it. Force later callers to establish their required
-    // mapping explicitly.
-    linear_read_limit_ = default_linear_read_limit;
+    // A structurally valid EZ3 catalog is sufficient classification evidence.
+    // Keep the mapping established while reading it: the former follow-up ID
+    // probes disturbed that mapping and made the subsequent prime read return
+    // FF bytes on layouts whose loader is above the first 8 MiB.
 
     const std::vector<std::uint8_t> c95 = {
         0x5A,0xA5,0x95,0, 0x80,0,0,0, 0,0,0,0,0};
