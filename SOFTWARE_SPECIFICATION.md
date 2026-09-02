@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.17.3` toolset, including guarded
+**Specification baseline:** shared `0.17.4` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -333,6 +333,8 @@ selection determines whether 32768 or 65536 bytes are accessed. Without
 `--rom`, extraction reads the selected 32768-byte physical bank directly, and
 save writing derives a one- through four-bank extent from the input file. The
 tool must reject any direct range whose final bank would exceed `0x0930`.
+Direct physical-bank access must not run ROM initialization, select a ROM
+mapping, or require catalog classification.
 
 For direct access, `--consecutive-bank N` accepts values 1 through 4 and reads
 or writes `N * 32768` bytes beginning at `--save-bank`. It requires

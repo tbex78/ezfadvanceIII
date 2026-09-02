@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.17.3**.
+version is **0.17.4**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.17.3
+“pending,” and “next” describe the named review point, not the present 0.17.4
 support boundary.
 
 ## Build and test
@@ -139,6 +139,8 @@ explicit `--rom N` choice unless `--save-bank` requests raw physical-bank
 access. A selected ROM must have a supported format.
 Direct extraction reads one 32-KiB bank by default; `--consecutive-bank N`
 reads 1–4 consecutive banks when the requested range remains within `0x0930`.
+This explicit physical-bank path bypasses ROM initialization, mapping, and
+catalog discovery so those unrelated transitions cannot alter raw save access.
 Its bank and capacity are derived from the documented cumulative
 catalog-order allocation policy; only the observed `FLASH512`-then-`SRAM_V111`
 case is currently hardware-proven. Unknown predecessor capacity and layouts
@@ -165,7 +167,8 @@ Direct-bank writing accepts one through four complete 32-KiB banks. When
 `--consecutive-bank N` is supplied, the input must be exactly `N * 32768`
 bytes; otherwise the input size selects the number of consecutive banks. The
 requested range must end at or before `0x0930`. Backup and full byte-for-byte
-read-back verification cover the same complete range.
+read-back verification cover the same complete range. Explicit physical-bank
+writing uses the same ROM-independent raw path as direct extraction.
 
 ### Erase EZ3 saves
 

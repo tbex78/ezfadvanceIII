@@ -498,6 +498,136 @@ private:
     std::optional<std::string> backup_path_;
 };
 
+// Explicit physical-bank access is intentionally independent of ROM probing,
+// mapping, and catalog interpretation. This keeps the raw bank contract usable
+// even when the cartridge's current ROM mapping cannot be classified safely.
+class DirectSaveBankWorkflow final {
+public:
+    DirectSaveBankWorkflow(ezfadvance::SaveMemoryReader& reader,
+                           ezfadvance::SaveMemoryWriter& writer,
+                           ezfadvance::SaveBankSelector first_bank,
+                           std::size_t bank_count,
+                           std::optional<std::string> output,
+                           std::optional<std::vector<uint8_t>> input,
+                           std::optional<std::string> backup)
+        : reader_(reader), writer_(writer), first_bank_(first_bank),
+          bank_count_(bank_count), output_(std::move(output)),
+          input_(std::move(input)), backup_(std::move(backup)) {}
+
+    int run()
+    {
+        const std::size_t size =
+            bank_count_ * ezfadvance::SaveBankSelector::bank_size;
+        std::cout << "Using explicitly requested physical save-bank range; "
+                     "ROM initialization and catalog allocation were bypassed.\n"
+                  << "Selected save bank: " << hex16(first_bank_.value())
+                  << "\n\nReading explicitly selected save-bank range...\n";
+
+        std::vector<uint8_t> current;
+        if (!read_save_capture(reader_, size, first_bank_.value(), current)) {
+            std::cerr << "Save read failed.\n";
+            return 2;
+        }
+
+        if (input_) return write(current, size);
+        return dump(current);
+    }
+
+private:
+    int write(const std::vector<uint8_t>& current, std::size_t size)
+    {
+        if (!backup_ || input_->size() != size) {
+            std::cerr << "Internal error: invalid direct save-write request.\n";
+            return 1;
+        }
+        if (!write_binary_file_without_overwrite(*backup_, current)) return 5;
+        std::cout << "Existing save backed up to: " << *backup_ << "\n"
+                  << "Writing " << size << "-byte save across " << bank_count_
+                  << " bank" << (bank_count_ == 1 ? "" : "s")
+                  << " beginning at selector " << hex16(first_bank_.value())
+                  << "...\n";
+        if (!writer_.write(first_bank_.value(), *input_)) {
+            std::cerr << "Save write failed. The original backup is available at "
+                      << *backup_ << ".\n";
+            return 2;
+        }
+
+        std::vector<uint8_t> verification;
+        std::cout << "Reading save back for byte-for-byte verification...\n";
+        if (!read_save_capture(reader_, size, first_bank_.value(), verification)) {
+            std::cerr << "Save read-back failed. Backup: " << *backup_ << '\n';
+            return 2;
+        }
+        if (verification != *input_) {
+            const auto mismatch = std::mismatch(
+                verification.begin(), verification.end(), input_->begin());
+            const auto offset = static_cast<std::size_t>(
+                std::distance(verification.begin(), mismatch.first));
+            std::cerr << "SAVE VERIFICATION FAILED at byte offset 0x"
+                      << std::hex << offset << std::dec
+                      << ". Backup: " << *backup_ << '\n';
+            return 6;
+        }
+
+        std::cout << "\n========================================\n"
+                  << "SAVE WRITE AND VERIFICATION COMPLETE\n"
+                  << "========================================\n"
+                  << "ROM          : (direct bank access)\n"
+                  << "Backup       : " << *backup_ << "\n"
+                  << "Size         : " << size << " bytes (" << size / 1024
+                  << " KiB)\n"
+                  << "Write        : " << bank_count_
+                  << " x 0x92/01 from selector " << hex16(first_bank_.value())
+                  << ", each with one 0x8000-byte OUT\n"
+                  << "Verification : full byte-for-byte 0x91/01 read-back matched\n";
+        return 0;
+    }
+
+    int dump(const std::vector<uint8_t>& save)
+    {
+        const std::string path = output_.value_or(
+            "save-bank-" + hex16(first_bank_.value()).substr(2) + ".sav");
+        std::ofstream file(path, std::ios::binary);
+        if (!file) {
+            std::cerr << "Could not create output file: " << path << '\n';
+            return 5;
+        }
+        file.write(reinterpret_cast<const char*>(save.data()),
+                   static_cast<std::streamsize>(save.size()));
+        if (!file) {
+            std::cerr << "Failed while writing output file: " << path << '\n';
+            return 5;
+        }
+        const auto nonzero = std::count_if(
+            save.begin(), save.end(), [](uint8_t byte) { return byte != 0; });
+        const auto nonff = std::count_if(
+            save.begin(), save.end(), [](uint8_t byte) { return byte != 0xff; });
+        std::cout << "\n========================================\n"
+                  << "SAVE DUMP COMPLETE\n"
+                  << "========================================\n"
+                  << "ROM          : (direct bank access)\n"
+                  << "Output       : " << path << "\n"
+                  << "Size         : " << save.size() << " bytes ("
+                  << save.size() / 1024 << " KiB)\n"
+                  << "Non-zero     : " << nonzero << " bytes\n"
+                  << "Non-FF       : " << nonff << " bytes\n"
+                  << "Protocol     : " << bank_count_
+                  << " x 0x91/01 from selector " << hex16(first_bank_.value())
+                  << ", each with one 0x8000-byte IN\n\n"
+                  << "No save-write payload, ROM-program, or erase operation was "
+                     "performed by this extraction.\n";
+        return 0;
+    }
+
+    ezfadvance::SaveMemoryReader& reader_;
+    ezfadvance::SaveMemoryWriter& writer_;
+    ezfadvance::SaveBankSelector first_bank_;
+    std::size_t bank_count_;
+    std::optional<std::string> output_;
+    std::optional<std::vector<uint8_t>> input_;
+    std::optional<std::string> backup_;
+};
+
 static void usage(const char* argv0)
 {
     std::cout << "Usage:\n"
@@ -726,6 +856,17 @@ int main(int argc, char** argv)
                   << " bytes\n"
                   << "Verification : every byte is zero\n";
         return 0;
+    }
+
+    if (requested_bank && !requested_rom) {
+        const std::size_t bank_count = requested_bank_count.value_or(
+            write_save ? write_save->size() /
+                             ezfadvance::SaveBankSelector::bank_size
+                       : 1);
+        DirectSaveBankWorkflow workflow(
+            save_reader, save_writer, *requested_bank, bank_count,
+            output, write_save, backup_path);
+        return workflow.run();
     }
 
     int result = 2;
