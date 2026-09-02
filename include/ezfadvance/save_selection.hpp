@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstddef>
+#include <charconv>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ezfadvance {
@@ -26,6 +28,31 @@ inline bool saveWritePathsConflict(
     const std::optional<std::string>& backup) noexcept
 {
     return input && backup && *input == *backup;
+}
+
+inline std::size_t directSaveAccessSize(
+    const std::optional<std::size_t>& write_size) noexcept
+{
+    return write_size.value_or(0x8000);
+}
+
+inline bool isDirectSaveBankAccess(
+    const std::optional<std::size_t>& requested_rom,
+    bool has_requested_bank) noexcept
+{
+    return has_requested_bank && !requested_rom;
+}
+
+inline std::optional<std::size_t> parseConsecutiveBankCount(
+    std::string_view text) noexcept
+{
+    std::size_t count = 0;
+    const auto result = std::from_chars(
+        text.data(), text.data() + text.size(), count);
+    if (text.empty() || result.ec != std::errc{} ||
+        result.ptr != text.data() + text.size() || count < 1 || count > 4)
+        return std::nullopt;
+    return count;
 }
 
 inline SaveSelection selectSaveRom(

@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.14.4**.
+Current shared project/toolset version covered by this summary: **0.15.0**.
 
 All mainline utilities carry this same version:
 
@@ -807,6 +807,12 @@ remains explicit for unresolved or contradictory structures.
 ### Multi-ROM save-bank behavior
 
 Catalog mapping is much better understood than the mechanism that associates multiple save regions with menu entries.
+The save tool therefore keeps ROM-aware automatic allocation explicit, while
+`--save-bank` can independently select one physical 32-KiB bank without a ROM
+choice. A direct 64-KiB write spans two consecutive banks according to the
+input file size and remains bounded by the four observed selectors.
+For read-only recovery, `--consecutive-bank N` can export 1–4 consecutive
+32-KiB banks without assigning them to catalog entries.
 
 ### Cartridge density probing
 
@@ -831,11 +837,11 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 
 ## Current native platform scope
 
-Shared version 0.14.4 follows the C++17/libusb platform policy while preserving
+Shared version 0.15.0 follows the C++17/libusb platform policy while preserving
 the established Unix-like build path:
 
 ```text
-macOS       target; current 0.14.4 baseline derives from code compiled on Apple Silicon/Homebrew
+macOS       target; current 0.15.0 baseline derives from code compiled on Apple Silicon/Homebrew
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending

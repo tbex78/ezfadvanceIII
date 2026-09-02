@@ -234,6 +234,7 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
                                  const std::optional<std::string>& requested_output,
                                  const std::optional<size_t>& requested_rom,
                                  const std::optional<ezfadvance::SaveBankSelector>& requested_bank,
+                                 const std::optional<size_t>& requested_bank_count,
                                  const std::optional<std::vector<uint8_t>>& write_save,
                                  const std::optional<std::string>& backup_path)
 {
@@ -331,60 +332,76 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
             supported_candidates.push_back(i);
     }
 
-    const auto selection = ezfadvance::selectSaveRom(
-        rom_count, supported_candidates, requested_rom);
-    if (selection.status == ezfadvance::SaveSelectionStatus::out_of_range) {
-        std::cerr << "--rom must be between 1 and " << rom_count << ".\n";
-        return 1;
-    }
-    if (selection.status == ezfadvance::SaveSelectionStatus::rom_required) {
-        std::cerr
-            << "\nThis is a multi-ROM card. Specify the ROM whose save "
-               "should be accessed with --rom N.\n"
-            << "Example: ezfadvanceIII_save_reader --rom 2 "
-               "--output file.sav\n";
-        return 4;
-    }
-    if (selection.status == ezfadvance::SaveSelectionStatus::no_supported_candidate) {
-        std::cerr << "\nThis card has no supported 32-/64-KiB save-bearing ROM.\n"
-                  << "No save read was performed.\n";
-        return 4;
-    }
-    if (selection.status == ezfadvance::SaveSelectionStatus::multiple_supported_candidates) {
-        std::cerr << "\nThis card has an unsupported ambiguous save selection.\n"
-                  << "No save read was performed.\n";
-        return 4;
-    }
-    if (selection.status == ezfadvance::SaveSelectionStatus::requested_rom_mismatch) {
-        std::cerr << "\nSelected ROM " << *requested_rom
-                  << " does not have a supported save format.\n"
-                  << "No save read was performed.\n";
-        return 4;
-    }
-    const size_t selected = selection.index;
-
-    const auto& chosen = roms[selected];
-
     std::vector<std::string> save_markers;
     save_markers.reserve(roms.size());
     for (const auto& rom : roms)
         save_markers.push_back(rom.sig.text);
-    const auto selected_save_size =
-        ezfadvance::supportedSaveSizeForMarker(chosen.sig.text);
 
-    if (!selected_save_size) {
-        std::cerr << "\nSelected ROM " << (selected+1) << " has save marker "
-                  << (chosen.sig.text.empty() ? "(unknown)" : chosen.sig.text)
-                  << ".\nThis tool supports 32-KiB SRAM_V111 and 64-KiB "
-                     "FLASH512 saves. No save access is performed for this ROM.\n";
-        return 4;
+    const bool direct_bank_access = ezfadvance::isDirectSaveBankAccess(
+        requested_rom, requested_bank.has_value());
+    std::optional<size_t> selected;
+    size_t selected_save_size = 0;
+    uint16_t save_selector = 0;
+    if (direct_bank_access) {
+        selected_save_size = requested_bank_count
+            ? *requested_bank_count * ezfadvance::SaveBankSelector::bank_size
+            : ezfadvance::directSaveAccessSize(
+                  write_save ? std::optional<size_t>(write_save->size())
+                             : std::nullopt);
+        if (!requested_bank->accommodates(selected_save_size)) {
+            std::cerr << "\nSave bank " << hex16(requested_bank->value())
+                      << " cannot contain a " << selected_save_size
+                      << "-byte direct save access within the four proven banks. "
+                         "No save access was performed.\n";
+            return 4;
+        }
+        save_selector = requested_bank->value();
+        std::cout << "\nUsing explicitly requested save bank without ROM "
+                     "selection; catalog allocation was bypassed.\n";
+    } else {
+        const auto selection = ezfadvance::selectSaveRom(
+            rom_count, supported_candidates, requested_rom);
+        if (selection.status == ezfadvance::SaveSelectionStatus::out_of_range) {
+            std::cerr << "--rom must be between 1 and " << rom_count << ".\n";
+            return 1;
+        }
+        if (selection.status == ezfadvance::SaveSelectionStatus::rom_required) {
+            std::cerr
+                << "\nThis is a multi-ROM card. Specify --rom N, or use "
+                   "--save-bank 0x09X0 for direct bank access.\n";
+            return 4;
+        }
+        if (selection.status == ezfadvance::SaveSelectionStatus::no_supported_candidate) {
+            std::cerr << "\nThis card has no supported 32-/64-KiB save-bearing ROM.\n"
+                      << "No save read was performed.\n";
+            return 4;
+        }
+        if (selection.status == ezfadvance::SaveSelectionStatus::multiple_supported_candidates) {
+            std::cerr << "\nThis card has an unsupported ambiguous save selection.\n"
+                      << "No save read was performed.\n";
+            return 4;
+        }
+        if (selection.status == ezfadvance::SaveSelectionStatus::requested_rom_mismatch) {
+            std::cerr << "\nSelected ROM " << *requested_rom
+                      << " does not have a supported save format.\n"
+                      << "No save read was performed.\n";
+            return 4;
+        }
+        selected = selection.index;
+        const auto selected_size =
+            ezfadvance::supportedSaveSizeForMarker(roms[*selected].sig.text);
+        if (!selected_size) {
+            std::cerr << "\nSelected ROM " << (*selected + 1)
+                      << " has no supported save size.\n";
+            return 4;
+        }
+        selected_save_size = *selected_size;
     }
 
-    uint16_t save_selector = 0;
-    if (requested_bank) {
-        if (!requested_bank->accommodates(*selected_save_size)) {
+    if (requested_bank && selected) {
+        if (!requested_bank->accommodates(selected_save_size)) {
             std::cerr << "\nSave bank " << hex16(requested_bank->value())
-                      << " cannot contain this ROM's " << *selected_save_size
+                      << " cannot contain this ROM's " << selected_save_size
                       << "-byte save within the four proven banks. "
                          "No save access was performed.\n";
             return 4;
@@ -392,9 +409,9 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
         save_selector = requested_bank->value();
         std::cout << "\nUsing explicitly requested save bank; automatic "
                      "catalog allocation was bypassed.\n";
-    } else {
+    } else if (selected) {
         const auto bank_layout =
-            ezfadvance::allocateSaveBanks(save_markers, selected);
+            ezfadvance::allocateSaveBanks(save_markers, *selected);
         if (bank_layout.status ==
             ezfadvance::SaveBankLayoutStatus::unknown_predecessor_capacity) {
             std::cerr << "\nCannot allocate save banks because ROM "
@@ -412,17 +429,22 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
         save_selector = bank_layout.selector;
     }
 
-    if (!is_single) {
+    if (!is_single && selected) {
         std::cout << "\nMulti-ROM save allocation: cumulative 32-KiB banks "
                      "in catalog order.\n";
     }
     std::cout << "Selected save bank: " << hex16(save_selector) << "\n";
 
-    std::cout << "\nReading save for ROM " << (selected+1) << ": "
-              << chosen.e.name << "\n";
+    if (selected) {
+        std::cout << "\nReading save for ROM " << (*selected + 1) << ": "
+                  << roms[*selected].e.name << "\n";
+    } else {
+        std::cout << "\nReading explicitly selected save bank "
+                  << hex16(save_selector) << "...\n";
+    }
 
     std::vector<uint8_t> save;
-    if (!read_save_capture(save_reader,*selected_save_size,save_selector,save)) {
+    if (!read_save_capture(save_reader,selected_save_size,save_selector,save)) {
         std::cerr << "Save read failed.\n";
         return 2;
     }
@@ -432,10 +454,10 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
             std::cerr << "Internal error: save writing requires a backup path.\n";
             return 1;
         }
-        if (write_save->size() != *selected_save_size) {
+        if (write_save->size() != selected_save_size) {
             std::cerr << "Save input size " << write_save->size()
-                      << " bytes does not match ROM " << (selected + 1)
-                      << " allocated save space of " << *selected_save_size
+                      << " bytes does not match the selected access size of "
+                      << selected_save_size
                       << " bytes. No save write was performed.\n";
             return 4;
         }
@@ -449,8 +471,8 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
             return 2;
         }
 
-        const auto bank_count = *selected_save_size / 0x8000;
-        std::cout << "Writing " << *selected_save_size
+        const auto bank_count = selected_save_size / 0x8000;
+        std::cout << "Writing " << selected_save_size
                   << "-byte save across " << bank_count
                   << " bank" << (bank_count == 1 ? "" : "s")
                   << " beginning at selector " << hex16(save_selector) << "...\n";
@@ -468,7 +490,7 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
 
         std::vector<uint8_t> verification;
         std::cout << "Reading save back for byte-for-byte verification...\n";
-        if (!read_save_capture(save_reader, *selected_save_size, save_selector, verification)) {
+        if (!read_save_capture(save_reader, selected_save_size, save_selector, verification)) {
             std::cerr << "Save read-back failed. Backup: " << *backup_path << '\n';
             return 2;
         }
@@ -486,10 +508,13 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
         std::cout << "\n========================================\n"
                   << "SAVE WRITE AND VERIFICATION COMPLETE\n"
                   << "========================================\n"
-                  << "ROM          : " << (selected+1) << " / " << rom_count << "\n"
+                  << "ROM          : "
+                  << (selected ? std::to_string(*selected + 1) + " / " +
+                                     std::to_string(rom_count)
+                               : "(direct bank access)") << "\n"
                   << "Backup       : " << *backup_path << "\n"
-                  << "Size         : " << *selected_save_size << " bytes ("
-                  << (*selected_save_size / 1024) << " KiB)\n"
+                  << "Size         : " << selected_save_size << " bytes ("
+                  << (selected_save_size / 1024) << " KiB)\n"
                   << "Write        : " << bank_count
                   << " x 0x92/01 from selector " << hex16(save_selector)
                   << ", each with one 0x8000-byte OUT\n"
@@ -500,10 +525,12 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     std::string output;
     if (requested_output) {
         output = *requested_output;
-    } else if (!chosen.g.game_code.empty()) {
-        output = safe_filename_component(chosen.g.game_code)+".sav";
+    } else if (!selected) {
+        output = "save-bank-" + hex16(save_selector).substr(2) + ".sav";
+    } else if (!roms[*selected].g.game_code.empty()) {
+        output = safe_filename_component(roms[*selected].g.game_code)+".sav";
     } else {
-        output = safe_filename_component(chosen.e.name)+".sav";
+        output = safe_filename_component(roms[*selected].e.name)+".sav";
     }
 
     std::ofstream f(output,std::ios::binary);
@@ -526,7 +553,10 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     std::cout << "\n========================================\n"
               << "SAVE DUMP COMPLETE\n"
               << "========================================\n"
-              << "ROM          : " << (selected+1) << " / " << rom_count << "\n"
+              << "ROM          : "
+              << (selected ? std::to_string(*selected + 1) + " / " +
+                                 std::to_string(rom_count)
+                           : "(direct bank access)") << "\n"
               << "Output       : " << output << "\n"
               << "Size         : " << save.size() << " bytes ("
               << (save.size() / 1024) << " KiB)\n"
@@ -548,6 +578,7 @@ public:
                   std::optional<std::string> output,
                   std::optional<size_t> requested_rom,
                   std::optional<ezfadvance::SaveBankSelector> requested_bank,
+                  std::optional<size_t> requested_bank_count,
                   std::optional<std::vector<uint8_t>> write_save,
                   std::optional<std::string> backup_path)
         : cartridge_(cartridge),
@@ -556,6 +587,7 @@ public:
           output_(std::move(output)),
           requested_rom_(requested_rom),
           requested_bank_(requested_bank),
+          requested_bank_count_(requested_bank_count),
           write_save_(std::move(write_save)),
           backup_path_(std::move(backup_path))
     {
@@ -566,6 +598,7 @@ public:
         return inspect_and_dump_save(cartridge_, save_reader_, save_writer_,
                                      output_, requested_rom_,
                                      requested_bank_,
+                                     requested_bank_count_,
                                      write_save_, backup_path_);
     }
 
@@ -576,6 +609,7 @@ private:
     std::optional<std::string> output_;
     std::optional<size_t> requested_rom_;
     std::optional<ezfadvance::SaveBankSelector> requested_bank_;
+    std::optional<size_t> requested_bank_count_;
     std::optional<std::vector<uint8_t>> write_save_;
     std::optional<std::string> backup_path_;
 };
@@ -587,16 +621,18 @@ static void usage(const char* argv0)
               << "  " << argv0 << " --version\n"
               << "  " << argv0 << " --output file.sav\n"
               << "  " << argv0 << " --rom N [--output file.sav]\n\n"
-              << "  " << argv0 << " --rom N --save-bank 0x09X0 "
-                 "[--output file.sav]\n\n"
+              << "  " << argv0 << " [--rom N] --save-bank 0x09X0 "
+                 "[--consecutive-bank N] [--output file.sav]\n\n"
               << "  " << argv0 << " --write file.sav --backup original.sav "
                  "--yes-really-write [--rom N]\n\n"
               << "EZF Advance III save reader/writer (" << ezfadvance::hostPlatformName() << ").\n"
               << "Supported paths: 32-KiB SRAM_V111 and 64-KiB FLASH512 with cumulative four-bank "
                  "allocation beginning at selector 0x0900.\n"
-              << "On a multi-ROM card, --rom N is required; the reader will not "
-                 "choose a ROM automatically. --save-bank overrides automatic "
-                 "allocation and accepts 0x0900, 0x0910, 0x0920, or 0x0930.\n";
+              << "On a multi-ROM card, --rom N is required unless --save-bank "
+                 "selects a physical bank directly. --save-bank overrides "
+                 "automatic allocation and accepts 0x0900, 0x0910, 0x0920, "
+                 "or 0x0930. --consecutive-bank reads 1 to 4 consecutive "
+                 "32-KiB banks in direct-bank extraction mode.\n";
 }
 
 int main(int argc, char** argv)
@@ -609,6 +645,7 @@ int main(int argc, char** argv)
     std::optional<std::string> output;
     std::optional<size_t> requested_rom;
     std::optional<ezfadvance::SaveBankSelector> requested_bank;
+    std::optional<size_t> requested_bank_count;
     std::optional<std::string> write_path;
     std::optional<std::string> backup_path;
     bool yes_really_write = false;
@@ -649,6 +686,17 @@ int main(int argc, char** argv)
                              "0x0910, 0x0920, or 0x0930.\n";
                 return 1;
             }
+        } else if (a == "--consecutive-bank") {
+            if (i+1 >= argc) {
+                usage(argv[0]);
+                return 1;
+            }
+            requested_bank_count =
+                ezfadvance::parseConsecutiveBankCount(argv[++i]);
+            if (!requested_bank_count) {
+                std::cerr << "Bad --consecutive-bank value; expected 1 to 4.\n";
+                return 1;
+            }
         } else if (a == "--backup") {
             if (i+1 >= argc) {
                 usage(argv[0]);
@@ -669,6 +717,26 @@ int main(int argc, char** argv)
 
     if (write_path && output) {
         std::cerr << "--output is for extraction and cannot be combined with --write.\n";
+        return 1;
+    }
+    if (requested_bank_count && !requested_bank) {
+        std::cerr << "--consecutive-bank requires --save-bank.\n";
+        return 1;
+    }
+    if (requested_bank_count && requested_rom) {
+        std::cerr << "--consecutive-bank is for direct bank access and cannot "
+                     "be combined with --rom.\n";
+        return 1;
+    }
+    if (requested_bank_count && write_path) {
+        std::cerr << "--consecutive-bank currently supports extraction only.\n";
+        return 1;
+    }
+    if (requested_bank_count &&
+        !requested_bank->accommodates(
+            *requested_bank_count * ezfadvance::SaveBankSelector::bank_size)) {
+        std::cerr << "The requested consecutive-bank range extends beyond "
+                     "save bank 0x0930.\n";
         return 1;
     }
     if (!write_path && (backup_path || yes_really_write)) {
@@ -719,6 +787,7 @@ int main(int argc, char** argv)
     if (cartridge.initialize() && ezfadvance::hasEz3Catalog(cartridge.kind())) {
         SaveExtractor extractor(cartridge, save_reader, save_writer,
                                 output, requested_rom, requested_bank,
+                                requested_bank_count,
                                 write_save, backup_path);
         result = extractor.run();
         if (!cartridge.finishSession()) {

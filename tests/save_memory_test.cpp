@@ -165,6 +165,30 @@ void testCaptured64KiBReadTranscript()
     assert(transport.complete());
 }
 
+void testFourConsecutiveBankReadTranscript()
+{
+    ezfadvance::test::TranscriptTransport transport;
+    const std::vector<std::uint8_t> command = {
+        0x5A, 0xA5, 0x91, 0x01, 0, 0, 0, 0,
+        0, 0x80, 0, 0, 0};
+    std::vector<std::uint8_t> expected;
+    for (std::size_t index = 0; index < 4; ++index) {
+        const auto selector = static_cast<std::uint16_t>(0x0900 + index * 0x10);
+        const std::vector<std::uint8_t> bank(0x8000,
+            static_cast<std::uint8_t>(index + 1));
+        expectSelector(transport, selector);
+        transport.expectOut(command, timeout_ms)
+                 .expectInExact(bank, bank.size(), timeout_ms);
+        expected.insert(expected.end(), bank.begin(), bank.end());
+    }
+
+    std::vector<std::uint8_t> actual;
+    ezfadvance::SaveMemoryReader reader(transport);
+    assert(reader.read(0x20000, actual, 0x0900));
+    assert(actual == expected);
+    assert(transport.complete());
+}
+
 } // namespace
 
 int main()
@@ -176,4 +200,5 @@ int main()
     testWriteEchoMismatchRejected();
     testCapturedReadTranscript();
     testCaptured64KiBReadTranscript();
+    testFourConsecutiveBankReadTranscript();
 }

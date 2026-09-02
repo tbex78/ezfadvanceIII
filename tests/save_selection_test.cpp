@@ -13,6 +13,17 @@ int main()
     assert(!ezfadvance::saveWritePathsConflict(std::nullopt, "backup.sav"));
     assert(!ezfadvance::saveWritePathsConflict("input.sav", "backup.sav"));
     assert(ezfadvance::saveWritePathsConflict("same.sav", "same.sav"));
+    assert(ezfadvance::directSaveAccessSize(std::nullopt) == 0x8000);
+    assert(ezfadvance::directSaveAccessSize(0x8000) == 0x8000);
+    assert(ezfadvance::directSaveAccessSize(0x10000) == 0x10000);
+    assert(ezfadvance::isDirectSaveBankAccess(std::nullopt, true));
+    assert(!ezfadvance::isDirectSaveBankAccess(1, true));
+    assert(!ezfadvance::isDirectSaveBankAccess(std::nullopt, false));
+    assert(ezfadvance::parseConsecutiveBankCount("1") == 1);
+    assert(ezfadvance::parseConsecutiveBankCount("4") == 4);
+    assert(!ezfadvance::parseConsecutiveBankCount("0"));
+    assert(!ezfadvance::parseConsecutiveBankCount("5"));
+    assert(!ezfadvance::parseConsecutiveBankCount("no"));
 
     const auto single_bank = ezfadvance::allocateSaveBanks({"SRAM_V111"}, 0);
     assert(single_bank.status == ezfadvance::SaveBankLayoutStatus::selected);

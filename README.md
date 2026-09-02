@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.14.4**.
+version is **0.15.0**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.14.4
+“pending,” and “next” describe the named review point, not the present 0.15.0
 support boundary.
 
 ## Build and test
@@ -120,13 +120,19 @@ extraction; `--verbose` selects per-block timing and throughput diagnostics.
 ./ezfadvanceIII_save_reader --output OUTPUT.sav
 ./ezfadvanceIII_save_reader --rom N --output OUTPUT.sav
 ./ezfadvanceIII_save_reader --rom N --save-bank 0x09X0 --output OUTPUT.sav
+./ezfadvanceIII_save_reader --save-bank 0x09X0 --output OUTPUT.sav
+./ezfadvanceIII_save_reader --save-bank 0x0900 --consecutive-bank 4 \
+  --output ALL-BANKS.sav
 ```
 
 Save/catalog processing is restricted to a cartridge positively classified as
 EZ3 flash. Supported save paths are 32-KiB `SRAM_V111` and 64-KiB
 `FLASH512`.
 Single-ROM layouts select ROM 1 automatically. Multi-ROM layouts require an
-explicit `--rom N` choice, and the selected ROM must have a supported format.
+explicit `--rom N` choice unless `--save-bank` requests raw physical-bank
+access. A selected ROM must have a supported format.
+Direct extraction reads one 32-KiB bank by default; `--consecutive-bank N`
+reads 1–4 consecutive banks when the requested range remains within `0x0930`.
 Its bank and capacity are derived from the documented cumulative
 catalog-order allocation policy; only the observed `FLASH512`-then-`SRAM_V111`
 case is currently hardware-proven. Unknown predecessor capacity and layouts

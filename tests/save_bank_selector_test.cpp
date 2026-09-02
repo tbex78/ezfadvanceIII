@@ -20,6 +20,9 @@ int main()
 
     assert(SaveBankSelector::parse("0x0900")->accommodates(0x8000));
     assert(SaveBankSelector::parse("0x0900")->accommodates(0x10000));
+    assert(SaveBankSelector::parse("0x0900")->accommodates(0x20000));
+    assert(SaveBankSelector::parse("0x0910")->accommodates(0x18000));
+    assert(!SaveBankSelector::parse("0x0910")->accommodates(0x20000));
     assert(SaveBankSelector::parse("0x0920")->accommodates(0x10000));
     assert(!SaveBankSelector::parse("0x0930")->accommodates(0x10000));
     assert(!SaveBankSelector::parse("0x0900")->accommodates(0));

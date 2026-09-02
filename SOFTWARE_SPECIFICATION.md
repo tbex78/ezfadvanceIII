@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.14.4` toolset, including guarded
+**Specification baseline:** shared `0.15.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -204,14 +204,16 @@ Responsibilities:
 
 - inspect the cartridge catalog;
 - scan ROM allocation spans for known save-library markers;
-- require an explicit catalog-ROM choice for multi-ROM layouts;
+- require either an explicit catalog-ROM choice or a physical save-bank choice
+  for multi-ROM layouts;
 - read supported 32 KiB SRAM and 64 KiB FLASH512 save data;
 - write extracted bytes to a local `.sav` file;
 - back up, write, and verify supported 32 KiB SRAM and 64 KiB FLASH512 data.
 
 On single-ROM cards, the reader selects ROM 1 automatically. On multi-ROM
-cards, it must display the catalog and require `--rom N`; it must not infer a
-choice even when exactly one `SRAM_V111` marker is present. The selected ROM
+cards, it must display the catalog and require `--rom N` unless an explicit
+`--save-bank` requests direct physical-bank access; it must not infer a ROM
+choice even when exactly one `SRAM_V111` marker is present. A selected ROM
 must identify a supported `SRAM_V111` or `FLASH512` entry. Missing or mismatched candidates,
 unsupported save formats, unknown predecessor capacity, and cumulative layouts
 larger than four banks must be refused.
@@ -288,6 +290,9 @@ ezfadvanceIII_save_reader
 ezfadvanceIII_save_reader --output FILE.sav
 ezfadvanceIII_save_reader --rom N [--output FILE.sav]
 ezfadvanceIII_save_reader --rom N --save-bank 0x09X0 [--output FILE.sav]
+ezfadvanceIII_save_reader --save-bank 0x09X0 [--output FILE.sav]
+ezfadvanceIII_save_reader --save-bank 0x09X0 --consecutive-bank N \
+    [--output FILE.sav]
 ezfadvanceIII_save_reader --write FILE.sav --backup ORIGINAL.sav \
     --yes-really-write [--rom N]
 ```
@@ -304,9 +309,18 @@ must remain bounded by the physical 32-MiB cartridge image.
 
 `--save-bank SELECTOR` explicitly overrides the policy-derived selector for
 investigation and recovery. It accepts only the four observed selectors
-`0x0900`, `0x0910`, `0x0920`, and `0x0930`. ROM selection remains responsible
-for determining whether 32768 or 65536 bytes are accessed. The tool must reject
-a 65536-byte access whose second consecutive bank would exceed `0x0930`.
+`0x0900`, `0x0910`, `0x0920`, and `0x0930`. When `--rom N` is also present, ROM
+selection determines whether 32768 or 65536 bytes are accessed. Without
+`--rom`, extraction reads the selected 32768-byte physical bank directly, and
+save writing derives the one- or two-bank extent from the 32768- or 65536-byte
+input file. The tool must reject a 65536-byte access whose second consecutive
+bank would exceed `0x0930`.
+
+For direct extraction, `--consecutive-bank N` accepts values 1 through 4 and
+reads `N * 32768` bytes beginning at `--save-bank`. It requires
+`--save-bank`, cannot be combined with `--rom`, and must reject any range whose
+last selector would exceed `0x0930`. This option does not enable writing more
+than the existing supported one- or two-bank save extents.
 
 ### 3.4 Card eraser
 
