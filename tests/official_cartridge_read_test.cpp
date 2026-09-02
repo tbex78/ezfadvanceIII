@@ -6,6 +6,8 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -282,6 +284,27 @@ void testHighMappingsContainNoSaveWrites()
     }
 }
 
+void testRepeatedMappingRequestIsIdempotent()
+{
+    ezfadvance::test::TranscriptTransport transcript;
+    expectSafeLinearMapping(transcript, 16);
+    ezfadvance::ReadOnlyCartridge cartridge(transcript);
+
+    std::ostringstream output;
+    auto* original_buffer = std::cout.rdbuf(output.rdbuf());
+    assert(cartridge.prepareLinearForAddress(0x00FFFFFFu));
+    assert(cartridge.prepareLinearForAddress(0x00FFFFFFu));
+    std::cout.rdbuf(original_buffer);
+
+    const std::string message =
+        "Loader/ROM lies above 8 MiB; selecting proven 16-MiB linear read mapping...";
+    const auto first = output.str().find(message);
+    assert(first != std::string::npos);
+    assert(output.str().find(message, first + message.size()) ==
+           std::string::npos);
+    assert(transcript.complete());
+}
+
 } // namespace
 
 int main()
@@ -292,4 +315,5 @@ int main()
     testReadUsesFinalPartialBlock();
     testDecodedCartridgeReads();
     testHighMappingsContainNoSaveWrites();
+    testRepeatedMappingRequestIsIdempotent();
 }

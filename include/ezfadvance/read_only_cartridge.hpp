@@ -67,6 +67,8 @@ public:
     bool finishSession();
 
 private:
+    static constexpr std::uint32_t default_linear_read_limit = 0x00800000u;
+
     bool startup();
     bool probeUnlockTail();
     bool probePrefix(std::uint8_t a0, std::uint8_t a1,
@@ -89,6 +91,7 @@ private:
     Protocol protocol_;
     std::function<void(std::chrono::milliseconds)> sleep_;
     CartridgeKind kind_ = CartridgeKind::unknown;
+    std::uint32_t linear_read_limit_ = default_linear_read_limit;
 };
 
 } // namespace ezfadvance

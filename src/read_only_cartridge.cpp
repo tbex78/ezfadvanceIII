@@ -206,6 +206,7 @@ CartridgeKind ReadOnlyCartridge::classifyProbeBehavior(
 bool ReadOnlyCartridge::initialize()
 {
     kind_ = CartridgeKind::unknown;
+    linear_read_limit_ = default_linear_read_limit;
     std::cout << "Initializing EZF Advance III/card using the capture-proven probe path...\n";
     if (!startup() || !probePrefix(0,0,0,0,0,0) ||
         !tx92TwoAt(0x555,0xAA,0,"probe @555 AA00") ||
@@ -282,6 +283,9 @@ bool ReadOnlyCartridge::finishReadMapping(const char* prefix)
 
 bool ReadOnlyCartridge::prepareLinear16MiB()
 {
+    constexpr std::uint32_t mapping_limit = 0x01000000u;
+    if (linear_read_limit_ >= mapping_limit) return true;
+
     std::cout << "Loader/ROM lies above 8 MiB; selecting proven 16-MiB linear read mapping...\n";
     if (!flashStatus() ||
         !protocol_.tx92Two(0x55,0xAA,"readmap 55AA") ||
@@ -289,15 +293,20 @@ bool ReadOnlyCartridge::prepareLinear16MiB()
         !protocol_.tx92Two(0,0x80,"readmap 0080") ||
         !protocol_.tx92Two(0,0,"readmap 0000 A")) return false;
     std::this_thread::sleep_for(std::chrono::milliseconds(125));
-    return protocol_.tx92Two(0xAA,0x55,"readmap AA55") &&
+    const bool prepared = protocol_.tx92Two(0xAA,0x55,"readmap AA55") &&
            protocol_.tx92Two(0,0,"readmap 0000 B") &&
            protocol_.tx92Two(0,0,"readmap 0000 C") &&
            protocol_.tx92Two(0,0,"readmap 0000 D") &&
            finishReadMapping("read prefix");
+    if (prepared) linear_read_limit_ = mapping_limit;
+    return prepared;
 }
 
 bool ReadOnlyCartridge::prepareLinear24MiB()
 {
+    constexpr std::uint32_t mapping_limit = 0x01800000u;
+    if (linear_read_limit_ >= mapping_limit) return true;
+
     std::cout << "Loader/ROM lies in the 16..24-MiB range; selecting proven 24-MiB linear read mapping...\n";
     if (!flashStatus() ||
         !protocol_.tx92Two(0x55,0xAA,"readmap24 55AA") ||
@@ -305,15 +314,20 @@ bool ReadOnlyCartridge::prepareLinear24MiB()
         !protocol_.tx92Two(0,0xC0,"readmap24 00C0") ||
         !protocol_.tx92Two(0,0,"readmap24 0000 A")) return false;
     std::this_thread::sleep_for(std::chrono::microseconds(125000));
-    return protocol_.tx92Two(0xAA,0x55,"readmap24 AA55") &&
+    const bool prepared = protocol_.tx92Two(0xAA,0x55,"readmap24 AA55") &&
            protocol_.tx92Two(0,0,"readmap24 0000 B") &&
            protocol_.tx92Two(0,0,"readmap24 0000 C") &&
            protocol_.tx92Two(0,0,"readmap24 0000 D") &&
            finishReadMapping("read24 prefix");
+    if (prepared) linear_read_limit_ = mapping_limit;
+    return prepared;
 }
 
 bool ReadOnlyCartridge::prepareLinear32MiB()
 {
+    constexpr std::uint32_t mapping_limit = 0x02000000u;
+    if (linear_read_limit_ >= mapping_limit) return true;
+
     std::cout << "Loader/ROM lies in the 24..32-MiB range; selecting proven 32-MiB linear read mapping...\n";
     if (!flashStatus() ||
         !protocol_.tx92Two(0x55,0xAA,"readmap32 55AA") ||
@@ -321,11 +335,13 @@ bool ReadOnlyCartridge::prepareLinear32MiB()
         !protocol_.tx92Two(0,0,"readmap32 0000 B") ||
         !protocol_.tx92Two(2,0,"readmap32 0200")) return false;
     std::this_thread::sleep_for(std::chrono::microseconds(125000));
-    return protocol_.tx92Two(0xAA,0x55,"readmap32 AA55") &&
+    const bool prepared = protocol_.tx92Two(0xAA,0x55,"readmap32 AA55") &&
            protocol_.tx92Two(0,0,"readmap32 0000 C") &&
            protocol_.tx92Two(0,0,"readmap32 0000 D") &&
            protocol_.tx92Two(0,0,"readmap32 0000 E") &&
            finishReadMapping("read32 prefix");
+    if (prepared) linear_read_limit_ = mapping_limit;
+    return prepared;
 }
 
 bool ReadOnlyCartridge::prepareLinearForAddress(std::uint32_t address)
