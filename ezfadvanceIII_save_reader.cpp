@@ -39,6 +39,7 @@
 #include "ezfadvance/save_bank_layout.hpp"
 #include "ezfadvance/save_bank_cleaner.hpp"
 #include "ezfadvance/save_bank_selector.hpp"
+#include "ezfadvance/save_access_planner.hpp"
 #include "ezfadvance/save_catalog_analyzer.hpp"
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
@@ -241,107 +242,78 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
         }
     }
 
-    std::vector<size_t> supported_candidates;
-    for (size_t i = 0; i < roms.size(); ++i) {
-        if (ezfadvance::supportedSaveSizeForMarker(roms[i].save_marker))
-            supported_candidates.push_back(i);
-    }
-
     std::vector<std::string> save_markers;
     save_markers.reserve(roms.size());
     for (const auto& rom : roms)
         save_markers.push_back(rom.save_marker);
 
-    const bool direct_bank_access = ezfadvance::isDirectSaveBankAccess(
-        requested_rom, requested_bank.has_value());
-    std::optional<size_t> selected;
-    size_t selected_save_size = 0;
-    uint16_t save_selector = 0;
-    if (direct_bank_access) {
-        selected_save_size = requested_bank_count
-            ? *requested_bank_count * ezfadvance::SaveBankSelector::bank_size
-            : ezfadvance::directSaveAccessSize(
-                  write_save ? std::optional<size_t>(write_save->size())
-                             : std::nullopt);
-        if (!requested_bank->accommodates(selected_save_size)) {
-            std::cerr << "\nSave bank " << hex16(requested_bank->value())
-                      << " cannot contain a " << selected_save_size
-                      << "-byte direct save access within the four proven banks. "
-                         "No save access was performed.\n";
-            return 4;
-        }
-        save_selector = requested_bank->value();
-        std::cout << "\nUsing explicitly requested save bank without ROM "
-                     "selection; catalog allocation was bypassed.\n";
-    } else {
-        const auto selection = ezfadvance::selectSaveRom(
-            rom_count, supported_candidates, requested_rom);
-        if (selection.status == ezfadvance::SaveSelectionStatus::out_of_range) {
+    const auto plan = ezfadvance::SaveAccessPlanner({
+        requested_rom, requested_bank, requested_bank_count,
+        write_save ? std::optional<std::size_t>(write_save->size())
+                   : std::nullopt}).plan(save_markers);
+    if (!plan) {
+        using Status = ezfadvance::SaveAccessPlanStatus;
+        switch (plan.status) {
+        case Status::rom_out_of_range:
             std::cerr << "--rom must be between 1 and " << rom_count << ".\n";
             return 1;
-        }
-        if (selection.status == ezfadvance::SaveSelectionStatus::rom_required) {
-            std::cerr
-                << "\nThis is a multi-ROM card. Specify --rom N, or use "
-                   "--save-bank 0x09X0 for direct bank access.\n";
+        case Status::rom_required:
+            std::cerr << "\nThis is a multi-ROM card. Specify --rom N, or use "
+                         "--save-bank 0x09X0 for direct bank access.\n";
             return 4;
-        }
-        if (selection.status == ezfadvance::SaveSelectionStatus::no_supported_candidate) {
-            std::cerr << "\nThis card has no supported 32-/64-KiB save-bearing ROM.\n"
-                      << "No save read was performed.\n";
+        case Status::no_supported_rom:
+            std::cerr << "\nThis card has no supported 32-/64-KiB "
+                         "save-bearing ROM.\nNo save read was performed.\n";
             return 4;
-        }
-        if (selection.status == ezfadvance::SaveSelectionStatus::multiple_supported_candidates) {
-            std::cerr << "\nThis card has an unsupported ambiguous save selection.\n"
-                      << "No save read was performed.\n";
+        case Status::ambiguous_selection:
+            std::cerr << "\nThis card has an unsupported ambiguous save "
+                         "selection.\nNo save read was performed.\n";
             return 4;
-        }
-        if (selection.status == ezfadvance::SaveSelectionStatus::requested_rom_mismatch) {
+        case Status::requested_rom_unsupported:
             std::cerr << "\nSelected ROM " << *requested_rom
                       << " does not have a supported save format.\n"
-                      << "No save read was performed.\n";
+                         "No save read was performed.\n";
             return 4;
-        }
-        selected = selection.index;
-        const auto selected_size =
-            ezfadvance::supportedSaveSizeForMarker(roms[*selected].save_marker);
-        if (!selected_size) {
-            std::cerr << "\nSelected ROM " << (*selected + 1)
+        case Status::selected_size_unknown:
+            std::cerr << "\nSelected ROM " << (plan.selected_rom.value() + 1)
                       << " has no supported save size.\n";
             return 4;
-        }
-        selected_save_size = *selected_size;
-    }
-
-    if (requested_bank && selected) {
-        if (!requested_bank->accommodates(selected_save_size)) {
-            std::cerr << "\nSave bank " << hex16(requested_bank->value())
-                      << " cannot contain this ROM's " << selected_save_size
+        case Status::direct_range_exceeded:
+            std::cerr << "\nSave bank " << hex16(plan.selector)
+                      << " cannot contain a " << plan.access_size
+                      << "-byte direct save access within the four proven "
+                         "banks. No save access was performed.\n";
+            return 4;
+        case Status::explicit_range_exceeded:
+            std::cerr << "\nSave bank " << hex16(plan.selector)
+                      << " cannot contain this ROM's " << plan.access_size
                       << "-byte save within the four proven banks. "
                          "No save access was performed.\n";
             return 4;
+        case Status::unknown_predecessor_capacity:
+            std::cerr << "\nCannot allocate save banks because ROM "
+                      << (plan.first_unknown_rom + 1)
+                      << " has an unknown save capacity. No save access was "
+                         "performed.\n";
+            return 4;
+        case Status::capacity_exceeded:
+            std::cerr << "\nThe cumulative save allocation exceeds the four "
+                         "proven 32-KiB banks. No save access was performed.\n";
+            return 4;
+        case Status::selected:
+            break;
         }
-        save_selector = requested_bank->value();
+    }
+
+    const auto selected = plan.selected_rom;
+    const std::size_t selected_save_size = plan.access_size;
+    const std::uint16_t save_selector = plan.selector;
+    if (plan.direct) {
+        std::cout << "\nUsing explicitly requested save bank without ROM "
+                     "selection; catalog allocation was bypassed.\n";
+    } else if (plan.explicit_override) {
         std::cout << "\nUsing explicitly requested save bank; automatic "
                      "catalog allocation was bypassed.\n";
-    } else if (selected) {
-        const auto bank_layout =
-            ezfadvance::allocateSaveBanks(save_markers, *selected);
-        if (bank_layout.status ==
-            ezfadvance::SaveBankLayoutStatus::unknown_predecessor_capacity) {
-            std::cerr << "\nCannot allocate save banks because ROM "
-                      << (bank_layout.first_unknown_rom + 1)
-                      << " has an unknown save capacity. No save access was performed.\n";
-            return 4;
-        }
-        if (bank_layout.status == ezfadvance::SaveBankLayoutStatus::capacity_exceeded) {
-            std::cerr << "\nThe cumulative save allocation exceeds the four proven "
-                         "32-KiB banks. No save access was performed.\n";
-            return 4;
-        }
-        if (bank_layout.status != ezfadvance::SaveBankLayoutStatus::selected)
-            return 4;
-        save_selector = bank_layout.selector;
     }
 
     if (!is_single && selected) {

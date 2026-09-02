@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.19.1 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.19.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -89,6 +89,7 @@ ezf_add_tool(ezfadvanceIII_card_reader
 ezf_add_tool(ezfadvanceIII_save_reader
     ezfadvanceIII_save_reader.cpp ${EZF_READ_ONLY_SOURCES}
     src/save_reader_options.cpp
+    src/save_access_planner.cpp
     src/save_catalog_analyzer.cpp
     src/save_bank_access.cpp src/save_bank_cleaner.cpp
     src/save_memory_reader.cpp src/save_memory_writer.cpp
@@ -136,6 +137,8 @@ if(BUILD_TESTING)
     ezf_add_test(save_selection_test tests/save_selection_test.cpp)
     ezf_add_test(save_reader_options_test tests/save_reader_options_test.cpp
         src/save_reader_options.cpp src/save_bank_selector.cpp)
+    ezf_add_test(save_access_planner_test tests/save_access_planner_test.cpp
+        src/save_access_planner.cpp)
     ezf_add_test(save_bank_selector_test tests/save_bank_selector_test.cpp src/save_bank_selector.cpp)
     ezf_add_usb_test(save_catalog_analyzer_test tests/save_catalog_analyzer_test.cpp src/save_catalog_analyzer.cpp src/ez3_catalog_reader.cpp src/ez3_catalog.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp)
     ezf_add_usb_test(save_memory_test tests/save_memory_test.cpp src/save_bank_access.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp src/protocol.cpp src/usb_device.cpp)
