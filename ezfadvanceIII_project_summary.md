@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.15.3**.
+Current shared project/toolset version covered by this summary: **0.15.4**.
 
 All mainline utilities carry this same version:
 
@@ -369,7 +369,8 @@ Catalog `map` is separate from ROM size. Current evidence links it to metadata c
 SRAM / SRAM_F / ordinary non-FLASH metadata -> map 3
 Classic NES EEPROM_V124                     -> map 4
 Tales of Phantasia EEPROM_V124              -> map 5
-FLASH-family metadata                       -> map 6
+FLASH_V / FLASH512_V metadata               -> map 6
+FLASH1M_V metadata                          -> map 7
 ```
 
 The same `EEPROM_V124` marker therefore occurs with both map 4 and map 5. Version 0.12.0 does not guess from the marker or ROM size: it follows a structurally recognized Nintendo SDK capacity initializer. Argument `4` (4 Kbit/512 bytes) selects map 4 and `0x40` (64 Kbit/8 KiB) selects map 5. Unresolved ROMs retain explicit `--mapN=4` or `--mapN=5`.
@@ -428,7 +429,10 @@ SRAM patch state                != a reason to change this ROM to map 3
 
 For metadata families with a generic captured rule, classification remains metadata-faithful. EEPROM is the exception: the marker is ambiguous, so the writer follows structurally visible SDK capacity initialization and otherwise requires an override.
 
-`FLASH1M_V... -> map 6` remains a generic metadata-based implementation rule that still deserves dedicated capture validation.
+`FLASH1MB.pcap` directly proves `BPEF / FLASH1M_V103 -> map 7`.
+The same ROM-programming workflow explicitly clears all four 32-KiB save-bank
+selectors before programming. A 128-KiB save import/export cycle remains
+unproven.
 
 `EEPROM_V124` is directly capture-proven with **map 4** in Classic NES Super Mario/Castlevania and **map 5** in Tales of Phantasia. The open problem is the generic capacity/configuration discriminator, not the marker revision.
 
@@ -766,7 +770,11 @@ higher-window extents remain deliberately unproven.
 
 ### FLASH1M
 
-`FLASH1M_V... -> map 6` is implemented generically but needs dedicated capture/save-cycle validation.
+`FLASH1MB.pcap` proves `BPEF` with `FLASH1M_V103` uses catalog type 1 and map
+7. The capture also shows the original manager writing zeros to all
+four selectors `0x0900`, `0x0910`, `0x0920`, and `0x0930` before ROM
+programming. The remaining validation gap is a complete 128-KiB save
+write/read cycle and real-hardware save reload.
 
 ### EEPROM map-4 / map-5 discriminator
 
@@ -837,11 +845,11 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 
 ## Current native platform scope
 
-Shared version 0.15.3 follows the C++17/libusb platform policy while preserving
+Shared version 0.15.4 follows the C++17/libusb platform policy while preserving
 the established Unix-like build path:
 
 ```text
-macOS       target; 0.15.2 baseline compiled on Apple Silicon/Homebrew; current 0.15.3 source awaits validation
+macOS       target; 0.15.2 baseline compiled on Apple Silicon/Homebrew; current 0.15.4 source awaits validation
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
@@ -1353,10 +1361,12 @@ written to the first two banks, but the original manager then incorrectly
 restarts a 32-KiB DumpRom save at `0x0900`, overwriting FFTA. The corrected
 tool uses a cumulative marker-capacity allocation policy, placing DumpRom at
 `0x0920` in this layout. Unknown or overflowing layouts are refused. Only this
-observed `FLASH512` FFTA followed by `SRAM_V111` DumpRom allocation is
-hardware-qualified. The analogous EEPROM-, generic-FLASH-, and
-FLASH1M-predecessor allocations remain policy inference pending direct capture
-or controlled hardware evidence. DumpRom was written and verified at `0x0920`,
+observed `FLASH512` FFTA (`AFXP`) followed by `SRAM_V111` DumpRom (`DROM`)
+allocation is hardware-qualified. The analogous EEPROM- and generic-FLASH
+predecessor layouts remain inferred. `FLASH1MB.pcap` directly supports
+four-bank initialization for `BPEF`, while its complete 128-KiB save
+import/export protocol and use as a predecessor remain pending controlled
+hardware evidence. DumpRom (`DROM`) was written and verified at `0x0920`,
 then extracted in a fresh tool session; the input and extracted files shared
 SHA-256
 `c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.

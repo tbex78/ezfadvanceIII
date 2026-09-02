@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.15.3` toolset, including guarded
+**Specification baseline:** shared `0.15.4` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -86,8 +86,8 @@ Writer metadata rules are:
 
 - catalog `type` is derived from the ROM size class (`32 MiB -> 0` through
   `64 KiB -> 9`) unless explicitly overridden;
-- SRAM/other ROMs use map `3` and FLASH-family ROMs use map `6` under the
-  current capture-derived classifier;
+- SRAM/other ROMs use map `3`, FLASH/FLASH512 ROMs use map `6`, and FLASH1M
+  ROMs use map `7` under the capture-derived classifier;
 - EEPROM map selection uses a structurally recovered Nintendo SDK capacity
   argument when present: 4-Kbit/512-byte EEPROM selects map `4`, while
   64-Kbit/8-KiB EEPROM selects map `5`. Marker revision and ROM size are not
@@ -271,6 +271,10 @@ The four observed 32-KiB banks use selectors `0x0900`, `0x0910`, `0x0920`, and
 `0x0930`. The software's cumulative catalog-order allocator is policy, not a
 fully capture-proven protocol rule. It reserves one bank for SRAM/EEPROM, two
 for FLASH512/FLASH, and four for FLASH1M according to marker-derived capacity.
+`FLASH1MB.pcap` directly proves `BPEF` with `FLASH1M_V103` is catalogued with
+map `7` and that the original manager clears selectors `0x0900` through
+`0x0930` before programming it. A complete 128-KiB save import/export cycle
+remains to be hardware-qualified.
 Only the observed `FLASH512` FFTA allocation at `0x0900`/`0x0910`, followed by
 `SRAM_V111` DumpRom at `0x0920`, is hardware-qualified. EEPROM predecessors,
 generic FLASH predecessors, and FLASH1M predecessors still require direct

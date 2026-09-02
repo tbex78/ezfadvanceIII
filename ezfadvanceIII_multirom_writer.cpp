@@ -197,8 +197,10 @@ static void print_hex(const uint8_t* p, size_t n, size_t max = 64)
 //   * non-power-of-two files use the next power-of-two size class, matching
 //     the existing multi-ROM placement allocator.
 //   * the mapping/config byte remains independent of ROM size: standard GBA
-//     FLASH save-library families use map 6; other non-EEPROM ROMs use map 3.
-//   * captured FLASH_V121/V124/V126 and FLASH512_V130 cases all fit map 6.
+//     FLASH_V/FLASH512_V families use map 6, FLASH1M_V uses map 7, and other
+//     non-EEPROM ROMs use map 3.
+//   * captured FLASH_V121/V124/V126 and FLASH512_V130 cases use map 6;
+//     FLASH1MB.pcap proves BPEF / FLASH1M_V103 uses map 7.
 // EEPROM handling was still restricted in 0.5.5; 0.5.8 replaces that restriction
 // with the capture-derived map-5 path. Packing, loader forms, USB write geometry,
 // --skip-verify and four-ROM support remain otherwise unchanged.

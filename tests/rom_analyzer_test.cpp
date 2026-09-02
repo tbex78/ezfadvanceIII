@@ -49,6 +49,15 @@ int main()
     assert(analysis.non_sram_save->family == "FLASH512 (64 KiB Flash)");
     assert(analysis.non_sram_save->signature == "FLASH512_V130");
 
+    // FLASH1MB.pcap: BPEF / FLASH1M_V103 is serialized
+    // with catalog type 1 and map 7 by the original manager.
+    analysis = analyzer.analyze(rom(0x1000000, "FLASH1M_V103"));
+    assert(analysis.entry_type == 1);
+    assert(analysis.mapping_flag == 7);
+    assert(analysis.non_sram_save);
+    assert(analysis.non_sram_save->family == "FLASH1M (128 KiB Flash)");
+    assert(analysis.non_sram_save->signature == "FLASH1M_V103");
+
     // An EEPROM marker without a structurally proven capacity remains
     // unresolved; the writer must continue requiring --mapN=4/5.
     analysis = analyzer.analyze(rom(0x10000, "EEPROM_V124"));

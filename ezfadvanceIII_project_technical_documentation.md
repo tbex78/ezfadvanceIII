@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.15.3`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.15.3`<br>
+**Current project/toolset version:** `0.15.4`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.15.4`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.15.3; its new save-analysis refactor awaits compilation and validation. The 0.15.2 baseline was compiled and transcript-tested on macOS / Apple Silicon. Linux CI covers the existing Makefile path, and Windows CMake/MSVC CI is defined for the new port. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD/Windows physical-USB validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.15.4; its latest changes await compilation and validation. The 0.15.2 baseline was compiled and transcript-tested on macOS / Apple Silicon. Linux CI covers the existing Makefile path, and Windows CMake/MSVC CI is defined for the new port. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD/Windows physical-USB validation remains pending.
 
 ---
 
@@ -1066,12 +1066,13 @@ The current captures show a strong association between embedded Nintendo/SDK sav
 SRAM / SRAM_F / ordinary non-FLASH metadata -> map 3
 Classic NES EEPROM_V124 captures            -> map 4
 Tales of Phantasia EEPROM_V124              -> map 5
-FLASH-family metadata                       -> map 6
+FLASH_V / FLASH512_V metadata               -> map 6
+FLASH1M_V metadata                          -> map 7
 ```
 
 The same `EEPROM_V124` revision therefore appears with **both map 4 and map 5**. The writer must not derive EEPROM map solely from `EEPROM_Vnnn`, ROM title, or ROM size.
 
-Therefore `map 3`, `map 4`, `map 5`, and `map 6` are treated as capture-derived EZ3 catalog mapping/configuration values, not definitive runtime save-mode declarations.
+Therefore `map 3`, `map 4`, `map 5`, `map 6`, and `map 7` are treated as capture-derived EZ3 catalog mapping/configuration values, not definitive runtime save-mode declarations.
 
 ### 19.1 Captured map-3 examples
 
@@ -1111,10 +1112,12 @@ It also means the current signature-based classifier is correct for reproducing 
 The current detector also recognizes:
 
 ```text
-FLASH1M_Vxxx -> map 6
+FLASH1M_V103 -> map 7
 ```
 
-as a generic extension of the observed FLASH-family metadata association. A dedicated `FLASH1M` PCAP/hardware validation is still desirable.
+`FLASH1MB.pcap` proves this classification for `BPEF`. Its single-ROM
+catalog entry is type 1 / map 7 with original entry `0x204`, and its patched
+branch targets the loader at `0x00E3CF70`.
 
 ### 19.3 Captured map-4 EEPROM examples
 
@@ -2011,6 +2014,7 @@ piano-megamanz.pcap
 2MB.pcap
 2_2MB.pcap
 TOF-EEPROM.pcap
+FLASH1MB.pcap
 readmultiromonesav.pcap
 readsav.pcap
 writesav.pcap
@@ -2044,10 +2048,10 @@ FFTA is now a paired-control case: unpatched FFTA is `FLASH512_V130`, `type 1 / 
 ### 35.3 FLASH1M marker
 
 ```text
-embedded marker association: map 6
+embedded marker association: map 7
 warning: yes
-implementation: supported generically
-capture validation: still desirable
+programming capture: BPEF, FLASH1M_V103
+save import/export validation: still pending
 ```
 
 This is not a runtime save-mode detector.
@@ -2793,10 +2797,12 @@ software uses a cumulative catalog-order allocation policy based on
 marker-derived capacity: SRAM/EEPROM reserves one bank, FLASH512/FLASH two,
 and FLASH1M four. This table is implementation policy, not a generally proven
 protocol rule. Direct hardware evidence currently covers only the observed
-`FLASH512` FFTA allocation at `0x0900`/`0x0910` followed by `SRAM_V111`
-DumpRom at `0x0920`. EEPROM-, generic-FLASH-, and FLASH1M-predecessor layouts
-remain inferred until supported by direct manager captures or controlled
-hardware tests. Unknown predecessor sizes and allocations beyond four banks
+`FLASH512` FFTA (`AFXP`) allocation at `0x0900`/`0x0910` followed by
+`SRAM_V111` DumpRom (`DROM`) at `0x0920`. EEPROM- and generic-FLASH predecessor
+layouts remain inferred. `FLASH1MB.pcap` directly shows four-bank zero
+initialization for `BPEF`, but a complete 128-KiB save cycle and a FLASH1M
+predecessor layout remain unproven. Unknown predecessor sizes and allocations
+beyond four banks
 are rejected. This corrected behavior intentionally differs from the captured
 manager bug. It is hardware-qualified on the FFTA + DumpRom layout: the tool
 wrote and verified DumpRom at `0x0920`, a fresh invocation extracted the same
@@ -3058,6 +3064,16 @@ The established USB protocol, marker priority, failure fallbacks, and CLI are
 unchanged. Compilation and runtime validation remain pending for this source
 checkpoint.
 
+### 36.76 0.15.4 — capture-proven FLASH1M catalog mapping
+
+`FLASH1MB.pcap` proves that `BPEF` with `FLASH1M_V103` is serialized as catalog
+type 1 / map 7, original entry `0x204`, with loader `0x00E3CF70`. The ROM
+analyzer now assigns map 7 specifically to `FLASH1M_V`; `FLASH_V` and
+`FLASH512_V` remain map 6. The same capture contains four separate 32-KiB zero
+writes after selecting `0x0900` through `0x0930`, directly supporting
+four-bank initialization. It does not contain a 128-KiB save import/export, so
+that save cycle remains pending.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -3070,7 +3086,7 @@ the cross-platform path and builds the same four executables and offline suite.
 Native project scope:
 
 ```text
-macOS       supported target; 0.15.2 baseline compiled and transcript-tested; current 0.15.3 source awaits validation; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; 0.15.2 baseline compiled and transcript-tested; current 0.15.4 source awaits validation; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
@@ -3422,7 +3438,13 @@ Other arbitrary partial higher-window extents remain deliberately unproven and s
 
 ### 40.3 FLASH1M
 
-The writer maps `FLASH1M_V...` to 6, consistent with the FLASH family, but a dedicated original-manager capture and save test would strengthen this assumption.
+`FLASH1MB.pcap` proves that `BPEF` with `FLASH1M_V103` uses catalog type 1 and
+map 7. Before programming the ROM, the original manager performs
+four separate 32-KiB zero writes after selecting `0x0900`, `0x0910`, `0x0920`,
+and `0x0930`. This directly supports the four-bank allocation and replaces the
+former inferred map-6 extension. The capture does not contain a 128-KiB save
+import/export, so byte-for-byte save writing and real-hardware save reload
+remain open.
 
 ### 40.4 EEPROM map-4 / map-5 discriminator
 
@@ -3494,7 +3516,8 @@ ROM files
    +--> identify save-library family / captured map class
    |       SRAM/other -> map 3
    |       EEPROM     -> structural capacity map 4/5, else explicit override
-   |       FLASH      -> map 6
+   |       FLASH/FLASH512 -> map 6
+   |       FLASH1M    -> map 7
    |
    +--> derive ROM size class -> catalog type 0..9
    |
@@ -3530,7 +3553,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared source version **0.15.3**, the project has an object-oriented structural model:
+At shared source version **0.15.4**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,

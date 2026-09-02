@@ -829,10 +829,12 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms,
 
     write_catalog_entry(t, SINGLE_ENTRY_OFF, r, true);
 
-    if (r.mapping_flag == 6) {
+    if (r.mapping_flag == 6 || r.mapping_flag == 7) {
         report << "FLASH catalog mapping: type "
                   << static_cast<unsigned>(r.entry_type)
-                  << ", mapping flag 6 (capture-derived)\n";
+                  << ", mapping flag "
+                  << static_cast<unsigned>(r.mapping_flag)
+                  << " (capture-derived)\n";
     }
 
     size_t image_size = std::max<size_t>(

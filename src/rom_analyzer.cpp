@@ -93,14 +93,16 @@ RomAnalysis RomAnalyzer::analyze(const std::vector<std::uint8_t>& rom) const
     result.has_eeprom_library = contains(rom, "EEPROM_V");
 
     // The mapping byte is independent from ROM size. Captured SRAM/non-FLASH
-    // cases use 3 and FLASH-library cases use 6. EEPROM map 4/5 follows the
-    // structurally recovered SDK capacity call; an unresolved call remains 0
-    // so the CLI can require an explicit override rather than guess.
+    // cases use 3, FLASH/FLASH512 cases use 6, and FLASH1M uses 7. EEPROM map
+    // 4/5 follows the structurally recovered SDK capacity call; an unresolved
+    // call remains 0 so the CLI can require an explicit override rather than
+    // guess.
     if (result.has_eeprom_library) {
         result.mapping_flag = catalogMapForEeprom(
             detectEepromMapping(rom).capacity);
-    } else if (contains(rom, "FLASH_V") || contains(rom, "FLASH512_V") ||
-               contains(rom, "FLASH1M_V")) {
+    } else if (contains(rom, "FLASH1M_V")) {
+        result.mapping_flag = 7;
+    } else if (contains(rom, "FLASH_V") || contains(rom, "FLASH512_V")) {
         result.mapping_flag = 6;
     } else {
         result.mapping_flag = 3;
