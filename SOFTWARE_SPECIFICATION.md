@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.17.4` toolset, including guarded
+**Specification baseline:** shared `0.18.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -226,13 +226,17 @@ must identify a supported `SRAM_V111` or `FLASH512` entry. Missing or mismatched
 unsupported save formats, unknown predecessor capacity, and cumulative layouts
 larger than four banks must be refused.
 
-Save writing must require `--write FILE`, `--backup FILE`, and
-`--yes-really-write`. Catalog-selected input must equal the selected ROM's
+Save writing must require `--write FILE` and `--yes-really-write`.
+`--backup FILE` is recommended but optional. If it is omitted, the tool must
+warn that the existing save may become unrecoverable and require an explicit
+interactive `y` or `yes` response before opening the USB device. Any other
+response, including end-of-input, must abort safely. Catalog-selected input must equal the selected ROM's
 32768- or 65536-byte allocated capacity. Direct-bank input must contain one
 through four complete 32768-byte banks and fit within `0x0900` through
-`0x0930`. The backup path must not already
-exist. The current save must be read and the backup completed
-before the first save-write payload is sent. A bounded readiness transition is
+`0x0930`. When supplied, the backup path must not already exist and the current
+save must be read and the backup completed before the first save-write payload
+is sent. Without a backup path, the current save is still read before writing.
+A bounded readiness transition is
 required before and after the captured `0x92/01` write. The tool must then read
 the full save through the proven `0x91/01` path. The read-back must match every
 input byte. A mismatch is failure,

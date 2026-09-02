@@ -334,10 +334,6 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     }
 
     if (write_save) {
-        if (!backup_path) {
-            std::cerr << "Internal error: save writing requires a backup path.\n";
-            return 1;
-        }
         if (write_save->size() != selected_save_size) {
             std::cerr << "Save input size " << write_save->size()
                       << " bytes does not match the selected access size of "
@@ -345,13 +341,14 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
                       << " bytes. No save write was performed.\n";
             return 4;
         }
-        if (!write_binary_file_without_overwrite(*backup_path, save))
-            return 5;
-
-        std::cout << "Existing save backed up to: " << *backup_path << "\n";
+        if (backup_path) {
+            if (!write_binary_file_without_overwrite(*backup_path, save))
+                return 5;
+            std::cout << "Existing save backed up to: " << *backup_path << "\n";
+        }
         if (!cartridge.finishSession()) {
             std::cerr << "Pre-write readiness transition failed. No save-write "
-                         "payload was sent. Backup: " << *backup_path << '\n';
+                         "payload was sent.\n";
             return 2;
         }
 
@@ -361,21 +358,24 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
                   << " bank" << (bank_count == 1 ? "" : "s")
                   << " beginning at selector " << hex16(save_selector) << "...\n";
         if (!save_writer.write(save_selector, *write_save)) {
-            std::cerr << "Save write failed. The original backup is available at "
-                      << *backup_path << ".\n";
+            std::cerr << "Save write failed."
+                      << (backup_path ? " The original backup is available.\n"
+                                      : " No backup was requested.\n");
             return 2;
         }
 
         if (!cartridge.finishSession()) {
             std::cerr << "Post-write readiness transition failed. The save was "
-                         "not verified. Backup: " << *backup_path << '\n';
+                         "not verified.\n";
             return 2;
         }
 
         std::vector<uint8_t> verification;
         std::cout << "Reading save back for byte-for-byte verification...\n";
         if (!read_save_capture(save_reader, selected_save_size, save_selector, verification)) {
-            std::cerr << "Save read-back failed. Backup: " << *backup_path << '\n';
+            std::cerr << "Save read-back failed."
+                      << (backup_path ? " The original backup is available.\n"
+                                      : " No backup was requested.\n");
             return 2;
         }
         if (verification != *write_save) {
@@ -385,7 +385,8 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
                 std::distance(verification.begin(), mismatch.first));
             std::cerr << "SAVE VERIFICATION FAILED at byte offset 0x"
                       << std::hex << offset << std::dec
-                      << ". Backup: " << *backup_path << '\n';
+                      << (backup_path ? ". The original backup is available.\n"
+                                      : ". No backup was requested.\n");
             return 6;
         }
 
@@ -396,7 +397,8 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
                   << (selected ? std::to_string(*selected + 1) + " / " +
                                      std::to_string(rom_count)
                                : "(direct bank access)") << "\n"
-                  << "Backup       : " << *backup_path << "\n"
+                  << "Backup       : "
+                  << (backup_path ? *backup_path : "(not requested)") << "\n"
                   << "Size         : " << selected_save_size << " bytes ("
                   << (selected_save_size / 1024) << " KiB)\n"
                   << "Write        : " << bank_count
@@ -536,26 +538,31 @@ public:
 private:
     int write(const std::vector<uint8_t>& current, std::size_t size)
     {
-        if (!backup_ || input_->size() != size) {
+        if (input_->size() != size) {
             std::cerr << "Internal error: invalid direct save-write request.\n";
             return 1;
         }
-        if (!write_binary_file_without_overwrite(*backup_, current)) return 5;
-        std::cout << "Existing save backed up to: " << *backup_ << "\n"
-                  << "Writing " << size << "-byte save across " << bank_count_
+        if (backup_) {
+            if (!write_binary_file_without_overwrite(*backup_, current)) return 5;
+            std::cout << "Existing save backed up to: " << *backup_ << "\n";
+        }
+        std::cout << "Writing " << size << "-byte save across " << bank_count_
                   << " bank" << (bank_count_ == 1 ? "" : "s")
                   << " beginning at selector " << hex16(first_bank_.value())
                   << "...\n";
         if (!writer_.write(first_bank_.value(), *input_)) {
-            std::cerr << "Save write failed. The original backup is available at "
-                      << *backup_ << ".\n";
+            std::cerr << "Save write failed."
+                      << (backup_ ? " The original backup is available.\n"
+                                  : " No backup was requested.\n");
             return 2;
         }
 
         std::vector<uint8_t> verification;
         std::cout << "Reading save back for byte-for-byte verification...\n";
         if (!read_save_capture(reader_, size, first_bank_.value(), verification)) {
-            std::cerr << "Save read-back failed. Backup: " << *backup_ << '\n';
+            std::cerr << "Save read-back failed."
+                      << (backup_ ? " The original backup is available.\n"
+                                  : " No backup was requested.\n");
             return 2;
         }
         if (verification != *input_) {
@@ -565,7 +572,8 @@ private:
                 std::distance(verification.begin(), mismatch.first));
             std::cerr << "SAVE VERIFICATION FAILED at byte offset 0x"
                       << std::hex << offset << std::dec
-                      << ". Backup: " << *backup_ << '\n';
+                      << (backup_ ? ". The original backup is available.\n"
+                                  : ". No backup was requested.\n");
             return 6;
         }
 
@@ -573,7 +581,8 @@ private:
                   << "SAVE WRITE AND VERIFICATION COMPLETE\n"
                   << "========================================\n"
                   << "ROM          : (direct bank access)\n"
-                  << "Backup       : " << *backup_ << "\n"
+                  << "Backup       : "
+                  << (backup_ ? *backup_ : "(not requested)") << "\n"
                   << "Size         : " << size << " bytes (" << size / 1024
                   << " KiB)\n"
                   << "Write        : " << bank_count_
@@ -637,9 +646,9 @@ static void usage(const char* argv0)
               << "  " << argv0 << " --rom N [--output file.sav]\n\n"
               << "  " << argv0 << " [--rom N] --save-bank 0x09X0 "
                  "[--consecutive-bank N] [--output file.sav]\n\n"
-              << "  " << argv0 << " --write file.sav --backup original.sav "
+              << "  " << argv0 << " --write file.sav [--backup original.sav] "
                  "--yes-really-write [--rom N]\n"
-              << "  " << argv0 << " --write file.sav --backup original.sav "
+              << "  " << argv0 << " --write file.sav [--backup original.sav] "
                  "--yes-really-write --save-bank 0x09X0 "
                  "[--consecutive-bank N]\n"
               << "  " << argv0 << " --erase [--save-bank 0x09X0 "
@@ -769,9 +778,8 @@ int main(int argc, char** argv)
         std::cerr << "--backup and --yes-really-write require --write FILE.\n";
         return 1;
     }
-    if (write_path && (!backup_path || !yes_really_write)) {
-        std::cerr << "Save writing requires both --backup FILE and "
-                     "--yes-really-write.\n";
+    if (write_path && !yes_really_write) {
+        std::cerr << "Save writing requires --yes-really-write.\n";
         return 1;
     }
     if (ezfadvance::saveWritePathsConflict(write_path, backup_path)) {
@@ -803,6 +811,24 @@ int main(int argc, char** argv)
                       << (*requested_bank_count * 0x8000) << " bytes).\n";
             return 1;
         }
+    }
+
+    if (write_path && !backup_path) {
+        std::cerr
+            << "\n========================================\n"
+            << "WARNING: NO SAVE BACKUP\n"
+            << "========================================\n"
+            << "The current cartridge save will be overwritten without creating "
+               "a backup file. If writing or verification fails, the previous "
+               "save may be unrecoverable.\n"
+            << "Continue without a backup? [y/N]: " << std::flush;
+        std::string answer;
+        if (!std::getline(std::cin, answer) ||
+            !ezfadvance::confirmsSaveWriteWithoutBackup(answer)) {
+            std::cerr << "No selected; aborting without opening the device.\n";
+            return 1;
+        }
+        std::cerr << "Yes selected; continuing without a backup.\n";
     }
 
     ezfadvance::UsbDevice device;

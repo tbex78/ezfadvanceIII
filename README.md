@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.17.4**.
+version is **0.18.0**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.17.4
+“pending,” and “next” describe the named review point, not the present 0.18.0
 support boundary.
 
 ## Build and test
@@ -169,6 +169,10 @@ bytes; otherwise the input size selects the number of consecutive banks. The
 requested range must end at or before `0x0930`. Backup and full byte-for-byte
 read-back verification cover the same complete range. Explicit physical-bank
 writing uses the same ROM-independent raw path as direct extraction.
+`--backup` is recommended but optional. When it is omitted, the tool displays
+a destructive-operation warning and accepts only an explicit interactive
+`y`/`yes` response before opening the USB device. `--yes-really-write` remains
+mandatory.
 
 ### Erase EZ3 saves
 

@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <charconv>
+#include <cctype>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -28,6 +29,22 @@ inline bool saveWritePathsConflict(
     const std::optional<std::string>& backup) noexcept
 {
     return input && backup && *input == *backup;
+}
+
+inline bool confirmsSaveWriteWithoutBackup(std::string_view answer) noexcept
+{
+    while (!answer.empty() &&
+           std::isspace(static_cast<unsigned char>(answer.front())))
+        answer.remove_prefix(1);
+    while (!answer.empty() &&
+           std::isspace(static_cast<unsigned char>(answer.back())))
+        answer.remove_suffix(1);
+    if (answer.size() != 1 && answer.size() != 3) return false;
+    std::string normalized(answer);
+    for (char& character : normalized)
+        character = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(character)));
+    return normalized == "y" || normalized == "yes";
 }
 
 inline std::size_t directSaveAccessSize(
