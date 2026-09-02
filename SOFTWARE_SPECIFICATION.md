@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.13.1` toolset, including guarded
+**Specification baseline:** shared `0.14.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -287,6 +287,7 @@ Supported invocations are:
 ezfadvanceIII_save_reader
 ezfadvanceIII_save_reader --output FILE.sav
 ezfadvanceIII_save_reader --rom N [--output FILE.sav]
+ezfadvanceIII_save_reader --rom N --save-bank 0x09X0 [--output FILE.sav]
 ezfadvanceIII_save_reader --write FILE.sav --backup ORIGINAL.sav \
     --yes-really-write [--rom N]
 ```
@@ -300,6 +301,12 @@ size or bank selection were proven.
 allocated bank. Catalog inspection and signature scanning may use the shared
 capture-proven 16-/24-/32-MiB linear mappings, but
 must remain bounded by the physical 32-MiB cartridge image.
+
+`--save-bank SELECTOR` explicitly overrides the policy-derived selector for
+investigation and recovery. It accepts only the four observed selectors
+`0x0900`, `0x0910`, `0x0920`, and `0x0930`. ROM selection remains responsible
+for determining whether 32768 or 65536 bytes are accessed. The tool must reject
+a 65536-byte access whose second consecutive bank would exceed `0x0930`.
 
 ### 3.4 Card eraser
 

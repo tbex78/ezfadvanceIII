@@ -35,6 +35,7 @@
 #include "ezfadvance/save_memory_reader.hpp"
 #include "ezfadvance/save_memory_writer.hpp"
 #include "ezfadvance/save_bank_layout.hpp"
+#include "ezfadvance/save_bank_selector.hpp"
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
@@ -232,6 +233,7 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
                                  ezfadvance::SaveMemoryWriter& save_writer,
                                  const std::optional<std::string>& requested_output,
                                  const std::optional<size_t>& requested_rom,
+                                 const std::optional<ezfadvance::SaveBankSelector>& requested_bank,
                                  const std::optional<std::vector<uint8_t>>& write_save,
                                  const std::optional<std::string>& backup_path)
 {
@@ -367,23 +369,6 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     save_markers.reserve(roms.size());
     for (const auto& rom : roms)
         save_markers.push_back(rom.sig.text);
-    const auto bank_layout =
-        ezfadvance::allocateSaveBanks(save_markers, selected);
-    if (bank_layout.status ==
-        ezfadvance::SaveBankLayoutStatus::unknown_predecessor_capacity) {
-        std::cerr << "\nCannot allocate save banks because ROM "
-                  << (bank_layout.first_unknown_rom + 1)
-                  << " has an unknown save capacity. No save access was performed.\n";
-        return 4;
-    }
-    if (bank_layout.status == ezfadvance::SaveBankLayoutStatus::capacity_exceeded) {
-        std::cerr << "\nThe cumulative save allocation exceeds the four proven "
-                     "32-KiB banks. No save access was performed.\n";
-        return 4;
-    }
-    if (bank_layout.status != ezfadvance::SaveBankLayoutStatus::selected)
-        return 4;
-    const uint16_t save_selector = bank_layout.selector;
     const auto selected_save_size =
         ezfadvance::supportedSaveSizeForMarker(chosen.sig.text);
 
@@ -393,6 +378,38 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
                   << ".\nThis tool supports 32-KiB SRAM_V111 and 64-KiB "
                      "FLASH512 saves. No save access is performed for this ROM.\n";
         return 4;
+    }
+
+    uint16_t save_selector = 0;
+    if (requested_bank) {
+        if (!requested_bank->accommodates(*selected_save_size)) {
+            std::cerr << "\nSave bank " << hex16(requested_bank->value())
+                      << " cannot contain this ROM's " << *selected_save_size
+                      << "-byte save within the four proven banks. "
+                         "No save access was performed.\n";
+            return 4;
+        }
+        save_selector = requested_bank->value();
+        std::cout << "\nUsing explicitly requested save bank; automatic "
+                     "catalog allocation was bypassed.\n";
+    } else {
+        const auto bank_layout =
+            ezfadvance::allocateSaveBanks(save_markers, selected);
+        if (bank_layout.status ==
+            ezfadvance::SaveBankLayoutStatus::unknown_predecessor_capacity) {
+            std::cerr << "\nCannot allocate save banks because ROM "
+                      << (bank_layout.first_unknown_rom + 1)
+                      << " has an unknown save capacity. No save access was performed.\n";
+            return 4;
+        }
+        if (bank_layout.status == ezfadvance::SaveBankLayoutStatus::capacity_exceeded) {
+            std::cerr << "\nThe cumulative save allocation exceeds the four proven "
+                         "32-KiB banks. No save access was performed.\n";
+            return 4;
+        }
+        if (bank_layout.status != ezfadvance::SaveBankLayoutStatus::selected)
+            return 4;
+        save_selector = bank_layout.selector;
     }
 
     if (!is_single) {
@@ -530,6 +547,7 @@ public:
                   ezfadvance::SaveMemoryWriter& save_writer,
                   std::optional<std::string> output,
                   std::optional<size_t> requested_rom,
+                  std::optional<ezfadvance::SaveBankSelector> requested_bank,
                   std::optional<std::vector<uint8_t>> write_save,
                   std::optional<std::string> backup_path)
         : cartridge_(cartridge),
@@ -537,6 +555,7 @@ public:
           save_writer_(save_writer),
           output_(std::move(output)),
           requested_rom_(requested_rom),
+          requested_bank_(requested_bank),
           write_save_(std::move(write_save)),
           backup_path_(std::move(backup_path))
     {
@@ -546,6 +565,7 @@ public:
     {
         return inspect_and_dump_save(cartridge_, save_reader_, save_writer_,
                                      output_, requested_rom_,
+                                     requested_bank_,
                                      write_save_, backup_path_);
     }
 
@@ -555,6 +575,7 @@ private:
     ezfadvance::SaveMemoryWriter& save_writer_;
     std::optional<std::string> output_;
     std::optional<size_t> requested_rom_;
+    std::optional<ezfadvance::SaveBankSelector> requested_bank_;
     std::optional<std::vector<uint8_t>> write_save_;
     std::optional<std::string> backup_path_;
 };
@@ -566,13 +587,16 @@ static void usage(const char* argv0)
               << "  " << argv0 << " --version\n"
               << "  " << argv0 << " --output file.sav\n"
               << "  " << argv0 << " --rom N [--output file.sav]\n\n"
+              << "  " << argv0 << " --rom N --save-bank 0x09X0 "
+                 "[--output file.sav]\n\n"
               << "  " << argv0 << " --write file.sav --backup original.sav "
                  "--yes-really-write [--rom N]\n\n"
               << "EZF Advance III save reader/writer (" << ezfadvance::hostPlatformName() << ").\n"
               << "Supported paths: 32-KiB SRAM_V111 and 64-KiB FLASH512 with cumulative four-bank "
                  "allocation beginning at selector 0x0900.\n"
               << "On a multi-ROM card, --rom N is required; the reader will not "
-                 "choose a ROM automatically.\n";
+                 "choose a ROM automatically. --save-bank overrides automatic "
+                 "allocation and accepts 0x0900, 0x0910, 0x0920, or 0x0930.\n";
 }
 
 int main(int argc, char** argv)
@@ -584,6 +608,7 @@ int main(int argc, char** argv)
 
     std::optional<std::string> output;
     std::optional<size_t> requested_rom;
+    std::optional<ezfadvance::SaveBankSelector> requested_bank;
     std::optional<std::string> write_path;
     std::optional<std::string> backup_path;
     bool yes_really_write = false;
@@ -613,6 +638,17 @@ int main(int argc, char** argv)
                 return 1;
             }
             write_path = argv[++i];
+        } else if (a == "--save-bank") {
+            if (i+1 >= argc) {
+                usage(argv[0]);
+                return 1;
+            }
+            requested_bank = ezfadvance::SaveBankSelector::parse(argv[++i]);
+            if (!requested_bank) {
+                std::cerr << "Bad --save-bank value; expected 0x0900, "
+                             "0x0910, 0x0920, or 0x0930.\n";
+                return 1;
+            }
         } else if (a == "--backup") {
             if (i+1 >= argc) {
                 usage(argv[0]);
@@ -690,7 +726,8 @@ int main(int argc, char** argv)
     int result = 2;
     if (cartridge.initialize() && ezfadvance::hasEz3Catalog(cartridge.kind())) {
         SaveExtractor extractor(cartridge, save_reader, save_writer,
-                                output, requested_rom, write_save, backup_path);
+                                output, requested_rom, requested_bank,
+                                write_save, backup_path);
         result = extractor.run();
         if (!cartridge.finishSession()) {
             std::cerr << "Save-reader operation finished, but the "

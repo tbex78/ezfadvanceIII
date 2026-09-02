@@ -5,7 +5,7 @@
 
 namespace ezfadvance {
 
-inline constexpr std::string_view project_version = "0.13.1";
+inline constexpr std::string_view project_version = "0.14.0";
 
 inline bool isVersionRequest(int argc, char** argv)
 {

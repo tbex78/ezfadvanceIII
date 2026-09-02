@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.13.1 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.14.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -81,7 +81,8 @@ ezf_add_tool(ezfadvanceIII_card_reader
     src/card_reader_options.cpp)
 ezf_add_tool(ezfadvanceIII_save_reader
     ezfadvanceIII_save_reader.cpp ${EZF_READ_ONLY_SOURCES}
-    src/save_memory_reader.cpp src/save_memory_writer.cpp)
+    src/save_memory_reader.cpp src/save_memory_writer.cpp
+    src/save_bank_selector.cpp)
 ezf_add_tool(ezfadvanceIII_wipe_card
     ezfadvanceIII_wipe_card.cpp ${EZF_TRANSPORT_SOURCES})
 
@@ -115,5 +116,6 @@ if(BUILD_TESTING)
     ezf_add_test(writer_options_test tests/writer_options_test.cpp src/writer_options.cpp)
     ezf_add_test(version_test tests/version_test.cpp)
     ezf_add_test(save_selection_test tests/save_selection_test.cpp)
+    ezf_add_test(save_bank_selector_test tests/save_bank_selector_test.cpp src/save_bank_selector.cpp)
     ezf_add_usb_test(save_memory_test tests/save_memory_test.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp src/protocol.cpp src/usb_device.cpp)
 endif()

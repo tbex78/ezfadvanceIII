@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.13.1**.
+version is **0.14.0**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.13.1
+“pending,” and “next” describe the named review point, not the present 0.14.0
 support boundary.
 
 ## Build and test
@@ -119,6 +119,7 @@ extraction; `--verbose` selects per-block timing and throughput diagnostics.
 ```sh
 ./ezfadvanceIII_save_reader --output OUTPUT.sav
 ./ezfadvanceIII_save_reader --rom N --output OUTPUT.sav
+./ezfadvanceIII_save_reader --rom N --save-bank 0x09X0 --output OUTPUT.sav
 ```
 
 Save/catalog processing is restricted to a cartridge positively classified as
