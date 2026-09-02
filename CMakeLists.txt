@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.14.1 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.14.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,6 +49,7 @@ set(EZF_TRANSPORT_SOURCES
 set(EZF_WRITER_SOURCES
     ${EZF_TRANSPORT_SOURCES}
     src/progress_bar.cpp
+    src/card_write_presenter.cpp
     src/save_bank_access.cpp
     src/save_bank_cleaner.cpp
     src/card_writer.cpp
@@ -106,6 +107,7 @@ if(BUILD_TESTING)
     ezf_add_test(cartridge_format_test tests/cartridge_format_test.cpp src/cartridge_format.cpp)
     ezf_add_test(cartridge_image_builder_test tests/cartridge_image_builder_test.cpp src/cartridge_image_builder.cpp src/cartridge_format.cpp)
     ezf_add_test(card_writer_test tests/card_writer_test.cpp src/card_writer.cpp src/verification_policy.cpp)
+    ezf_add_test(card_write_presenter_test tests/card_write_presenter_test.cpp src/card_write_presenter.cpp)
     ezf_add_test(ez3_catalog_test tests/ez3_catalog_test.cpp src/ez3_catalog.cpp src/cartridge_format.cpp)
     ezf_add_test(eeprom_mapping_test tests/eeprom_mapping_test.cpp src/eeprom_mapping.cpp)
     ezf_add_test(card_reader_options_test tests/card_reader_options_test.cpp src/card_reader_options.cpp)

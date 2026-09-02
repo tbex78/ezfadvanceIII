@@ -30,6 +30,7 @@
 #include "ezfadvance/cartridge_format.hpp"
 #include "ezfadvance/cartridge_image_builder.hpp"
 #include "ezfadvance/card_writer.hpp"
+#include "ezfadvance/card_write_presenter.hpp"
 #include "ezfadvance/eeprom_mapping.hpp"
 #include "ezfadvance/libusb_writer_backend.hpp"
 #include "ezfadvance/protocol.hpp"
@@ -718,19 +719,7 @@ int main(int argc, char** argv)
             return 2;
         }
 
-        std::cout << "\n========================================\n";
-        if (!write_result) {
-            std::cout << "WRITE/FINALIZE FAILED.\n";
-        } else if (write_result.verification_skipped_by_user) {
-            std::cout << "WRITE SUCCEEDED; READ-BACK VERIFICATION SKIPPED BY REQUEST.\n";
-        } else if (write_result.verification_skipped_unproven) {
-            std::cout << "WRITE SUCCEEDED; FULL READ-BACK VERIFICATION SKIPPED.\n";
-        } else if (write_result.verification_completed) {
-            std::cout << "WRITE + FULL READ-BACK VERIFICATION SUCCEEDED.\n";
-        } else {
-            std::cout << "WRITE SUCCEEDED.\n";
-        }
-        std::cout << "========================================\n";
+        ezfadvance::printCardWriteSummary(write_result, std::cout);
 
         return write_result ? 0 : 2;
     }
