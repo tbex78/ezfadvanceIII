@@ -22,6 +22,7 @@
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/platform.hpp"
+#include "ezfadvance/save_bank_cleaner.hpp"
 #include "ezfadvance/version.hpp"
 
 static constexpr unsigned READINESS_ATTEMPTS = 5;
@@ -238,53 +239,6 @@ static bool flash_status_sequence(libusb_device_handle* h)
     return true;
 }
 
-static bool clear_all_save_banks(libusb_device_handle* h)
-{
-    // The multi-ROM programming captures explicitly initialize the complete
-    // shared save area as four zero-filled 32-KiB banks. Apply the identical
-    // selector and payload transaction so a full-card wipe also clears saves.
-    const std::vector<uint16_t> selectors = {
-        0x0900, 0x0910, 0x0920, 0x0930
-    };
-    const std::vector<uint8_t> command = {
-        0x5A,0xA5,0x92,0x01,
-        0x00,0x00,0x00,0x00,
-        0x00,0x80,0x00,0x00,0x00
-    };
-    const std::vector<uint8_t> zeros(0x8000, 0x00);
-
-    std::cout << "\n========================================\n"
-              << "CLEARING SAVE MEMORY\n"
-              << "========================================\n";
-
-    for (size_t bank = 0; bank < selectors.size(); ++bank) {
-        const auto selector = selectors[bank];
-        const auto low = static_cast<uint8_t>(selector & 0xFFu);
-        const auto high = static_cast<uint8_t>(selector >> 8);
-
-        std::cout << "Clearing save bank " << (bank + 1) << "/4 (selector 0x"
-                  << std::hex << std::setw(4) << std::setfill('0') << selector
-                  << std::dec << ", 32 KiB)...\n";
-
-        if (!tx92_2(h,0x55,0xAA,"SAVE CLEAR 55AA") ||
-            !tx92_2(h,0x00,0x00,"SAVE CLEAR 0000 A") ||
-            !tx92_2(h,0x00,0x00,"SAVE CLEAR 0000 B") ||
-            !tx92_2(h,low,high,"SAVE CLEAR BANK VALUE") ||
-            !tx92_2(h,0x00,0x00,"SAVE CLEAR 0000 C") ||
-            !tx92_2(h,0x00,0x00,"SAVE CLEAR 0000 D") ||
-            !tx92_2(h,0x00,0x00,"SAVE CLEAR 0000 E") ||
-            !tx92_2(h,0x00,0x00,"SAVE CLEAR 0000 F"))
-            return false;
-
-        if (!ezfadvance::Protocol(h).commandDataEcho(
-                command, zeros, "SAVE CLEAR PAYLOAD", {15000, 750, true}))
-            return false;
-    }
-
-    std::cout << "All four save banks explicitly cleared to zero.\n";
-    return true;
-}
-
 static bool final_cleanup(libusb_device_handle* h)
 {
     // Exact cleanup immediately before blank verification in delete.pcap.
@@ -483,7 +437,7 @@ static bool verify_blank_like_capture(libusb_device_handle* h)
 class CardEraser final {
 public:
     explicit CardEraser(libusb_device_handle* handle) noexcept
-        : handle_(handle)
+        : handle_(handle), transport_(handle), save_bank_cleaner_(transport_)
     {
     }
 
@@ -495,8 +449,14 @@ public:
         for (unsigned bank = 0; bank < 4 && ok; ++bank)
             ok = erase_bank(handle_, bank);
 
-        if (ok)
-            ok = clear_all_save_banks(handle_);
+        if (ok) {
+            std::cout << "\n========================================\n"
+                      << "CLEARING SAVE MEMORY\n"
+                      << "========================================\n";
+            ok = save_bank_cleaner_.clearAll(std::cout);
+            if (ok)
+                std::cout << "All four save banks explicitly cleared to zero.\n";
+        }
 
         if (ok) {
             std::cout << "\nRunning final cleanup sequence...\n";
@@ -509,6 +469,8 @@ public:
 
 private:
     libusb_device_handle* handle_;
+    ezfadvance::BulkTransport transport_;
+    ezfadvance::SaveBankCleaner save_bank_cleaner_;
 };
 
 int main(int argc, char** argv)
@@ -543,15 +505,7 @@ int main(int argc, char** argv)
     ezfadvance::UsbDevice device;
     const auto open_result = device.open(std::cerr);
     if (!open_result) {
-        if (open_result.status == ezfadvance::UsbOpenStatus::initialization_failed) {
-            std::cerr << "libusb_init failed: "
-                      << libusb_error_name(open_result.libusb_error) << '\n';
-        } else if (open_result.status == ezfadvance::UsbOpenStatus::device_not_found) {
-            std::cerr << "EZF Advance III USB device VID=0x0E6A PID=0x5088 not found.\n";
-        } else {
-            std::cerr << "Could not claim interface 0: "
-                      << libusb_error_name(open_result.libusb_error) << '\n';
-        }
+        ezfadvance::reportUsbOpenFailure(open_result, std::cerr);
         return 1;
     }
     libusb_device_handle* h = device.handle();

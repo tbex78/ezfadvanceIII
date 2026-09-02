@@ -13,6 +13,8 @@
 #include "ezfadvance/libusb_writer_backend.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/platform.hpp"
+#include "ezfadvance/progress_bar.hpp"
+#include "ezfadvance/save_bank_cleaner.hpp"
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/verification_session.hpp"
 
@@ -34,116 +36,6 @@ static constexpr size_t CARD_HALF_SIZE = 0x1000000;
 static constexpr unsigned USB_TIMEOUT_MS = 15000;
 
 
-static std::string progress_duration(double seconds)
-{
-    if (seconds < 0.0) seconds = 0.0;
-    const uint64_t total_seconds = static_cast<uint64_t>(seconds + 0.5);
-    const uint64_t hours = total_seconds / 3600;
-    const uint64_t minutes = (total_seconds % 3600) / 60;
-    const uint64_t secs = total_seconds % 60;
-
-    std::ostringstream oss;
-    if (hours != 0) {
-        oss << hours << ':' << std::setw(2) << std::setfill('0') << minutes
-            << ':' << std::setw(2) << secs;
-    } else {
-        oss << minutes << ':' << std::setw(2) << std::setfill('0') << secs;
-    }
-    return oss.str();
-}
-
-class ProgressBar
-{
-public:
-    ProgressBar(std::string label, uint64_t total, bool byte_units, bool enabled)
-        : label_(std::move(label)),
-          total_(total),
-          byte_units_(byte_units),
-          enabled_(enabled),
-          started_(std::chrono::steady_clock::now())
-    {
-    }
-
-    ~ProgressBar()
-    {
-        if (enabled_ && drew_ && !finished_)
-            std::cout << '\n';
-    }
-
-    void update(uint64_t completed)
-    {
-        if (!enabled_) return;
-        if (completed > total_) completed = total_;
-
-        const auto now = std::chrono::steady_clock::now();
-        const double elapsed =
-            std::chrono::duration<double>(now - started_).count();
-        const double ratio =
-            total_ != 0 ? static_cast<double>(completed) /
-                          static_cast<double>(total_) : 1.0;
-
-        static constexpr size_t BAR_WIDTH = 32;
-        size_t filled = static_cast<size_t>(ratio * BAR_WIDTH);
-        if (filled > BAR_WIDTH) filled = BAR_WIDTH;
-
-        std::ostringstream oss;
-        oss << label_ << " [";
-        for (size_t i = 0; i < BAR_WIDTH; ++i)
-            oss << (i < filled ? '=' : (i == filled && completed < total_ ? '>' : ' '));
-        oss << "] " << std::fixed << std::setprecision(1)
-            << (ratio * 100.0) << "%  ";
-
-        if (byte_units_) {
-            const double done_mib =
-                static_cast<double>(completed) / (1024.0 * 1024.0);
-            const double total_mib =
-                static_cast<double>(total_) / (1024.0 * 1024.0);
-            oss << std::setprecision(2) << done_mib << '/'
-                << total_mib << " MiB";
-        } else {
-            oss << completed << '/' << total_;
-        }
-
-        if (elapsed > 0.0 && completed != 0) {
-            const double rate = static_cast<double>(completed) / elapsed;
-            oss << "  ";
-            if (byte_units_) {
-                oss << std::setprecision(1) << (rate / 1024.0) << " KiB/s";
-            } else {
-                oss << std::setprecision(1) << rate << "/s";
-            }
-
-            const double remaining =
-                rate > 0.0 ? static_cast<double>(total_ - completed) / rate : 0.0;
-            oss << "  elapsed " << progress_duration(elapsed)
-                << "  ETA " << progress_duration(remaining);
-        }
-
-        const std::string line = ezfadvance::fitProgressToTerminal(oss.str());
-        ezfadvance::beginProgressLine(std::cout);
-        std::cout << line;
-        if (last_width_ > line.size())
-            std::cout << std::string(last_width_ - line.size(), ' ');
-        std::cout << std::flush;
-        last_width_ = line.size();
-        drew_ = true;
-
-        if (completed >= total_) {
-            std::cout << '\n';
-            finished_ = true;
-        }
-    }
-
-private:
-    std::string label_;
-    uint64_t total_;
-    bool byte_units_;
-    bool enabled_;
-    bool drew_ = false;
-    bool finished_ = false;
-    size_t last_width_ = 0;
-    std::chrono::steady_clock::time_point started_;
-};
 static constexpr unsigned COMMAND_DATA_SETTLE_US = 750; // exact legacy DLL busy-wait
 static constexpr unsigned READINESS_ATTEMPTS = 5;
 static constexpr auto READINESS_RETRY_DELAY = std::chrono::milliseconds(100);
@@ -195,40 +87,6 @@ static void legacy_command_data_settle()
     while (std::chrono::steady_clock::now() < deadline) {
         // Intentional busy-wait: mirrors the original DLL.
     }
-}
-
-static void precise_gap_us(uint32_t us)
-{
-    if (us == 0) return;
-    const auto deadline = std::chrono::steady_clock::now() +
-        std::chrono::microseconds(us);
-    while (std::chrono::steady_clock::now() < deadline) {
-        // Intentional busy-wait. For this diagnostic we want a repeatable
-        // command-to-command packet gap without scheduler granularity noise.
-    }
-}
-
-static bool bulk_out_paced64(libusb_device_handle* h,
-                             const uint8_t* p,
-                             size_t n,
-                             uint32_t packet_gap_us,
-                             double* elapsed_seconds = nullptr)
-{
-    const auto started = std::chrono::steady_clock::now();
-    size_t off = 0;
-    while (off < n) {
-        const size_t piece = std::min<size_t>(64, n - off);
-        if (!bulk_out(h, p + off, piece, USB_TIMEOUT_MS))
-            return false;
-        off += piece;
-        if (off < n && packet_gap_us != 0)
-            precise_gap_us(packet_gap_us);
-    }
-
-    const double elapsed = std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - started).count();
-    if (elapsed_seconds) *elapsed_seconds = elapsed;
-    return true;
 }
 
 static bool bulk_in_exact(libusb_device_handle* h,
@@ -666,88 +524,6 @@ static bool initialize_bridge(libusb_device_handle* h)
     return true;
 }
 
-// Capture-derived four-bank setup that precedes selective 0x96 erase operations
-// in writeromonemptycard/add3rom. These are NOT the 0x96 erases themselves.
-static bool captured_global_write_setup(libusb_device_handle* h,
-                                        bool paced,
-                                        uint32_t packet_gap_us,
-                                        bool verbose = true)
-{
-    if (verbose) {
-        std::cout << "\n========================================\n"
-                  << "GLOBAL WRITE SETUP (capture-derived)\n"
-                  << "========================================\n";
-        if (paced)
-            std::cout << "32 KiB setup transport: 64-byte calls, "
-                      << packet_gap_us << " us inter-packet gap\n";
-        else
-            std::cout << "32 KiB setup transport: one libusb bulk transfer (baseline)\n";
-    }
-
-    const std::vector<uint8_t> cmd32k = {
-        0x5A,0xA5,0x92,0x01,
-        0x00,0x00,0x00,0x00,
-        0x00,0x80,0x00,0x00,0x00
-    };
-
-    const std::vector<uint16_t> values = {
-        0x0900, 0x0910, 0x0920, 0x0930
-    };
-    const std::vector<uint8_t> zeros32k(0x8000, 0x00);
-
-    for (size_t bank = 0; bank < values.size(); ++bank) {
-        const uint8_t lo = static_cast<uint8_t>(values[bank] & 0xFF);
-        const uint8_t hi = static_cast<uint8_t>(values[bank] >> 8);
-
-        if (verbose) {
-            std::cout << "setup bank " << (bank + 1) << "/4 value 0x"
-                      << std::hex << std::setw(4) << std::setfill('0')
-                      << values[bank] << std::dec << '\n';
-        }
-
-        if (!tx92_2(h,0x55,0xAA,"GLOBAL 55AA")) return false;
-        if (!tx92_2(h,0x00,0x00,"GLOBAL 0000 A")) return false;
-        if (!tx92_2(h,0x00,0x00,"GLOBAL 0000 B")) return false;
-        if (!tx92_2(h,lo,hi,"GLOBAL BANK VALUE")) return false;
-        if (!tx92_2(h,0x00,0x00,"GLOBAL 0000 C")) return false;
-        if (!tx92_2(h,0x00,0x00,"GLOBAL 0000 D")) return false;
-        if (!tx92_2(h,0x00,0x00,"GLOBAL 0000 E")) return false;
-        if (!tx92_2(h,0x00,0x00,"GLOBAL 0000 F")) return false;
-
-        if (!bulk_out(h, cmd32k)) return false;
-        legacy_command_data_settle();
-
-        const auto started = std::chrono::steady_clock::now();
-        double stream_elapsed = 0.0;
-        if (paced) {
-            if (!bulk_out_paced64(h, zeros32k.data(), zeros32k.size(),
-                                  packet_gap_us, &stream_elapsed))
-                return false;
-        } else {
-            if (!bulk_out(h, zeros32k)) return false;
-            stream_elapsed = std::chrono::duration<double>(
-                std::chrono::steady_clock::now() - started).count();
-        }
-
-        std::vector<uint8_t> echo;
-        if (!bulk_in_max(h, echo, 64)) return false;
-        if (echo != cmd32k) {
-            std::cerr << "32 KiB setup command echo mismatch\n";
-            return false;
-        }
-
-        if (verbose) {
-            const double kib_s = stream_elapsed > 0.0
-                ? 32.0 / stream_elapsed : 0.0;
-            std::cout << "    setup stream: " << std::fixed
-                      << std::setprecision(3) << stream_elapsed << " s, "
-                      << std::setprecision(1) << kib_s << " KiB/s"
-                      << std::defaultfloat << '\n';
-        }
-    }
-    return true;
-}
-
 // Bank-0 setup/unlock sequence. This exact sequence occurs before selective
 // erases and again immediately before programming in the writer captures.
 static bool flash_bank0_setup(libusb_device_handle* h,
@@ -989,7 +765,7 @@ static bool erase_image_capture_faithful(libusb_device_handle* h,
         std::cout << "\n========================================\n"
                   << "SELECTIVE SECTOR ERASE\n"
                   << "========================================\n";
-        ProgressBar progress("Erase", addresses.size(), false, !verbose);
+        ezfadvance::ProgressBar progress("Erase", addresses.size(), false, !verbose);
         for (size_t i = 0; i < addresses.size(); ++i) {
             if (!erase_sector(h, addresses[i], i, addresses.size(), verbose))
                 return false;
@@ -1032,7 +808,7 @@ static bool erase_image_capture_faithful(libusb_device_handle* h,
                       << " erase commands\n";
     }
 
-    ProgressBar progress("Erase", total, false, !verbose);
+    ezfadvance::ProgressBar progress("Erase", total, false, !verbose);
     size_t index = 0;
     for (size_t gi = 0; gi < groups.size(); ++gi) {
         const unsigned window = groups[gi].first;
@@ -1131,7 +907,7 @@ static bool program_image(libusb_device_handle* h,
               << "========================================\n"
               << "One 0x92 transaction + one BULK OUT per Windows-sized block\n";
 
-    ProgressBar progress("Program", image.size(), true, !verbose);
+    ezfadvance::ProgressBar progress("Program", image.size(), true, !verbose);
 
     for (size_t off = 0; off < image.size(); ) {
         if (off != 0 && (off % FLASH_WINDOW_SIZE) == 0) {
@@ -1176,32 +952,66 @@ class LibusbWriterBackend final : public ezfadvance::WriterBackend {
 public:
     LibusbWriterBackend(libusb_device_handle* handle, bool verbose)
         : handle_(handle), verbose_(verbose), transport_(handle),
-          verification_(transport_)
+          save_bank_cleaner_(transport_), verification_(transport_)
     {
     }
 
-    bool preflight() { return original_manager_initialize_and_check(handle_); }
-    bool initializeBridge() { return initialize_bridge(handle_); }
-    bool prepareGlobalWrite() {
-        return captured_global_write_setup(handle_, false, 0, verbose_);
+    bool preflight() override { return original_manager_initialize_and_check(handle_); }
+    bool initializeBridge() override { return initialize_bridge(handle_); }
+    bool prepareGlobalWrite() override {
+        if (verbose_) {
+            std::cout << "\n========================================\n"
+                      << "GLOBAL WRITE SETUP (capture-derived)\n"
+                      << "========================================\n"
+                      << "32 KiB setup transport: one libusb bulk transfer (baseline)\n";
+        }
+        return save_bank_cleaner_.clearAll(std::cout, verbose_);
     }
-    bool clearSaveBanks() {
+    bool clearSaveBanks() override {
         std::cout << "\nClearing all four save banks after ROM workflow...\n";
-        return captured_global_write_setup(handle_, false, 0, verbose_);
+        return save_bank_cleaner_.clearAll(std::cout, verbose_);
     }
-    bool selectWindowZeroForErase() {
+    bool selectWindowZeroForErase() override {
         return flash_bank0_setup(handle_, 125000, false);
     }
-    bool erase(std::size_t image_size) {
+    bool erase(std::size_t image_size) override {
         return erase_image_capture_faithful(handle_, image_size, verbose_);
     }
-    bool finalizeFlashState() { return flash_status_sequence(handle_); }
-    bool selectWindowZeroForProgram() {
+    bool finalizeFlashState() override { return flash_status_sequence(handle_); }
+    bool selectWindowZeroForProgram() override {
         return flash_bank0_setup(handle_, 125000, verbose_);
     }
-    bool program(const std::vector<uint8_t>& image) {
+    bool program(const std::vector<uint8_t>& image) override {
         return program_image(handle_, image, verbose_);
     }
+    bool verify(ezfadvance::VerificationMode mode,
+                const std::vector<uint8_t>& image) override {
+        switch (mode) {
+        case ezfadvance::VerificationMode::partial_first_window:
+            return verifyPartialFirstWindow(image);
+        case ezfadvance::VerificationMode::exact_8_mib:
+            return verifyExact8MiB(image);
+        case ezfadvance::VerificationMode::partial_12_mib:
+            return verifyPartial12MiB(image);
+        case ezfadvance::VerificationMode::exact_16_mib:
+            return verifyExact16MiB(image);
+        case ezfadvance::VerificationMode::tiny_tail_above_16_mib:
+            return verifyTinyTailAbove16MiB(image);
+        case ezfadvance::VerificationMode::partial_20_mib:
+            return verifyPartial20MiB(image);
+        case ezfadvance::VerificationMode::exact_24_mib:
+            return verifyExact24MiB(image);
+        case ezfadvance::VerificationMode::partial_28_mib:
+            return verifyPartial28MiB(image);
+        case ezfadvance::VerificationMode::exact_32_mib:
+            return verifyExact32MiB(image);
+        case ezfadvance::VerificationMode::unsupported_partial_higher_window:
+            return false;
+        }
+        return false;
+    }
+
+private:
     bool verifyPartialFirstWindow(const std::vector<uint8_t>& image) {
         std::cout << "\nPreparing capture-proven partial first-window linear "
                      "read/verify state...\n"
@@ -1217,7 +1027,7 @@ public:
                 << "Partial BANK0 verify extent rounded to 64-KiB block: 0x"
                 << std::hex << verify_size << std::dec << " bytes\n";
         }
-        ProgressBar progress("Verify", verify_size, true, !verbose_);
+        ezfadvance::ProgressBar progress("Verify", verify_size, true, !verbose_);
         return verification_.verifyPartialFirstWindow(
             image,
             [&](size_t offset, size_t length) {
@@ -1236,7 +1046,7 @@ public:
             << "\n========================================\n"
             << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
             << "========================================\n";
-        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        ezfadvance::ProgressBar progress("Verify", image.size(), true, !verbose_);
         return verification_.verifyExact8MiB(
             image,
             [&](size_t offset, size_t length) {
@@ -1255,7 +1065,7 @@ public:
             << "\n========================================\n"
             << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
             << "========================================\n";
-        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        ezfadvance::ProgressBar progress("Verify", image.size(), true, !verbose_);
         return verification_.verifyExact16MiB(
             image,
             [&](size_t offset, size_t length) {
@@ -1275,7 +1085,7 @@ public:
             << "\n========================================\n"
             << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
             << "========================================\n";
-        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        ezfadvance::ProgressBar progress("Verify", image.size(), true, !verbose_);
         return verification_.verifyPartial12MiB(
             image,
             [&](size_t offset, size_t length) {
@@ -1300,7 +1110,7 @@ public:
             << "\n========================================\n"
             << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
             << "========================================\n";
-        ProgressBar progress("Verify", verify_size, true, !verbose_);
+        ezfadvance::ProgressBar progress("Verify", verify_size, true, !verbose_);
         return verification_.verifyTinyTailAbove16MiB(
             image,
             [&](size_t offset, size_t length) {
@@ -1321,7 +1131,7 @@ public:
             << "\n========================================\n"
             << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
             << "========================================\n";
-        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        ezfadvance::ProgressBar progress("Verify", image.size(), true, !verbose_);
         return verification_.verifyExact24MiB(
             image,
             [&](size_t offset, size_t length) {
@@ -1341,7 +1151,7 @@ public:
             << "\n========================================\n"
             << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
             << "========================================\n";
-        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        ezfadvance::ProgressBar progress("Verify", image.size(), true, !verbose_);
         return verification_.verifyPartial20MiB(
             image,
             [&](size_t offset, size_t length) {
@@ -1361,7 +1171,7 @@ public:
             << "\n========================================\n"
             << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
             << "========================================\n";
-        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        ezfadvance::ProgressBar progress("Verify", image.size(), true, !verbose_);
         return verification_.verifyPartial28MiB(
             image,
             [&](size_t offset, size_t length) {
@@ -1381,7 +1191,7 @@ public:
             << "\n========================================\n"
             << "READ-BACK VERIFICATION (CAPTURE-LINEAR)\n"
             << "========================================\n";
-        ProgressBar progress("Verify", image.size(), true, !verbose_);
+        ezfadvance::ProgressBar progress("Verify", image.size(), true, !verbose_);
         return verification_.verifyExact32MiB(
             image,
             [&](size_t offset, size_t length) {
@@ -1395,10 +1205,10 @@ public:
             });
     }
 
-private:
     libusb_device_handle* handle_;
     bool verbose_;
     ezfadvance::BulkTransport transport_;
+    ezfadvance::SaveBankCleaner save_bank_cleaner_;
     ezfadvance::VerificationSession verification_;
 };
 

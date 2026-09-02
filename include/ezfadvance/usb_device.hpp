@@ -27,6 +27,10 @@ struct UsbOpenResult {
     }
 };
 
+void reportUsbOpenFailure(const UsbOpenResult& result,
+                          std::ostream& diagnostics,
+                          const char* device_name = "EZF Advance III USB device");
+
 // Owns the complete libusb session for one EZ-Flash Advance III device.
 // Destruction releases the claimed interface, closes the handle, and exits
 // the libusb context in the same order used by the original programs.

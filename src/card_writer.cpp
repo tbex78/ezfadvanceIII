@@ -40,44 +40,8 @@ CardWriteResult CardWriter::write(const std::vector<std::uint8_t>& image,
         ok = backend_.finalizeFlashState();
         result.verification_skipped_by_user = ok;
     } else if (ok) {
-        switch (VerificationPolicy{}.modeFor(image.size())) {
-        case VerificationMode::exact_32_mib:
-            ok = backend_.verifyExact32MiB(image);
-            result.verification_completed = ok;
-            break;
-        case VerificationMode::partial_28_mib:
-            ok = backend_.verifyPartial28MiB(image);
-            result.verification_completed = ok;
-            break;
-        case VerificationMode::exact_24_mib:
-            ok = backend_.verifyExact24MiB(image);
-            result.verification_completed = ok;
-            break;
-        case VerificationMode::partial_20_mib:
-            ok = backend_.verifyPartial20MiB(image);
-            result.verification_completed = ok;
-            break;
-        case VerificationMode::exact_16_mib:
-            ok = backend_.verifyExact16MiB(image);
-            result.verification_completed = ok;
-            break;
-        case VerificationMode::partial_12_mib:
-            ok = backend_.verifyPartial12MiB(image);
-            result.verification_completed = ok;
-            break;
-        case VerificationMode::exact_8_mib:
-            ok = backend_.verifyExact8MiB(image);
-            result.verification_completed = ok;
-            break;
-        case VerificationMode::partial_first_window:
-            ok = backend_.verifyPartialFirstWindow(image);
-            result.verification_completed = ok;
-            break;
-        case VerificationMode::tiny_tail_above_16_mib:
-            ok = backend_.verifyTinyTailAbove16MiB(image);
-            result.verification_completed = ok;
-            break;
-        case VerificationMode::unsupported_partial_higher_window:
+        const auto mode = VerificationPolicy{}.modeFor(image.size());
+        if (mode == VerificationMode::unsupported_partial_higher_window) {
             ok = backend_.finalizeFlashState();
             if (ok) {
                 result.verification_skipped_unproven = true;
@@ -92,7 +56,9 @@ CardWriteResult CardWriter::write(const std::vector<std::uint8_t>& image,
                        << "Programming completed; no experimental verification "
                           "window selection was sent.\n";
             }
-            break;
+        } else {
+            ok = backend_.verify(mode, image);
+            result.verification_completed = ok;
         }
     }
 

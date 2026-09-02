@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ezfadvance/verification_policy.hpp"
+
 #include <cstdint>
 #include <iosfwd>
 #include <vector>
@@ -18,15 +20,8 @@ public:
     virtual bool finalizeFlashState() = 0;
     virtual bool selectWindowZeroForProgram() = 0;
     virtual bool program(const std::vector<std::uint8_t>& image) = 0;
-    virtual bool verifyPartialFirstWindow(const std::vector<std::uint8_t>& image) = 0;
-    virtual bool verifyExact8MiB(const std::vector<std::uint8_t>& image) = 0;
-    virtual bool verifyPartial12MiB(const std::vector<std::uint8_t>& image) = 0;
-    virtual bool verifyExact16MiB(const std::vector<std::uint8_t>& image) = 0;
-    virtual bool verifyTinyTailAbove16MiB(const std::vector<std::uint8_t>& image) = 0;
-    virtual bool verifyPartial20MiB(const std::vector<std::uint8_t>& image) = 0;
-    virtual bool verifyExact24MiB(const std::vector<std::uint8_t>& image) = 0;
-    virtual bool verifyPartial28MiB(const std::vector<std::uint8_t>& image) = 0;
-    virtual bool verifyExact32MiB(const std::vector<std::uint8_t>& image) = 0;
+    virtual bool verify(VerificationMode mode,
+                        const std::vector<std::uint8_t>& image) = 0;
 };
 
 enum class CardWriteStatus {

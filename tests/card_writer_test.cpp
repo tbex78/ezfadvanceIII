@@ -32,15 +32,32 @@ public:
     bool finalizeFlashState() override { return call("finalize"); }
     bool selectWindowZeroForProgram() override { return call("program-window"); }
     bool program(const std::vector<std::uint8_t>&) override { return call("program"); }
-    bool verifyPartialFirstWindow(const std::vector<std::uint8_t>&) override { return call("verify-partial-first"); }
-    bool verifyExact8MiB(const std::vector<std::uint8_t>&) override { return call("verify-8"); }
-    bool verifyPartial12MiB(const std::vector<std::uint8_t>&) override { return call("verify-12"); }
-    bool verifyExact16MiB(const std::vector<std::uint8_t>&) override { return call("verify-16"); }
-    bool verifyTinyTailAbove16MiB(const std::vector<std::uint8_t>&) override { return call("verify-tiny-tail"); }
-    bool verifyPartial20MiB(const std::vector<std::uint8_t>&) override { return call("verify-20"); }
-    bool verifyExact24MiB(const std::vector<std::uint8_t>&) override { return call("verify-24"); }
-    bool verifyPartial28MiB(const std::vector<std::uint8_t>&) override { return call("verify-28"); }
-    bool verifyExact32MiB(const std::vector<std::uint8_t>&) override { return call("verify-32"); }
+    bool verify(ezfadvance::VerificationMode mode,
+                const std::vector<std::uint8_t>&) override {
+        switch (mode) {
+        case ezfadvance::VerificationMode::partial_first_window:
+            return call("verify-partial-first");
+        case ezfadvance::VerificationMode::exact_8_mib:
+            return call("verify-8");
+        case ezfadvance::VerificationMode::partial_12_mib:
+            return call("verify-12");
+        case ezfadvance::VerificationMode::exact_16_mib:
+            return call("verify-16");
+        case ezfadvance::VerificationMode::tiny_tail_above_16_mib:
+            return call("verify-tiny-tail");
+        case ezfadvance::VerificationMode::partial_20_mib:
+            return call("verify-20");
+        case ezfadvance::VerificationMode::exact_24_mib:
+            return call("verify-24");
+        case ezfadvance::VerificationMode::partial_28_mib:
+            return call("verify-28");
+        case ezfadvance::VerificationMode::exact_32_mib:
+            return call("verify-32");
+        case ezfadvance::VerificationMode::unsupported_partial_higher_window:
+            return call("verify-unsupported");
+        }
+        return false;
+    }
 };
 
 void expect(bool condition, const char* message)

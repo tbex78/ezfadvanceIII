@@ -17,6 +17,27 @@
 
 namespace ezfadvance {
 
+void reportUsbOpenFailure(const UsbOpenResult& result,
+                          std::ostream& diagnostics,
+                          const char* device_name)
+{
+    switch (result.status) {
+    case UsbOpenStatus::success:
+        return;
+    case UsbOpenStatus::initialization_failed:
+        diagnostics << "libusb_init failed: "
+                    << libusb_error_name(result.libusb_error) << '\n';
+        return;
+    case UsbOpenStatus::device_not_found:
+        diagnostics << device_name << " VID=0x0E6A PID=0x5088 not found.\n";
+        return;
+    case UsbOpenStatus::interface_claim_failed:
+        diagnostics << "Could not claim interface 0: "
+                    << libusb_error_name(result.libusb_error) << '\n';
+        return;
+    }
+}
+
 UsbDevice::~UsbDevice()
 {
     close();

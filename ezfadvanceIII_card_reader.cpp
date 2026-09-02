@@ -33,6 +33,7 @@
 #include "ezfadvance/card_reader_options.hpp"
 #include "ezfadvance/ez3_catalog.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
+#include "ezfadvance/progress_bar.hpp"
 #include "ezfadvance/version.hpp"
 
 // EZF Advance III card reader 0.9.0, read-only inspector.
@@ -84,89 +85,6 @@ static constexpr uint32_t LINEAR24_LIMIT     = 0x01800000u; // 24 MiB / 192 Mbit
 static constexpr uint32_t CARD_IMAGE_LIMIT   = 0x02000000u; // 32 MiB / 256 Mbit
 
 static constexpr size_t CAPTURE_PROVEN_MAX_ROMS = 8;
-
-static std::string progress_duration(double seconds)
-{
-    if (seconds < 0.0) seconds = 0.0;
-    const uint64_t total_seconds = static_cast<uint64_t>(seconds + 0.5);
-    const uint64_t hours = total_seconds / 3600;
-    const uint64_t minutes = (total_seconds % 3600) / 60;
-    const uint64_t secs = total_seconds % 60;
-    std::ostringstream output;
-    if (hours != 0) {
-        output << hours << ':' << std::setw(2) << std::setfill('0') << minutes
-               << ':' << std::setw(2) << secs;
-    } else {
-        output << minutes << ':' << std::setw(2) << std::setfill('0') << secs;
-    }
-    return output.str();
-}
-
-class ProgressBar final {
-public:
-    ProgressBar(std::string label, std::size_t total)
-        : label_(std::move(label)), total_(total),
-          started_(std::chrono::steady_clock::now())
-    {
-    }
-
-    ~ProgressBar()
-    {
-        if (drew_ && !finished_) std::cout << '\n';
-    }
-
-    void update(std::size_t completed)
-    {
-        completed = std::min(completed, total_);
-        const double elapsed = std::chrono::duration<double>(
-            std::chrono::steady_clock::now() - started_).count();
-        const double ratio = total_ == 0 ? 1.0 :
-            static_cast<double>(completed) / static_cast<double>(total_);
-        static constexpr std::size_t width = 32;
-        const std::size_t filled = std::min<std::size_t>(
-            static_cast<std::size_t>(ratio * width), width);
-
-        std::ostringstream output;
-        output << label_ << " [";
-        for (std::size_t i = 0; i < width; ++i)
-            output << (i < filled ? '=' :
-                       (i == filled && completed < total_ ? '>' : ' '));
-        output << "] " << std::fixed << std::setprecision(1)
-               << ratio * 100.0 << "%  " << std::setprecision(2)
-               << static_cast<double>(completed) / (1024.0 * 1024.0) << '/'
-               << static_cast<double>(total_) / (1024.0 * 1024.0) << " MiB";
-
-        if (elapsed > 0.0 && completed != 0) {
-            const double rate = static_cast<double>(completed) / elapsed;
-            const double remaining = rate > 0.0 ?
-                static_cast<double>(total_ - completed) / rate : 0.0;
-            output << "  " << std::setprecision(1) << rate / 1024.0
-                   << " KiB/s  elapsed " << progress_duration(elapsed)
-                   << "  ETA " << progress_duration(remaining);
-        }
-
-        const std::string line = ezfadvance::fitProgressToTerminal(output.str());
-        ezfadvance::beginProgressLine(std::cout);
-        std::cout << line;
-        if (last_width_ > line.size())
-            std::cout << std::string(last_width_ - line.size(), ' ');
-        std::cout << std::flush;
-        last_width_ = line.size();
-        drew_ = true;
-        if (completed == total_) {
-            std::cout << '\n';
-            finished_ = true;
-        }
-    }
-
-private:
-    std::string label_;
-    std::size_t total_;
-    bool drew_ = false;
-    bool finished_ = false;
-    std::size_t last_width_ = 0;
-    std::chrono::steady_clock::time_point started_;
-};
 
 static uint32_t read_le32(const uint8_t* p)
 {
@@ -237,7 +155,7 @@ static int extract_official_cartridge(ezfadvance::ReadOnlyCartridge& cartridge,
     bool header_ok = false;
     const auto extraction_started = std::chrono::steady_clock::now();
     {
-        ProgressBar progress("Extract", dump_size);
+        ezfadvance::ProgressBar progress("Extract", dump_size);
         if (!verbose) progress.update(0);
         for (std::size_t offset = 0; offset < dump_size && read_ok;
              offset += block_size) {
@@ -444,7 +362,7 @@ static int extract_ez3_rom(ezfadvance::ReadOnlyCartridge& cartridge,
     bool read_ok = true;
     const auto extraction_started = std::chrono::steady_clock::now();
     {
-        ProgressBar progress("Extract", size);
+        ezfadvance::ProgressBar progress("Extract", size);
         if (!verbose) progress.update(0);
         for (std::size_t offset = 0; offset < size && read_ok;
              offset += block_size) {
@@ -764,15 +682,7 @@ int main(int argc, char** argv)
     ezfadvance::UsbDevice device;
     const auto open_result = device.open(std::cerr);
     if (!open_result) {
-        if (open_result.status == ezfadvance::UsbOpenStatus::initialization_failed) {
-            std::cerr << "libusb_init failed: "
-                      << libusb_error_name(open_result.libusb_error) << '\n';
-        } else if (open_result.status == ezfadvance::UsbOpenStatus::device_not_found) {
-            std::cerr << "EZF Advance III USB device VID=0x0E6A PID=0x5088 not found.\n";
-        } else {
-            std::cerr << "Could not claim interface 0: "
-                      << libusb_error_name(open_result.libusb_error) << '\n';
-        }
+        ezfadvance::reportUsbOpenFailure(open_result, std::cerr);
         return 1;
     }
     ezfadvance::ReadOnlyCartridge cartridge(device.handle());

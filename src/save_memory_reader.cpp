@@ -11,33 +11,19 @@ constexpr unsigned timeout_ms = 15000;
 
 SaveMemoryReader::SaveMemoryReader(libusb_device_handle* handle) noexcept
     : owned_transport_(new BulkTransport(handle)),
-      transport_(*owned_transport_), protocol_(transport_)
+      transport_(*owned_transport_), bank_access_(transport_)
 {
 }
 
 SaveMemoryReader::SaveMemoryReader(Transport& transport) noexcept
-    : transport_(transport), protocol_(transport_)
+    : transport_(transport), bank_access_(transport_)
 {
-}
-
-bool SaveMemoryReader::selectBank(std::uint16_t bank_value)
-{
-    const auto low = static_cast<std::uint8_t>(bank_value & 0xFFu);
-    const auto high = static_cast<std::uint8_t>(bank_value >> 8);
-    return protocol_.tx92Two(0x55,0xAA,"savebank 55AA") &&
-           protocol_.tx92Two(0,0,"savebank 0000 A") &&
-           protocol_.tx92Two(0,0,"savebank 0000 B") &&
-           protocol_.tx92Two(low,high,"savebank selector") &&
-           protocol_.tx92Two(0,0,"savebank 0000 C") &&
-           protocol_.tx92Two(0,0,"savebank 0000 D") &&
-           protocol_.tx92Two(0,0,"savebank 0000 E") &&
-           protocol_.tx92Two(0,0,"savebank 0000 F");
 }
 
 bool SaveMemoryReader::readBank32KiB(std::uint16_t bank_value,
                                      std::vector<std::uint8_t>& output)
 {
-    if (!selectBank(bank_value))
+    if (!bank_access_.select(bank_value))
         return false;
     const std::vector<std::uint8_t> command = {
         0x5A,0xA5,0x91,0x01, 0,0,0,0, 0,0x80,0,0, 0};

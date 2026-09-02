@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ezfadvance/protocol.hpp"
+#include "ezfadvance/save_bank_access.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -19,13 +19,12 @@ public:
               std::uint16_t first_bank = 0x0900);
 
 private:
-    bool selectBank(std::uint16_t bank_value);
     bool readBank32KiB(std::uint16_t bank_value,
                        std::vector<std::uint8_t>& output);
 
     std::unique_ptr<BulkTransport> owned_transport_;
     Transport& transport_;
-    Protocol protocol_;
+    SaveBankAccess bank_access_;
 };
 
 } // namespace ezfadvance

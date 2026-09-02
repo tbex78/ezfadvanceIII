@@ -704,15 +704,7 @@ int main(int argc, char** argv)
     ezfadvance::UsbDevice device;
     const auto open_result = device.open(std::cerr);
     if (!open_result) {
-        if (open_result.status == ezfadvance::UsbOpenStatus::initialization_failed) {
-            std::cerr << "libusb_init failed: "
-                      << libusb_error_name(open_result.libusb_error) << '\n';
-        } else if (open_result.status == ezfadvance::UsbOpenStatus::device_not_found) {
-            std::cerr << "EZF Advance III USB device VID=0x0E6A PID=0x5088 not found.\n";
-        } else {
-            std::cerr << "Could not claim interface 0: "
-                      << libusb_error_name(open_result.libusb_error) << '\n';
-        }
+        ezfadvance::reportUsbOpenFailure(open_result, std::cerr);
         return 1;
     }
     ezfadvance::BulkTransport transport(device.handle());

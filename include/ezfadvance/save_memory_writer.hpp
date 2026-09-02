@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ezfadvance/protocol.hpp"
+#include "ezfadvance/save_bank_access.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -20,11 +20,9 @@ public:
                const std::vector<std::uint8_t>& save);
 
 private:
-    bool selectBank(std::uint16_t bank_value);
-
     std::unique_ptr<BulkTransport> owned_transport_;
     Transport& transport_;
-    Protocol protocol_;
+    SaveBankAccess bank_access_;
 };
 
 } // namespace ezfadvance

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.14.0 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.14.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -48,6 +48,9 @@ set(EZF_TRANSPORT_SOURCES
     src/platform.cpp)
 set(EZF_WRITER_SOURCES
     ${EZF_TRANSPORT_SOURCES}
+    src/progress_bar.cpp
+    src/save_bank_access.cpp
+    src/save_bank_cleaner.cpp
     src/card_writer.cpp
     src/libusb_writer_backend.cpp
     src/cartridge_format.cpp
@@ -78,13 +81,14 @@ ezf_add_tool(ezfadvanceIII_multirom_writer
     ezfadvanceIII_multirom_writer.cpp ${EZF_WRITER_SOURCES})
 ezf_add_tool(ezfadvanceIII_card_reader
     ezfadvanceIII_card_reader.cpp ${EZF_READ_ONLY_SOURCES}
-    src/card_reader_options.cpp)
+    src/card_reader_options.cpp src/progress_bar.cpp)
 ezf_add_tool(ezfadvanceIII_save_reader
     ezfadvanceIII_save_reader.cpp ${EZF_READ_ONLY_SOURCES}
-    src/save_memory_reader.cpp src/save_memory_writer.cpp
+    src/save_bank_access.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp
     src/save_bank_selector.cpp)
 ezf_add_tool(ezfadvanceIII_wipe_card
-    ezfadvanceIII_wipe_card.cpp ${EZF_TRANSPORT_SOURCES})
+    ezfadvanceIII_wipe_card.cpp ${EZF_TRANSPORT_SOURCES}
+    src/save_bank_access.cpp src/save_bank_cleaner.cpp)
 
 include(CTest)
 if(BUILD_TESTING)
@@ -106,7 +110,9 @@ if(BUILD_TESTING)
     ezf_add_test(eeprom_mapping_test tests/eeprom_mapping_test.cpp src/eeprom_mapping.cpp)
     ezf_add_test(card_reader_options_test tests/card_reader_options_test.cpp src/card_reader_options.cpp)
     ezf_add_usb_test(protocol_test tests/protocol_test.cpp src/protocol.cpp src/usb_device.cpp)
+    ezf_add_usb_test(usb_device_test tests/usb_device_test.cpp src/usb_device.cpp)
     ezf_add_test(platform_test tests/platform_test.cpp src/platform.cpp)
+    ezf_add_test(progress_bar_test tests/progress_bar_test.cpp src/progress_bar.cpp src/platform.cpp)
     ezf_add_test(read_session_transition_test tests/read_session_transition_test.cpp src/read_session_transition.cpp)
     ezf_add_usb_test(official_cartridge_read_test tests/official_cartridge_read_test.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp)
     ezf_add_test(verification_policy_test tests/verification_policy_test.cpp src/verification_policy.cpp)
@@ -117,5 +123,6 @@ if(BUILD_TESTING)
     ezf_add_test(version_test tests/version_test.cpp)
     ezf_add_test(save_selection_test tests/save_selection_test.cpp)
     ezf_add_test(save_bank_selector_test tests/save_bank_selector_test.cpp src/save_bank_selector.cpp)
-    ezf_add_usb_test(save_memory_test tests/save_memory_test.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp src/protocol.cpp src/usb_device.cpp)
+    ezf_add_usb_test(save_memory_test tests/save_memory_test.cpp src/save_bank_access.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp src/protocol.cpp src/usb_device.cpp)
+    ezf_add_usb_test(save_bank_cleaner_test tests/save_bank_cleaner_test.cpp src/save_bank_access.cpp src/save_bank_cleaner.cpp src/protocol.cpp src/usb_device.cpp)
 endif()
