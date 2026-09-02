@@ -35,6 +35,7 @@
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"
 #include "ezfadvance/save_memory_writer.hpp"
+#include "ezfadvance/save_reader_options.hpp"
 #include "ezfadvance/save_bank_layout.hpp"
 #include "ezfadvance/save_bank_cleaner.hpp"
 #include "ezfadvance/save_bank_selector.hpp"
@@ -42,15 +43,12 @@
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
-// EZF Advance III save reader/writer 0.11.1.
-// 0.6.2 removes hard-coded project-version text from runtime output.
-// Save-read protocol behavior remains unchanged from 0.5.10.
-//
 // Ported from the historical save-reader v2 implementation. The USB/save
 // protocol and conservative safety behavior are intentionally unchanged.
 // This utility never sends erase (0x96) commands or ROM-program payloads. Save
-// writing is limited to the capture-derived 32-KiB SRAM_V111 transaction and
-// requires backup, explicit authorization, and byte-for-byte verification.
+// access uses one to four observed 32-KiB banks. Save writing requires explicit
+// authorization and byte-for-byte verification; writing or erasing without a
+// backup requires separate interactive confirmation before USB access.
 //
 // Supported native targets:
 //   macOS
@@ -711,119 +709,29 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    std::optional<std::string> output;
-    std::optional<size_t> requested_rom;
-    std::optional<ezfadvance::SaveBankSelector> requested_bank;
-    std::optional<size_t> requested_bank_count;
-    std::optional<std::string> write_path;
-    std::optional<std::string> backup_path;
-    bool yes_really_write = false;
-    bool erase = false;
+    std::vector<std::string> arguments;
+    arguments.reserve(static_cast<std::size_t>(argc - 1));
+    for (int i = 1; i < argc; ++i) arguments.emplace_back(argv[i]);
 
-    for (int i=1;i<argc;++i) {
-        const std::string a = argv[i];
-        if (a == "--output") {
-            if (i+1 >= argc) {
-                usage(argv[0]);
-                return 1;
-            }
-            output = argv[++i];
-        } else if (a == "--rom") {
-            if (i+1 >= argc) {
-                usage(argv[0]);
-                return 1;
-            }
-            const int n = std::stoi(argv[++i]);
-            if (n < 1) {
-                std::cerr << "Bad --rom value.\n";
-                return 1;
-            }
-            requested_rom = static_cast<size_t>(n);
-        } else if (a == "--write") {
-            if (i+1 >= argc) {
-                usage(argv[0]);
-                return 1;
-            }
-            write_path = argv[++i];
-        } else if (a == "--save-bank") {
-            if (i+1 >= argc) {
-                usage(argv[0]);
-                return 1;
-            }
-            requested_bank = ezfadvance::SaveBankSelector::parse(argv[++i]);
-            if (!requested_bank) {
-                std::cerr << "Bad --save-bank value; expected 0x0900, "
-                             "0x0910, 0x0920, or 0x0930.\n";
-                return 1;
-            }
-        } else if (a == "--consecutive-bank") {
-            if (i+1 >= argc) {
-                usage(argv[0]);
-                return 1;
-            }
-            requested_bank_count =
-                ezfadvance::parseConsecutiveBankCount(argv[++i]);
-            if (!requested_bank_count) {
-                std::cerr << "Bad --consecutive-bank value; expected 1 to 4.\n";
-                return 1;
-            }
-        } else if (a == "--backup") {
-            if (i+1 >= argc) {
-                usage(argv[0]);
-                return 1;
-            }
-            backup_path = argv[++i];
-        } else if (a == "--yes-really-write") {
-            yes_really_write = true;
-        } else if (a == "--erase") {
-            erase = true;
-        } else if (a == "--help" || a == "-h") {
-            usage(argv[0]);
-            return 0;
-        } else {
-            std::cerr << "Unknown option: " << a << '\n';
-            usage(argv[0]);
-            return 1;
-        }
+    ezfadvance::SaveReaderOptions options;
+    const auto parse_status =
+        ezfadvance::parseSaveReaderOptions(arguments, options, std::cerr);
+    if (parse_status == ezfadvance::SaveReaderParseStatus::help) {
+        usage(argv[0]);
+        return 0;
+    }
+    if (parse_status == ezfadvance::SaveReaderParseStatus::error) {
+        usage(argv[0]);
+        return 1;
     }
 
-    if (write_path && output) {
-        std::cerr << "--output is for extraction and cannot be combined with --write.\n";
-        return 1;
-    }
-    if (erase && (write_path || output || requested_rom || yes_really_write)) {
-        std::cerr << "--erase cannot be combined with --write, --output, "
-                     "--rom, or --yes-really-write.\n";
-        return 1;
-    }
-    if (requested_bank_count && !requested_bank) {
-        std::cerr << "--consecutive-bank requires --save-bank.\n";
-        return 1;
-    }
-    if (requested_bank_count && requested_rom) {
-        std::cerr << "--consecutive-bank is for direct bank access and cannot "
-                     "be combined with --rom.\n";
-        return 1;
-    }
-    if (requested_bank_count &&
-        !requested_bank->accommodates(
-            *requested_bank_count * ezfadvance::SaveBankSelector::bank_size)) {
-        std::cerr << "The requested consecutive-bank range extends beyond "
-                     "save bank 0x0930.\n";
-        return 1;
-    }
-    if (!write_path && !erase && (backup_path || yes_really_write)) {
-        std::cerr << "--backup and --yes-really-write require --write FILE.\n";
-        return 1;
-    }
-    if (write_path && !yes_really_write) {
-        std::cerr << "Save writing requires --yes-really-write.\n";
-        return 1;
-    }
-    if (ezfadvance::saveWritePathsConflict(write_path, backup_path)) {
-        std::cerr << "The input save and backup paths must be different.\n";
-        return 1;
-    }
+    const auto& output = options.output_path;
+    const auto& requested_rom = options.rom_number;
+    const auto& requested_bank = options.save_bank;
+    const auto& requested_bank_count = options.consecutive_bank_count;
+    const auto& write_path = options.write_path;
+    const auto& backup_path = options.backup_path;
+    const bool erase = options.erase;
 
     std::optional<std::vector<uint8_t>> write_save;
     if (write_path) {
@@ -972,7 +880,8 @@ int main(int argc, char** argv)
         SaveExtractor extractor(cartridge, save_reader, save_writer,
                                 output, requested_rom, requested_bank,
                                 requested_bank_count,
-                                write_save, backup_path, argc == 1);
+                                write_save, backup_path,
+                                options.inspection_only);
         result = extractor.run();
         if (!cartridge.finishSession()) {
             std::cerr << "Save-reader operation finished, but the "
