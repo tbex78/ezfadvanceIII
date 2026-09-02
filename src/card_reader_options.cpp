@@ -12,9 +12,9 @@ CardReaderParseStatus parseCardReaderOptions(
     options = {};
     for (std::size_t i = 0; i < arguments.size(); ++i) {
         const std::string& argument = arguments[i];
-        if (argument == "--extract") {
+        if (argument == "--extract" || argument == "--dump") {
             if (options.extract || i + 1 >= arguments.size()) {
-                errors << "Invalid or incomplete --extract option.\n";
+                errors << "Invalid or incomplete " << argument << " option.\n";
                 return CardReaderParseStatus::error;
             }
             options.extract = true;
@@ -30,7 +30,7 @@ CardReaderParseStatus parseCardReaderOptions(
                     options.rom_number = static_cast<std::size_t>(parsed);
                     options.output_path = arguments[++i];
                 } catch (const std::exception&) {
-                    errors << "Bad ROM number for EZ3 --extract.\n";
+                    errors << "Bad ROM number for EZ3 " << argument << ".\n";
                     return CardReaderParseStatus::error;
                 }
             } else {
@@ -50,7 +50,7 @@ CardReaderParseStatus parseCardReaderOptions(
         }
     }
     if (options.verbose && !options.extract) {
-        errors << "--verbose is currently available with --extract only.\n";
+        errors << "--verbose is currently available with extraction only.\n";
         return CardReaderParseStatus::error;
     }
     return CardReaderParseStatus::run;
@@ -63,7 +63,7 @@ CardReaderDecision decideCardReaderAction(
     if (kind == CartridgeKind::official_gba_rom) {
         if (options.rom_number) {
             return {CardReaderAction::reject, 0,
-                    "Numbered --extract requires an EZ3 flash cartridge."};
+                    "Numbered extraction requires an EZ3 flash cartridge."};
         }
         return {options.extract ? CardReaderAction::extract_official
                                 : CardReaderAction::inspect_official,

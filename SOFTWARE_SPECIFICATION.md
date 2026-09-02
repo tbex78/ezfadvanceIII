@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.16.1` toolset, including guarded
+**Specification baseline:** shared `0.16.2` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -139,6 +139,9 @@ The extraction interface is:
 ezfadvanceIII_card_reader --extract OUTPUT.gba [--verbose]
 ```
 
+`--dump` is an exact alias for `--extract` in both official-cartridge and EZ3
+catalogued-ROM workflows.
+
 It is restricted to a detected official GBA cartridge and must:
 
 - refuse to overwrite an existing output file;
@@ -166,7 +169,7 @@ data beyond the supported 32-MiB extent must fail without creating output.
 With `--verbose`, extraction replaces the live progress bar with one diagnostic
 line per 64-KiB block containing the byte address, transfer length, elapsed
 seconds, and throughput, followed by total duration and average throughput.
-`--verbose` without `--extract` is invalid because ordinary header/catalog
+`--verbose` without `--extract` or `--dump` is invalid because ordinary header/catalog
 inspection has no long-running block operation to report.
 
 EZ3 ROM extraction uses:
@@ -174,6 +177,9 @@ EZ3 ROM extraction uses:
 ```sh
 ezfadvanceIII_card_reader --extract N OUTPUT.gba [--verbose]
 ```
+
+The equivalent `--dump N OUTPUT.gba [--verbose]` form uses the same parsed
+request and execution path.
 
 The one-based ROM number must exist in the parsed catalog. When the command is
 invoked as `--extract OUTPUT.gba` and the detected cartridge is EZ3 flash, the

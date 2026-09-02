@@ -612,13 +612,15 @@ static void usage(const char* argv0)
               << "  " << argv0 << "\n"
               << "  " << argv0 << " --version\n"
               << "  " << argv0 << " --extract OUTPUT.gba [--verbose]\n"
-              << "  " << argv0 << " --extract N OUTPUT.gba [--verbose]\n\n"
+              << "  " << argv0 << " --extract N OUTPUT.gba [--verbose]\n"
+              << "  " << argv0 << " --dump OUTPUT.gba [--verbose]\n"
+              << "  " << argv0 << " --dump N OUTPUT.gba [--verbose]\n\n"
               << "Read-only EZF Advance III card inspector (" << ezfadvance::hostPlatformName() << ").\n"
-              << "--extract reads 32 MiB and writes a trimmed .gba dump of a detected "
+              << "--extract and --dump are equivalent. They read 32 MiB and write a trimmed .gba dump of a detected "
                  "official GBA cartridge.\n"
               << "--verbose replaces the extraction progress bar with per-block "
                  "address and timing diagnostics.\n";
-    std::cout << "For EZ3 flash, --extract defaults to catalog ROM 1; adding "
+    std::cout << "For EZ3 flash, extraction defaults to catalog ROM 1; adding "
                  "N selects another displayed ROM number. ROM 1's original "
                  "entry is reconstructed.\n";
 }

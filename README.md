@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.16.1**.
+version is **0.16.2**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.16.1
+“pending,” and “next” describe the named review point, not the present 0.16.2
 support boundary.
 
 ## Build and test
@@ -87,6 +87,8 @@ when its GBA fixed header byte and complement checksum are valid.
 ./ezfadvanceIII_card_reader --extract OUTPUT.gba
 ```
 
+`--dump` is an equivalent alias for `--extract`.
+
 Add `--verbose` for per-block addresses, timing, and throughput. Extraction is
 read-only: it performs a guarded full 32-MiB scan using 512 global-linear
 64-KiB reads, completes read-session cleanup, and then writes the smallest
@@ -102,6 +104,9 @@ extent, still require equivalent physical-cartridge dump/hash qualification.
 ```sh
 ./ezfadvanceIII_card_reader --extract N OUTPUT.gba [--verbose]
 ```
+
+The equivalent `--dump N OUTPUT.gba` form follows the same routing and default
+ROM-selection behavior.
 
 `N` is the displayed one-based catalog number. If it is omitted on an EZ3
 cartridge, the reader extracts catalog ROM 1. The reader exports the ROM's

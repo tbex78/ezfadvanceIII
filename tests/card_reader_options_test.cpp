@@ -43,11 +43,19 @@ int main()
     assert(unnumbered.extract && !unnumbered.rom_number);
     assert(unnumbered.output_path == "first.gba");
 
+    const auto dumped = parse({"--dump", "dumped.gba"});
+    assert(dumped.extract && !dumped.rom_number);
+    assert(dumped.output_path == "dumped.gba");
+
     const auto numbered = parse(
         {"--verbose", "--extract", "2", "second.gba"});
     assert(numbered.extract && numbered.verbose);
     assert(numbered.rom_number == 2);
     assert(numbered.output_path == "second.gba");
+
+    const auto numbered_dump = parse({"--dump", "3", "third.gba"});
+    assert(numbered_dump.extract && numbered_dump.rom_number == 3);
+    assert(numbered_dump.output_path == "third.gba");
 
     assert(ezfadvance::decideCardReaderAction(
                CartridgeKind::official_gba_rom, inspect).action ==
@@ -75,10 +83,13 @@ int main()
 
     expectRejected({"--verbose"}, "--verbose");
     expectRejected({"--extract"}, "incomplete");
+    expectRejected({"--dump"}, "incomplete");
     expectRejected({"--extract", "0", "bad.gba"}, "Bad ROM number");
     expectRejected({"--extract", "nope", "bad.gba"}, "Bad ROM number");
     expectRejected({"--extract", "1", "a.gba", "extra"}, "Unknown option");
     expectRejected({"--extract", "a.gba", "--extract", "b.gba"},
+                   "Invalid");
+    expectRejected({"--extract", "a.gba", "--dump", "b.gba"},
                    "Invalid");
 
     CardReaderOptions help;
