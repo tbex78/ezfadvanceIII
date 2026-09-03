@@ -73,7 +73,7 @@ int main()
         experimental_options);
     assert(experimental_ok);
     assert(experimental_error.empty());
-    assert(experimental_roms[0].start == 0);
+    assert(experimental_roms[0].start == 0x10000);
     assert(experimental_image.report.find(
                "EXPERIMENTAL ONE-ENTRY MULTI-LOADER PACKING") !=
            std::string::npos);
@@ -90,6 +90,14 @@ int main()
     assert(ezfadvance::CartridgeFormat::readLe16(
                experimental_image.bytes.data() + *loader_start +
                multi_header_offset + 14) == 1);
+    assert(experimental_image.bytes[experimental_roms[0].start] == 0x11);
+    constexpr std::size_t multi_entry_offset = 0x476E;
+    const auto entry = ezfadvance::CatalogEntry::parse(
+        experimental_image.bytes,
+        *loader_start + multi_entry_offset,
+        false);
+    assert(entry.start == experimental_roms[0].start);
+    assert(entry.target_or_start == experimental_roms[0].start);
 
     verify({
         rom("Large", 0x100000, 0x21, 5),

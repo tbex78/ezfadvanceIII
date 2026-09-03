@@ -656,12 +656,14 @@ captured final 26-byte zero tail. The loader may be appended or embedded in a
 sufficiently large erased run; only physical/catalog ROM 1 is patched to branch
 to it.
 
-The opt-in `--experimental-single-multi-loader` mode accepts exactly one ROM
-and constructs a multi-loader image whose two count fields are one and whose
-first catalog slot describes that ROM. It must be visibly identified as
-experimental. It must not alter default single-ROM construction or infer the
-mode from a title, game code, ROM size, or save marker. This one-entry form is
-not capture-derived and remains hardware-unqualified.
+The opt-in `--experimental-single-multi-loader` mode accepts exactly one ROM.
+It reserves the first size-class block as a synthetic bootstrap, relocates the
+unmodified ROM to the next size-class boundary, and describes that location as
+a later-ROM-style entry in a multi-loader catalog whose two count fields are
+one. It must be visibly identified as experimental. It must not alter default
+single-ROM construction or infer the mode from a title, game code, ROM size,
+or save marker. This one-entry form is not capture-derived and remains
+hardware-unqualified.
 
 The minimum programmed extent is 64 KiB. A larger constructed extent is
 rounded up to a `0x100`-byte boundary.

@@ -3379,10 +3379,13 @@ operation remains a separate, unqualified hardware checkpoint.
 ### 36.107 0.21.0 — experimental one-entry multi-loader image
 
 The writer accepts `--experimental-single-multi-loader` only with exactly one
-ROM. This mode uses the multi-ROM loader template with both catalog count
-fields set to one and one populated catalog entry. It is intended to determine
-whether the multi-loader setup can launch a small ROM that does not boot under
-the original manager's single-ROM layout.
+ROM. The first experimental form used the multi-ROM loader with the ROM still
+at physical offset zero; it did not boot on real hardware. The revised mode
+reserves a synthetic first size-class block, places the complete unmodified
+ROM at the following size-class boundary, and encodes the sole catalog entry
+with later-ROM start semantics. Both catalog count fields remain one. This
+isolates the selection path that successfully launches the same ROM when it is
+a later entry in a conventional multi-ROM layout.
 
 The experiment is structural and opt-in: normal single-ROM construction is
 unchanged, no game-code or title exception is used, and the generated layout

@@ -875,7 +875,8 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms,
 }
 
 static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms,
-                                              std::ostream& report)
+                                              std::ostream& report,
+                                              bool relocate_single_rom = false)
 {
     if (roms.empty())
         throw std::runtime_error("multi-loader image builder requires at least one ROM");
@@ -933,7 +934,9 @@ static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms,
         const uint32_t alignment = multi_rom_size_class_alignment(roms[i].data.size());
 
         uint64_t start = 0;
-        if (i != 0)
+        if (relocate_single_rom && roms.size() == 1)
+            start = alignment;
+        else if (i != 0)
             start = align_up_u64(meaningful_cursor, alignment);
 
         if (start > UINT32_MAX || start + roms[i].data.size() > MAX_CARD_IMAGE) {
@@ -1042,8 +1045,11 @@ static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms,
             MULTI_ENTRY_OFF + MULTI_TEMPLATE_POPULATED_ENTRY_SLOTS * 28),
         0x00);
 
-    for (size_t i = 0; i < roms.size(); ++i)
-        write_catalog_entry(t, MULTI_ENTRY_OFF + i * 28, roms[i], i == 0);
+    for (size_t i = 0; i < roms.size(); ++i) {
+        const bool physical_first_rom = i == 0 && !relocate_single_rom;
+        write_catalog_entry(
+            t, MULTI_ENTRY_OFF + i * 28, roms[i], physical_first_rom);
+    }
 
     if (roms.size() == 2) {
         // Exact unused third-entry sentinel observed in piano-bios.pcap.
@@ -1088,8 +1094,9 @@ static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms,
         }
     }
 
-    // Only physical/catalog ROM #1 is patched. Reordering therefore matters:
-    // the branch is applied after stable sorting, exactly as the captures show.
+    // Normal multi-ROM images patch physical/catalog ROM #1 after sorting.
+    // The one-entry experiment instead patches the synthetic bootstrap at
+    // offset zero while leaving its relocated catalogued ROM unchanged.
     const uint32_t patched =
         ezfadvance::CartridgeFormat::makeArmBranch(loader_start);
     write_le32(image, 0, patched);
@@ -1137,7 +1144,8 @@ bool CartridgeImageBuilder::build(std::vector<RomInfo>& roms,
         roms.size() == 1 && !options.use_multi_loader_for_single_rom;
     result.bytes = use_single_loader
         ? build_single_image(roms, report)
-        : build_multi_image(roms, report);
+        : build_multi_image(
+              roms, report, options.use_multi_loader_for_single_rom);
     result.report = report.str();
     if (result.bytes.size() > MAX_CARD_IMAGE) {
         std::ostringstream message;

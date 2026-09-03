@@ -25,10 +25,12 @@ every save marker or ROM layout. Linux and Windows CI pass, while physical
 Windows USB operation remains unqualified.
 
 Version 0.21.0 adds the explicitly opt-in
-`--experimental-single-multi-loader` writer mode. It constructs a one-ROM
-image using the multi-ROM loader and a one-entry catalog for controlled
-hardware investigation. This layout is not capture-derived or hardware-proven
-and does not change the default single-ROM path.
+`--experimental-single-multi-loader` writer mode. It places a synthetic
+bootstrap at cartridge offset zero, relocates the unmodified ROM behind it,
+and launches that ROM through a one-entry multi-loader catalog. This tests the
+later-ROM selection path used by working multi-ROM layouts. The construction
+is not capture-derived or hardware-proven and does not change the default
+single-ROM path.
 
 ```sh
 ./ezfadvanceIII_multirom_writer \

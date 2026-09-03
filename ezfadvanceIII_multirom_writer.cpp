@@ -60,7 +60,8 @@ static void usage(const char* argv0)
         << "  --map1=6    --map6=6    --map10=3\n\n"
         << "Experimental image construction:\n"
         << "  --experimental-single-multi-loader\n"
-        << "      Build a one-ROM image with the multi-ROM loader/catalog.\n";
+        << "      Relocate one ROM behind a synthetic bootstrap and launch it\n"
+        << "      through a one-entry multi-loader catalog.\n";
 }
 
 int main(int argc, char** argv)
@@ -155,9 +156,11 @@ int main(int argc, char** argv)
         std::cout << built_image.report;
         if (experimental_single_multi_loader) {
             std::cout
-                << "WARNING: experimental one-entry multi-loader image.\n"
+                << "WARNING: experimental relocated one-entry multi-loader image.\n"
                 << "This layout is not derived from an original-manager capture "
-                   "and requires real-hardware qualification.\n";
+                   "and requires real-hardware qualification.\n"
+                << "The reported patched first bytes belong to the synthetic "
+                   "bootstrap; the relocated ROM entry remains unchanged.\n";
         }
         std::vector<uint8_t>& image = built_image.bytes;
         const size_t programmed_size = built_image.programmed_size;
