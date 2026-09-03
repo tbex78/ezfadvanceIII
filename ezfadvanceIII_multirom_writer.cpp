@@ -264,6 +264,8 @@ static void usage(const char* argv0)
         << "Output options:\n"
         << "  --verbose   Show per-sector/per-block erase, program, timing, and verify diagnostics.\n"
         << "              Without it, erase/program/verify use live progress bars.\n\n"
+        << "Optional menu-title override:\n"
+        << "  --title1=Name   --title6=Another\n\n"
         << "Optional capture-metadata overrides:\n"
         << "  --type1=2   --type6=3   --type10=4\n"
         << "  --map1=6    --map6=6    --map10=3\n";
@@ -289,6 +291,7 @@ int main(int argc, char** argv)
         const bool verbose = options.verbose;
         const auto& type_override = options.type_overrides;
         const auto& mapping_override = options.mapping_overrides;
+        const auto& title_override = options.title_overrides;
         const auto& rom_paths = options.rom_paths;
 
         if (rom_paths.empty()) {
@@ -309,7 +312,8 @@ int main(int argc, char** argv)
         for (size_t i = 0; i < rom_paths.size(); ++i) {
             RomInfo r;
             r.path = rom_paths[i];
-            r.name = ezfadvance::RomInputLoader::deriveCatalogName(r.path);
+            r.name = title_override[i].value_or(
+                ezfadvance::RomInputLoader::deriveCatalogName(r.path));
             if (type_override[i]) {
                 r.entry_type = *type_override[i];
                 r.entry_type_overridden = true;

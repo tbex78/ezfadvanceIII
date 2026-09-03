@@ -38,13 +38,15 @@ int main()
         ezfadvance::WriterOptions options;
         std::ostringstream errors;
         const auto result = parse(
-            {"writer", "--map1=4", "--map120=6", "--type10=3", "rom.gba"},
+            {"writer", "--map1=4", "--map120=6", "--type10=3",
+             "--title1=Menu Name", "rom.gba"},
             options, errors);
         assert(result.ok);
         assert(errors.str().empty());
         assert(options.mapping_overrides[0] == 4);
         assert(options.mapping_overrides[119] == 6);
         assert(options.type_overrides[9] == 3);
+        assert(options.title_overrides[0] == "Menu Name");
         assert(options.rom_paths.size() == 1);
         assert(options.rom_paths[0] == "rom.gba");
     }
@@ -59,6 +61,10 @@ int main()
                    "Bad mapping override slot");
     expectRejected("--type1=99999999999999999999999999999999",
                    "Bad type override value");
+    expectRejected("--title0=Name", "Bad title override slot");
+    expectRejected("--title121=Name", "Bad title override slot");
+    expectRejected("--title1=", "Bad title override value");
+    expectRejected("--title1=1234567890abcdefg", "Bad title override value");
 
     {
         ezfadvance::WriterOptions options;

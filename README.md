@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.19.9**.
+version is **0.20.0**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.19.9
+“pending,” and “next” describe the named review point, not the present 0.20.0
 support boundary.
 
 ## Build and test
@@ -213,6 +213,10 @@ Erase, program, and verify the constructed image:
 ```sh
 ./ezfadvanceIII_multirom_writer --yes-really-write ROM1.gba [ROM2.gba ...]
 ```
+
+Use `--titleN=TEXT` to replace the menu title for input ROM `N`. The title must
+contain 1 to 16 printable ASCII characters; for example,
+`--title2="My Game"` changes the second input ROM's menu entry.
 
 The default destructive-write display uses progress bars. Add `--verbose` for
 per-sector and per-block diagnostics. `--skip-verify` deliberately omits ROM

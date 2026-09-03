@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.19.9` toolset, including guarded
+**Specification baseline:** shared `0.20.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -97,6 +97,9 @@ Writer metadata rules are:
 - `--typeN=VALUE` and `--mapN=VALUE` accept structural slots `1..120` and
   byte values `0..255`; 120 is a parser/catalog safety bound, while only
   1..8 active entries are capture-proven.
+- `--titleN=TEXT` replaces the menu title for input ROM `N`; `TEXT` must
+  contain 1 to 16 printable ASCII characters and remains associated with that
+  ROM if packing reorders the inputs.
 
 ### 3.2 Card inspector
 

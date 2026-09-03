@@ -24,6 +24,27 @@ bool parseDecimal(std::string_view text, std::size_t maximum,
     return true;
 }
 
+bool parseOverrideSlot(const std::string& argument,
+                       std::size_t prefix_size,
+                       std::size_t equals,
+                       std::size_t& slot)
+{
+    return equals > prefix_size &&
+           parseDecimal(std::string_view(argument).substr(
+                            prefix_size, equals - prefix_size),
+                        WriterOptions::catalog_slots, slot) &&
+           slot != 0;
+}
+
+bool validMenuTitle(std::string_view title)
+{
+    if (title.empty() || title.size() > 16) return false;
+    for (const unsigned char character : title) {
+        if (character < 0x20 || character > 0x7E) return false;
+    }
+    return true;
+}
+
 } // namespace
 
 WriterParseResult WriterOptions::parse(int argc, char** argv,
@@ -38,15 +59,29 @@ WriterParseResult WriterOptions::parse(int argc, char** argv,
             options.skip_verify = true;
         } else if (argument == "--verbose") {
             options.verbose = true;
+        } else if (argument.rfind("--title", 0) == 0) {
+            const auto equals = argument.find('=');
+            std::size_t slot = 0;
+            if (equals == std::string::npos ||
+                !parseOverrideSlot(argument, 7, equals, slot)) {
+                errors << "Bad title override slot: " << argument
+                       << " (valid structural catalog slots are 1.."
+                       << catalog_slots << ")\n";
+                return {false, false};
+            }
+            const std::string title = argument.substr(equals + 1);
+            if (!validMenuTitle(title)) {
+                errors << "Bad title override value: " << argument
+                       << " (title must contain 1..16 printable ASCII characters)\n";
+                return {false, false};
+            }
+            options.title_overrides[slot - 1] = title;
         } else if (argument.rfind("--type", 0) == 0) {
             const auto equals = argument.find('=');
             if (equals == std::string::npos || equals <= 6 ||
                 equals + 1 >= argument.size()) return {false, true};
             std::size_t slot = 0;
-            if (!parseDecimal(
-                    std::string_view(argument).substr(6, equals - 6),
-                    catalog_slots, slot) ||
-                slot == 0) {
+            if (!parseOverrideSlot(argument, 6, equals, slot)) {
                 errors << "Bad type override slot: " << argument
                        << " (valid structural catalog slots are 1.."
                        << catalog_slots << ")\n";
@@ -65,10 +100,7 @@ WriterParseResult WriterOptions::parse(int argc, char** argv,
             if (equals == std::string::npos || equals <= 5 ||
                 equals + 1 >= argument.size()) return {false, true};
             std::size_t slot = 0;
-            if (!parseDecimal(
-                    std::string_view(argument).substr(5, equals - 5),
-                    catalog_slots, slot) ||
-                slot == 0) {
+            if (!parseOverrideSlot(argument, 5, equals, slot)) {
                 errors << "Bad mapping override slot: " << argument
                        << " (valid structural catalog slots are 1.."
                        << catalog_slots << ")\n";

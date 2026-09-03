@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.19.9**.
+Current shared project/toolset version covered by this summary: **0.20.0**.
 
 All mainline utilities carry this same version:
 
@@ -702,7 +702,12 @@ Supported for protocol experiments; multi-digit slot numbers are accepted. EEPRO
 ```text
 --typeN=VALUE
 --mapN=VALUE
+--titleN=TEXT
 ```
+
+`--titleN=TEXT` changes the menu title of input ROM `N`. Its value is limited
+to the catalog field's 1 to 16 printable ASCII characters and follows the ROM
+through size-based packing.
 
 ---
 
@@ -852,11 +857,11 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 
 ## Current native platform scope
 
-Shared version 0.19.9 follows the C++17/libusb platform policy while preserving
+Shared version 0.20.0 follows the C++17/libusb platform policy while preserving
 the established Unix-like build path:
 
 ```text
-macOS       target; 0.15.2 baseline compiled on Apple Silicon/Homebrew; current 0.19.9 source awaits validation
+macOS       target; 0.15.2 baseline compiled on Apple Silicon/Homebrew; current 0.20.0 source awaits validation
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
