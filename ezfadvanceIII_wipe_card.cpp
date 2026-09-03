@@ -474,7 +474,9 @@ int main(int argc, char** argv)
         std::cout << "The two blank-check reads captured by Windows both returned all FF.\n";
         std::cout << "All four 32-KiB save banks were explicitly written with zeros.\n";
     } else {
-        std::cout << "CARD WIPE FAILED OR COULD NOT BE VERIFIED.\n";
+        std::cout << "CARD WIPE FAILED OR COULD NOT BE VERIFIED.\n"
+                  << "Please unplug and reconnect the EZF Advance III, "
+                     "then try again.\n";
     }
     std::cout << "========================================\n";
 
