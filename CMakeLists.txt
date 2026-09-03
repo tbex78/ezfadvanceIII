@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.19.5 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.19.6 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -144,7 +144,7 @@ if(BUILD_TESTING)
     ezf_add_test(save_reader_options_test tests/save_reader_options_test.cpp
         src/save_reader_options.cpp src/save_bank_selector.cpp)
     ezf_add_test(save_access_planner_test tests/save_access_planner_test.cpp
-        src/save_access_planner.cpp)
+        src/save_access_planner.cpp src/save_bank_selector.cpp)
     ezf_add_test(save_file_store_test tests/save_file_store_test.cpp
         src/save_file_store.cpp)
     ezf_add_test(save_bank_selector_test tests/save_bank_selector_test.cpp src/save_bank_selector.cpp)

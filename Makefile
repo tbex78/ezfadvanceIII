@@ -184,7 +184,7 @@ test: check
 	./build/save_selection_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_reader_options_test.cpp src/save_reader_options.cpp src/save_bank_selector.cpp -o build/save_reader_options_test
 	./build/save_reader_options_test
-	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_access_planner_test.cpp src/save_access_planner.cpp -o build/save_access_planner_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_access_planner_test.cpp src/save_access_planner.cpp src/save_bank_selector.cpp -o build/save_access_planner_test
 	./build/save_access_planner_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/save_file_store_test.cpp src/save_file_store.cpp -o build/save_file_store_test
 	./build/save_file_store_test
