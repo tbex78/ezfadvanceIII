@@ -93,6 +93,15 @@ void testProbeClassification()
     assert(ezfadvance::hasEz3Catalog(CartridgeKind::ez3_flash));
     assert(!ezfadvance::hasEz3Catalog(CartridgeKind::official_gba_rom));
     assert(!ezfadvance::hasEz3Catalog(CartridgeKind::unknown));
+
+    std::vector<std::uint8_t> erased_header(0xC0, 0xFF);
+    assert(ezfadvance::ReadOnlyCartridge::classifyContentHeader(erased_header) ==
+           CartridgeKind::ez3_flash);
+    erased_header[0] = 0x00;
+    assert(ezfadvance::ReadOnlyCartridge::classifyContentHeader(erased_header) ==
+           CartridgeKind::unknown);
+    assert(ezfadvance::ReadOnlyCartridge::classifyContentHeader(
+               std::vector<std::uint8_t>(4, 0xFF)) == CartridgeKind::unknown);
 }
 
 void testOfficialDetectionStopsEz3Path()

@@ -44,6 +44,8 @@ public:
     static CartridgeKind classifyProbeBehavior(
         const std::array<std::uint8_t, 4>& before_flash_id,
         const std::array<std::uint8_t, 4>& after_flash_id) noexcept;
+    static CartridgeKind classifyContentHeader(
+        const std::vector<std::uint8_t>& header) noexcept;
     bool read(std::uint32_t byte_address,
               std::uint8_t* destination,
               std::size_t length);

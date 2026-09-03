@@ -191,6 +191,18 @@ CartridgeKind ReadOnlyCartridge::classifyProbeBehavior(
     return CartridgeKind::unknown;
 }
 
+CartridgeKind ReadOnlyCartridge::classifyContentHeader(
+    const std::vector<std::uint8_t>& header) noexcept
+{
+    if (header.size() >= 0xC0 &&
+        std::all_of(header.begin(), header.begin() + 0xC0,
+                    [](std::uint8_t byte) { return byte == 0xFF; }))
+        return CartridgeKind::ez3_flash;
+    if (CartridgeFormat::validGbaRomHeader(header))
+        return CartridgeKind::official_gba_rom;
+    return CartridgeKind::unknown;
+}
+
 CartridgeKind ReadOnlyCartridge::classifyCartridgeContent()
 {
     constexpr std::uint32_t image_limit = 0x02000000u;
@@ -200,9 +212,8 @@ CartridgeKind ReadOnlyCartridge::classifyCartridgeContent()
         return CartridgeKind::ez3_flash;
 
     std::vector<std::uint8_t> header;
-    if (read(0, header, 0xC0) && CartridgeFormat::validGbaRomHeader(header))
-        return CartridgeKind::official_gba_rom;
-    return CartridgeKind::unknown;
+    if (!read(0, header, 0xC0)) return CartridgeKind::unknown;
+    return classifyContentHeader(header);
 }
 
 bool ReadOnlyCartridge::initialize()

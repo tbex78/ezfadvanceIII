@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.19.6` toolset, including guarded
+**Specification baseline:** shared `0.19.7` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
