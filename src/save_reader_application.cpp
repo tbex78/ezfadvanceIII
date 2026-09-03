@@ -1,35 +1,17 @@
-#if defined(__has_include)
-#  if __has_include(<libusb-1.0/libusb.h>)
-#    include <libusb-1.0/libusb.h>
-#  elif __has_include(<libusb.h>)
-#    include <libusb.h>
-#  else
-#    error "libusb header not found. Install the libusb development package."
-#  endif
-#else
-#  include <libusb-1.0/libusb.h>
-#endif
-
 #include <algorithm>
-#include <array>
-#include <chrono>
 #include <cstdint>
 #include <iomanip>
 #include <fstream>
 #include <iostream>
 #include <optional>
 #include <sstream>
-#include <stdexcept>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/protocol.hpp"
 #include "ezfadvance/platform.hpp"
-#include "ezfadvance/cartridge_format.hpp"
-#include "ezfadvance/ez3_catalog.hpp"
 #include "ezfadvance/ez3_catalog_reader.hpp"
 #include "ezfadvance/read_only_cartridge.hpp"
 #include "ezfadvance/save_memory_reader.hpp"

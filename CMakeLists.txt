@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.20.6 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.20.7 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -71,6 +71,17 @@ set(EZF_READ_ONLY_SOURCES
     src/ez3_catalog_reader.cpp
     src/read_only_cartridge.cpp
     src/read_session_transition.cpp)
+set(EZF_SAVE_MEMORY_SOURCES
+    src/save_bank_access.cpp
+    src/save_bank_cleaner.cpp
+    src/save_memory_reader.cpp
+    src/save_memory_writer.cpp
+    src/save_bank_selector.cpp)
+set(EZF_SAVE_CATALOG_SOURCES
+    src/save_access_planner.cpp
+    src/save_catalog_analyzer.cpp
+    src/save_catalog_presenter.cpp
+    src/save_output_path.cpp)
 
 function(ezf_add_tool target main_source)
     add_executable(${target} ${main_source} ${ARGN})
@@ -93,14 +104,9 @@ ezf_add_tool(ezfadvanceIII_save_reader
     ezfadvanceIII_save_reader.cpp ${EZF_READ_ONLY_SOURCES}
     src/save_reader_application.cpp
     src/save_reader_options.cpp
-    src/save_access_planner.cpp
     src/save_file_store.cpp src/save_bank_workflow.cpp
-    src/save_catalog_analyzer.cpp
-    src/save_catalog_presenter.cpp
-    src/save_output_path.cpp
-    src/save_bank_access.cpp src/save_bank_cleaner.cpp
-    src/save_memory_reader.cpp src/save_memory_writer.cpp
-    src/save_bank_selector.cpp)
+    ${EZF_SAVE_CATALOG_SOURCES}
+    ${EZF_SAVE_MEMORY_SOURCES})
 ezf_add_tool(ezfadvanceIII_wipe_card
     ezfadvanceIII_wipe_card.cpp ${EZF_TRANSPORT_SOURCES}
     src/card_wipe_workflow.cpp
