@@ -13,9 +13,9 @@ int main()
 
     assert(ezfadvance::isVersionRequest(2, request));
     assert(!ezfadvance::isVersionRequest(3, invalid_request));
-    assert(ezfadvance::project_version == "0.20.3");
+    assert(ezfadvance::project_version == "0.20.4");
 
     std::ostringstream output;
     ezfadvance::printVersion(output, "tool");
-    assert(output.str() == "tool 0.20.3\n");
+    assert(output.str() == "tool 0.20.4\n");
 }

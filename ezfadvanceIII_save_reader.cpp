@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <cctype>
 #include <cstdint>
 #include <iomanip>
 #include <fstream>
@@ -45,6 +44,7 @@
 #include "ezfadvance/save_catalog_analyzer.hpp"
 #include "ezfadvance/save_catalog_presenter.hpp"
 #include "ezfadvance/catalog_save_workflow.hpp"
+#include "ezfadvance/save_output_path.hpp"
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
@@ -107,17 +107,6 @@ static bool read_save_capture(ezfadvance::SaveMemoryReader& reader,
                               std::vector<uint8_t>& save)
 {
     return reader.read(save_size, save, first_bank);
-}
-
-static std::string safe_filename_component(std::string s)
-{
-    for (char& c : s) {
-        const unsigned char u = static_cast<unsigned char>(c);
-        if (!(std::isalnum(u) || c == '-' || c == '_' || c == '.'))
-            c = '_';
-    }
-    while (!s.empty() && s.back() == '_') s.pop_back();
-    return s.empty() ? "gba_save" : s;
 }
 
 ezfadvance::CatalogSaveWorkflow::CatalogSaveWorkflow(
@@ -371,16 +360,8 @@ int ezfadvance::CatalogSaveWorkflow::run()
         return 0;
     }
 
-    std::string output;
-    if (requested_output) {
-        output = *requested_output;
-    } else if (!selected) {
-        output = "save-bank-" + hex16(save_selector).substr(2) + ".sav";
-    } else if (!roms[*selected].header.game_code.empty()) {
-        output = safe_filename_component(roms[*selected].header.game_code)+".sav";
-    } else {
-        output = safe_filename_component(roms[*selected].catalog_entry.name)+".sav";
-    }
+    const std::string output = ezfadvance::SaveOutputPath::resolve(
+        requested_output, selected, save_selector, roms);
 
     if (!files.write(output, save, std::cerr)) return 5;
 
