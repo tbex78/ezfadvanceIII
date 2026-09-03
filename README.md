@@ -1,6 +1,6 @@
 # EZF Advance III open-source alternative software
 
-![EZF Advance III](ezadvanceIII_image1.jpg) ![EZF Advance III](ezadvanceIII_image2.jpg)
+![EZF Advance III](ezfadvanceIII_image1.jpg) ![EZF Advance III](ezfadvanceIII_image2.jpg)
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
