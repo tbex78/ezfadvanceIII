@@ -44,6 +44,7 @@
 #include "ezfadvance/save_access_planner.hpp"
 #include "ezfadvance/save_catalog_analyzer.hpp"
 #include "ezfadvance/save_catalog_presenter.hpp"
+#include "ezfadvance/catalog_save_workflow.hpp"
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
@@ -119,32 +120,44 @@ static std::string safe_filename_component(std::string s)
     return s.empty() ? "gba_save" : s;
 }
 
-static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
-                                 ezfadvance::SaveMemoryReader& save_reader,
-                                 ezfadvance::SaveMemoryWriter& save_writer,
-                                 const ezfadvance::SaveFileStore& files,
-                                 const std::optional<std::string>& requested_output,
-                                 const std::optional<size_t>& requested_rom,
-                                 const std::optional<ezfadvance::SaveBankSelector>& requested_bank,
-                                 const std::optional<size_t>& requested_bank_count,
-                                 const std::optional<std::vector<uint8_t>>& write_save,
-                                 const std::optional<std::string>& backup_path,
-                                 bool show_catalog)
+ezfadvance::CatalogSaveWorkflow::CatalogSaveWorkflow(
+    ReadOnlyCartridge& cartridge, SaveMemoryReader& reader,
+    SaveMemoryWriter& writer, const SaveFileStore& files,
+    CatalogSaveRequest request, std::ostream& output, std::ostream& errors)
+    : cartridge_(cartridge), reader_(reader), writer_(writer), files_(files),
+      request_(std::move(request)), output_(output), errors_(errors)
 {
+}
+
+int ezfadvance::CatalogSaveWorkflow::run()
+{
+    auto& cartridge = cartridge_;
+    auto& save_reader = reader_;
+    auto& save_writer = writer_;
+    const auto& files = files_;
+    const auto& requested_output = request_.output_path;
+    const auto& requested_rom = request_.rom_number;
+    const auto& requested_bank = request_.save_bank;
+    const auto& requested_bank_count = request_.consecutive_bank_count;
+    const auto& write_save = request_.input;
+    const auto& backup_path = request_.backup_path;
+    const bool show_catalog = request_.show_catalog;
+    auto& cout = output_;
+    auto& cerr = errors_;
     ezfadvance::Ez3CatalogReader catalog_reader(
         cartridge, CARD_IMAGE_SIZE, MAX_CAPTURED_ROMS);
     const auto discovery = catalog_reader.read();
     if (discovery.status == ezfadvance::Ez3CatalogReadStatus::read_failed)
         return 2;
     if (discovery.status == ezfadvance::Ez3CatalogReadStatus::missing_branch) {
-        std::cerr << "Card byte 0 is not an ARM unconditional branch.\n"
+        cerr << "Card byte 0 is not an ARM unconditional branch.\n"
                   << "This does not look like a recognized capture-derived EZ3 image.\n";
         return 3;
     }
 
     if (discovery.status ==
         ezfadvance::Ez3CatalogReadStatus::branch_out_of_range) {
-        std::cerr << "Patched branch points to " << hex32(discovery.loader_start)
+        cerr << "Patched branch points to " << hex32(discovery.loader_start)
                   << ", outside the understood 32-MiB cartridge layout.\n";
         return 3;
     }
@@ -152,7 +165,7 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     const uint32_t loader_start = discovery.loader_start;
     const uint32_t loader_end = discovery.loader_end;
     if (!discovery) {
-        std::cerr << "Found loader branch at " << hex32(discovery.loader_start)
+        cerr << "Found loader branch at " << hex32(discovery.loader_start)
                   << " but no recognized EZ3 catalog.\n";
         return 3;
     }
@@ -161,16 +174,16 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     const std::size_t rom_count = catalog.entries.size();
 
     if (!show_catalog && requested_rom && *requested_rom > rom_count) {
-        std::cerr << "--rom must be between 1 and " << rom_count << ".\n";
+        cerr << "--rom must be between 1 and " << rom_count << ".\n";
         return 1;
     }
     if (!show_catalog && !requested_rom && !is_single) {
-        std::cerr << "This is a multi-ROM card. Specify --rom N, or use "
+        cerr << "This is a multi-ROM card. Specify --rom N, or use "
                      "--save-bank 0x09X0 for direct bank access.\n";
         return 4;
     }
 
-    ezfadvance::SaveCatalogPresenter presenter(std::cout);
+    ezfadvance::SaveCatalogPresenter presenter(cout);
     if (show_catalog)
         presenter.showSummary(is_single, rom_count, loader_start);
 
@@ -396,56 +409,6 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
     return 0;
 }
 
-class SaveExtractor final {
-public:
-    SaveExtractor(ezfadvance::ReadOnlyCartridge& cartridge,
-                  ezfadvance::SaveMemoryReader& save_reader,
-                  ezfadvance::SaveMemoryWriter& save_writer,
-                  const ezfadvance::SaveFileStore& files,
-                  std::optional<std::string> output,
-                  std::optional<size_t> requested_rom,
-                  std::optional<ezfadvance::SaveBankSelector> requested_bank,
-                  std::optional<size_t> requested_bank_count,
-                  std::optional<std::vector<uint8_t>> write_save,
-                  std::optional<std::string> backup_path,
-                  bool show_catalog)
-        : cartridge_(cartridge),
-          save_reader_(save_reader),
-          save_writer_(save_writer),
-          files_(files),
-          output_(std::move(output)),
-          requested_rom_(requested_rom),
-          requested_bank_(requested_bank),
-          requested_bank_count_(requested_bank_count),
-          write_save_(std::move(write_save)),
-          backup_path_(std::move(backup_path)),
-          show_catalog_(show_catalog)
-    {
-    }
-
-    int run()
-    {
-        return inspect_and_dump_save(cartridge_, save_reader_, save_writer_, files_,
-                                     output_, requested_rom_,
-                                     requested_bank_,
-                                     requested_bank_count_,
-                                     write_save_, backup_path_, show_catalog_);
-    }
-
-private:
-    ezfadvance::ReadOnlyCartridge& cartridge_;
-    ezfadvance::SaveMemoryReader& save_reader_;
-    ezfadvance::SaveMemoryWriter& save_writer_;
-    const ezfadvance::SaveFileStore& files_;
-    std::optional<std::string> output_;
-    std::optional<size_t> requested_rom_;
-    std::optional<ezfadvance::SaveBankSelector> requested_bank_;
-    std::optional<size_t> requested_bank_count_;
-    std::optional<std::vector<uint8_t>> write_save_;
-    std::optional<std::string> backup_path_;
-    bool show_catalog_;
-};
-
 static void usage(const char* argv0)
 {
     std::cout << "Usage:\n"
@@ -612,12 +575,12 @@ int main(int argc, char** argv)
 
     int result = 2;
     if (cartridge.initialize() && ezfadvance::hasEz3Catalog(cartridge.kind())) {
-        SaveExtractor extractor(cartridge, save_reader, save_writer, save_files,
-                                output, requested_rom, requested_bank,
-                                requested_bank_count,
-                                write_save, backup_path,
-                                options.inspection_only);
-        result = extractor.run();
+        ezfadvance::CatalogSaveWorkflow workflow(
+            cartridge, save_reader, save_writer, save_files,
+            {output, requested_rom, requested_bank, requested_bank_count,
+             write_save, backup_path, options.inspection_only},
+            std::cout, std::cerr);
+        result = workflow.run();
         if (!cartridge.finishSession()) {
             std::cerr << "Save-reader operation finished, but the "
                          "capture-derived read-session close transition "
