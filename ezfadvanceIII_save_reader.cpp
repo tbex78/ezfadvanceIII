@@ -43,6 +43,7 @@
 #include "ezfadvance/save_bank_selector.hpp"
 #include "ezfadvance/save_access_planner.hpp"
 #include "ezfadvance/save_catalog_analyzer.hpp"
+#include "ezfadvance/save_catalog_presenter.hpp"
 #include "ezfadvance/save_selection.hpp"
 #include "ezfadvance/version.hpp"
 
@@ -169,29 +170,14 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
         return 4;
     }
 
-    if (show_catalog) {
-        std::cout << "\n========================================\n"
-                  << "EZF ADVANCE III SAVE TOOL - CARD CONTENTS\n"
-                  << "========================================\n"
-                  << "Layout       : " << (is_single ? "single ROM" : "multi ROM") << "\n"
-                  << "ROM count    : " << rom_count << "\n"
-                  << "Loader/menu  : " << hex32(loader_start) << "\n\n";
-    }
+    ezfadvance::SaveCatalogPresenter presenter(std::cout);
+    if (show_catalog)
+        presenter.showSummary(is_single, rom_count, loader_start);
 
     ezfadvance::SaveCatalogAnalyzer analyzer(
         cartridge, CARD_IMAGE_SIZE,
-        show_catalog ? ezfadvance::SaveScanProgress{
-        [](std::size_t index, std::size_t count, std::uint32_t scanned,
-           std::uint32_t total, bool finished) {
-            const unsigned percent = total == 0
-                ? 100u
-                : static_cast<unsigned>(
-                      (static_cast<std::uint64_t>(scanned) * 100u) / total);
-            std::cout << '\r' << "Scanning save metadata for ROM "
-                      << (index + 1) << '/' << count << ": "
-                      << std::setw(3) << percent << '%' << std::flush;
-            if (finished) std::cout << '\n';
-        }} : ezfadvance::SaveScanProgress{});
+        show_catalog ? presenter.scanProgress()
+                     : ezfadvance::SaveScanProgress{});
     const std::size_t analyzed_count = show_catalog
         ? rom_count
         : requested_rom.value_or(1);
@@ -201,22 +187,7 @@ static int inspect_and_dump_save(ezfadvance::ReadOnlyCartridge& cartridge,
         return 2;
     const auto& roms = analysis.roms;
 
-    if (show_catalog) {
-        for (size_t i=0;i<roms.size();++i) {
-            const auto& r = roms[i];
-            std::cout << "\nROM " << (i+1) << "\n"
-                      << "  Catalog name : " << r.catalog_entry.name << "\n"
-                      << "  Start        : " << hex32(r.catalog_entry.start) << "\n"
-                      << "  Alloc. span  : " << r.allocation_span << " bytes\n"
-                      << "  EZ type      : " << static_cast<unsigned>(r.catalog_entry.type) << "\n"
-                      << "  Mapping flag : " << static_cast<unsigned>(r.catalog_entry.mapping) << "\n"
-                      << "  GBA title    : " << (r.header.title.empty() ? "(blank)" : r.header.title) << "\n"
-                      << "  Game code    : " << (r.header.game_code.empty() ? "(blank)" : r.header.game_code) << "\n"
-                      << "  Save marker  : "
-                      << (r.save_marker.empty() ? "(none found)" : r.save_marker)
-                      << "\n";
-        }
-    }
+    if (show_catalog) presenter.showRoms(analysis);
 
     std::vector<std::string> save_markers;
     save_markers.reserve(roms.size());
