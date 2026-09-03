@@ -205,49 +205,49 @@ int ezfadvance::CatalogSaveWorkflow::run()
         using Status = ezfadvance::SaveAccessPlanStatus;
         switch (plan.status) {
         case Status::rom_out_of_range:
-            std::cerr << "--rom must be between 1 and " << rom_count << ".\n";
+            cerr << "--rom must be between 1 and " << rom_count << ".\n";
             return 1;
         case Status::rom_required:
-            std::cerr << "\nThis is a multi-ROM card. Specify --rom N, or use "
+            cerr << "\nThis is a multi-ROM card. Specify --rom N, or use "
                          "--save-bank 0x09X0 for direct bank access.\n";
             return 4;
         case Status::no_supported_rom:
-            std::cerr << "\nThis card has no supported 32-/64-KiB "
+            cerr << "\nThis card has no supported 32-/64-KiB "
                          "save-bearing ROM.\nNo save read was performed.\n";
             return 4;
         case Status::ambiguous_selection:
-            std::cerr << "\nThis card has an unsupported ambiguous save "
+            cerr << "\nThis card has an unsupported ambiguous save "
                          "selection.\nNo save read was performed.\n";
             return 4;
         case Status::requested_rom_unsupported:
-            std::cerr << "\nSelected ROM " << *requested_rom
+            cerr << "\nSelected ROM " << *requested_rom
                       << " does not have a supported save format.\n"
                          "No save read was performed.\n";
             return 4;
         case Status::selected_size_unknown:
-            std::cerr << "\nSelected ROM " << (plan.selected_rom.value() + 1)
+            cerr << "\nSelected ROM " << (plan.selected_rom.value() + 1)
                       << " has no supported save size.\n";
             return 4;
         case Status::direct_range_exceeded:
-            std::cerr << "\nSave bank " << hex16(plan.selector)
+            cerr << "\nSave bank " << hex16(plan.selector)
                       << " cannot contain a " << plan.access_size
                       << "-byte direct save access within the four proven "
                          "banks. No save access was performed.\n";
             return 4;
         case Status::explicit_range_exceeded:
-            std::cerr << "\nSave bank " << hex16(plan.selector)
+            cerr << "\nSave bank " << hex16(plan.selector)
                       << " cannot contain this ROM's " << plan.access_size
                       << "-byte save within the four proven banks. "
                          "No save access was performed.\n";
             return 4;
         case Status::unknown_predecessor_capacity:
-            std::cerr << "\nCannot allocate save banks because ROM "
+            cerr << "\nCannot allocate save banks because ROM "
                       << (plan.first_unknown_rom + 1)
                       << " has an unknown save capacity. No save access was "
                          "performed.\n";
             return 4;
         case Status::capacity_exceeded:
-            std::cerr << "\nThe cumulative save allocation exceeds the four "
+            cerr << "\nThe cumulative save allocation exceeds the four "
                          "proven 32-KiB banks. No save access was performed.\n";
             return 4;
         case Status::selected:
@@ -259,74 +259,74 @@ int ezfadvance::CatalogSaveWorkflow::run()
     const std::size_t selected_save_size = plan.access_size;
     const std::uint16_t save_selector = plan.selector;
     if (plan.direct) {
-        std::cout << "\nUsing explicitly requested save bank without ROM "
+        cout << "\nUsing explicitly requested save bank without ROM "
                      "selection; catalog allocation was bypassed.\n";
     } else if (plan.explicit_override) {
-        std::cout << "\nUsing explicitly requested save bank; automatic "
+        cout << "\nUsing explicitly requested save bank; automatic "
                      "catalog allocation was bypassed.\n";
     }
 
     if (!is_single && selected) {
-        std::cout << "\nMulti-ROM save allocation: cumulative 32-KiB banks "
+        cout << "\nMulti-ROM save allocation: cumulative 32-KiB banks "
                      "in catalog order.\n";
     }
-    std::cout << "Selected save bank: " << hex16(save_selector) << "\n";
+    cout << "Selected save bank: " << hex16(save_selector) << "\n";
 
     if (selected) {
-        std::cout << "\nReading save for ROM " << (*selected + 1) << ": "
+        cout << "\nReading save for ROM " << (*selected + 1) << ": "
                   << roms[*selected].catalog_entry.name << "\n";
     } else {
-        std::cout << "\nReading explicitly selected save bank "
+        cout << "\nReading explicitly selected save bank "
                   << hex16(save_selector) << "...\n";
     }
 
     std::vector<uint8_t> save;
     if (!read_save_capture(save_reader,selected_save_size,save_selector,save)) {
-        std::cerr << "Save read failed.\n";
+        cerr << "Save read failed.\n";
         return 2;
     }
 
     if (write_save) {
         if (write_save->size() != selected_save_size) {
-            std::cerr << "Save input size " << write_save->size()
+            cerr << "Save input size " << write_save->size()
                       << " bytes does not match the selected access size of "
                       << selected_save_size
                       << " bytes. No save write was performed.\n";
             return 4;
         }
         if (backup_path) {
-            if (!files.writeNew(*backup_path, save, std::cerr))
+            if (!files.writeNew(*backup_path, save, cerr))
                 return 5;
-            std::cout << "Existing save backed up to: " << *backup_path << "\n";
+            cout << "Existing save backed up to: " << *backup_path << "\n";
         }
         if (!cartridge.finishSession()) {
-            std::cerr << "Pre-write readiness transition failed. No save-write "
+            cerr << "Pre-write readiness transition failed. No save-write "
                          "payload was sent.\n";
             return 2;
         }
 
         const auto bank_count = selected_save_size / 0x8000;
-        std::cout << "Writing " << selected_save_size
+        cout << "Writing " << selected_save_size
                   << "-byte save across " << bank_count
                   << " bank" << (bank_count == 1 ? "" : "s")
                   << " beginning at selector " << hex16(save_selector) << "...\n";
         if (!save_writer.write(save_selector, *write_save)) {
-            std::cerr << "Save write failed."
+            cerr << "Save write failed."
                       << (backup_path ? " The original backup is available.\n"
                                       : " No backup was requested.\n");
             return 2;
         }
 
         if (!cartridge.finishSession()) {
-            std::cerr << "Post-write readiness transition failed. The save was "
+            cerr << "Post-write readiness transition failed. The save was "
                          "not verified.\n";
             return 2;
         }
 
         std::vector<uint8_t> verification;
-        std::cout << "Reading save back for byte-for-byte verification...\n";
+        cout << "Reading save back for byte-for-byte verification...\n";
         if (!read_save_capture(save_reader, selected_save_size, save_selector, verification)) {
-            std::cerr << "Save read-back failed."
+            cerr << "Save read-back failed."
                       << (backup_path ? " The original backup is available.\n"
                                       : " No backup was requested.\n");
             return 2;
@@ -336,14 +336,14 @@ int ezfadvance::CatalogSaveWorkflow::run()
                 verification.begin(), verification.end(), write_save->begin());
             const auto offset = static_cast<size_t>(
                 std::distance(verification.begin(), mismatch.first));
-            std::cerr << "SAVE VERIFICATION FAILED at byte offset 0x"
+            cerr << "SAVE VERIFICATION FAILED at byte offset 0x"
                       << std::hex << offset << std::dec
                       << (backup_path ? ". The original backup is available.\n"
                                       : ". No backup was requested.\n");
             return 6;
         }
 
-        std::cout << "\n========================================\n"
+        cout << "\n========================================\n"
                   << "SAVE WRITE AND VERIFICATION COMPLETE\n"
                   << "========================================\n"
                   << "ROM          : "
@@ -364,14 +364,14 @@ int ezfadvance::CatalogSaveWorkflow::run()
     const std::string output = ezfadvance::SaveOutputPath::resolve(
         requested_output, selected, save_selector, roms);
 
-    if (!files.write(output, save, std::cerr)) return 5;
+    if (!files.write(output, save, cerr)) return 5;
 
     const size_t nonzero = static_cast<size_t>(std::count_if(
         save.begin(),save.end(),[](uint8_t b){ return b != 0x00; }));
     const size_t nonff = static_cast<size_t>(std::count_if(
         save.begin(),save.end(),[](uint8_t b){ return b != 0xFF; }));
 
-    std::cout << "\n========================================\n"
+    cout << "\n========================================\n"
               << "SAVE DUMP COMPLETE\n"
               << "========================================\n"
               << "ROM          : "
