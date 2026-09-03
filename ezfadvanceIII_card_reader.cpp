@@ -49,22 +49,6 @@
 //   single ROM: loader-relative header 0x4E8, entry 0x4F8
 //   multi ROM : loader-relative header 0x475E, entries 0x476E (28 bytes each)
 //
-// 0.5.13 improves blank-card diagnostics only. If the first four card bytes
-// are FF FF FF FF, the reader now explicitly reports that the cartridge
-// appears empty/erased and that no EZ3 loader/catalog is present at byte 0.
-// USB probing, mapping, and read behavior are unchanged.
-//
-// 0.5.12 aligns the diagnostic reader with the writer's current catalog/layout
-// knowledge and the newer 5-, 6-, 7-, and 8-ROM captures:
-//   * 1..8 active catalog entries are capture-proven; the loader contains 120
-//     structurally available 28-byte catalog slots, used here only as a safe
-//     parser bound rather than a claim that 120-ROM menu operation is proven;
-//   * full 32-MiB / 256-Mbit card geometry;
-//   * exact 16-MiB, 24-MiB, and 32-MiB linear read mappings;
-//   * the 32-MiB sequence is corrected to the exact 256-Mbit transition used by
-//     the current writer and independently reconfirmed by the 6/7/8-ROM captures.
-// The utility remains strictly read-only: no erase commands and no ROM
-// programming are performed.
 
 static constexpr uint32_t CARD_IMAGE_LIMIT   = 0x02000000u; // 32 MiB / 256 Mbit
 
