@@ -40,6 +40,7 @@ int main()
     assert(ffta_dump.selector == 0x0920);
     assert(ezfadvance::saveBankCountForMarker("FLASH1M_V103") == 4);
     assert(ezfadvance::saveBankCountForMarker("EEPROM_V124") == 1);
+
     assert(ezfadvance::supportedSaveSizeForMarker("SRAM_V111") == 0x8000);
     assert(ezfadvance::supportedSaveSizeForMarker("FLASH512") == 0x10000);
     assert(!ezfadvance::supportedSaveSizeForMarker("FLASH1M_V103"));
@@ -66,6 +67,8 @@ int main()
     assert(selectSaveRom(2, {1}, 1).status ==
            SaveSelectionStatus::requested_rom_mismatch);
     assert(selectSaveRom(2, {}, 1).status ==
+           SaveSelectionStatus::requested_rom_mismatch);
+    assert(selectSaveRom(1, {}, std::nullopt).status ==
            SaveSelectionStatus::no_supported_candidate);
     const auto first_of_two = selectSaveRom(2, {0, 1}, 1);
     assert(first_of_two.status == SaveSelectionStatus::selected);

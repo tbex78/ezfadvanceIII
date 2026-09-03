@@ -83,9 +83,12 @@ inline SaveSelection selectSaveRom(
         return {SaveSelectionStatus::out_of_range, 0};
     if (rom_count > 1 && !requested_rom)
         return {SaveSelectionStatus::rom_required, 0};
-    if (supported_candidates.empty())
-        return {SaveSelectionStatus::no_supported_candidate, 0};
     const std::size_t selected = requested_rom ? *requested_rom - 1 : 0;
+    if (supported_candidates.empty()) {
+        if (requested_rom)
+            return {SaveSelectionStatus::requested_rom_mismatch, selected};
+        return {SaveSelectionStatus::no_supported_candidate, 0};
+    }
     bool supported = false;
     for (const auto candidate : supported_candidates) {
         if (candidate == selected) {
