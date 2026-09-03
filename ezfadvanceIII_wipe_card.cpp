@@ -10,420 +10,54 @@
 #  include <libusb-1.0/libusb.h>
 #endif
 
-#include <algorithm>
-#include <chrono>
-#include <cstdint>
-#include <iomanip>
 #include <iostream>
 #include <string>
-#include <thread>
-#include <vector>
 
-#include "ezfadvance/usb_device.hpp"
+#include "ezfadvance/card_wipe_workflow.hpp"
 #include "ezfadvance/flash_window_selector.hpp"
-#include "ezfadvance/protocol.hpp"
 #include "ezfadvance/platform.hpp"
 #include "ezfadvance/save_bank_cleaner.hpp"
+#include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/version.hpp"
 
-static constexpr unsigned READINESS_ATTEMPTS = 5;
-static constexpr auto READINESS_RETRY_DELAY = std::chrono::milliseconds(100);
+namespace {
 
-// ezfadvanceIII wipe utility 0.9.0.
-// 0.6.2 removes hard-coded project-version text from runtime output.
-// Erase protocol/timing behavior remains unchanged from 0.5.10.
-//
-// Ported from the capture-derived wipe-card v3 utility.
-// The erase geometry, per-bank setup, 0x96 erase commands, status sequence,
-// cleanup, and two capture-derived blank-verification reads are intentionally
-// unchanged. 0.5.10 changes naming and Unix-like portability only.
-//
-// Supported native targets: macOS, Linux, FreeBSD, OpenBSD, NetBSD,
-// DragonFly BSD, and Windows 10/11 through libusb with WinUSB/libusbK.
-
-static void print_hex(const uint8_t* p, size_t n, size_t max = 64)
+void printUsage(const char* program)
 {
-    const size_t shown = std::min(n, max);
-    for (size_t i = 0; i < shown; ++i) {
-        if (i && (i % 16) == 0) std::cout << '\n';
-        std::cout << std::hex << std::setw(2) << std::setfill('0')
-                  << static_cast<unsigned>(p[i]) << ' ';
-    }
-    std::cout << std::dec << '\n';
+    std::cerr
+        << "EZF Advance III card wipe utility ("
+        << ezfadvance::hostPlatformName() << ")\n\n"
+        << "WARNING: This operation is destructive and erases cartridge "
+           "flash and all four save banks.\n\n"
+        << "RECOMMENDED BEFORE USE:\n"
+        << "  Unplug the EZF Advance III USB device, then plug it back in "
+           "before running\n"
+        << "  this wipe utility. This gives the wipe a fresh USB/bridge "
+           "session.\n\n"
+        << "Usage: " << program << " --yes-really-wipe\n"
+        << "       " << program << " --version\n";
 }
 
-static bool bulk_out(libusb_device_handle* h,
-                     const std::vector<uint8_t>& data,
-                     unsigned timeout_ms = 5000)
-{
-    return ezfadvance::BulkTransport(h).out(data, timeout_ms);
-}
-
-static bool bulk_in_max(libusb_device_handle* h,
-                        std::vector<uint8_t>& data,
-                        size_t max_len,
-                        unsigned timeout_ms = 5000)
-{
-    return ezfadvance::BulkTransport(h).inMax(data, max_len, timeout_ms);
-}
-
-// Non-destructive bridge startup and cartridge/readiness preflight.  Use the
-// same capture-proven 0x97 -> 0x98 -> 0x99 startup as the writer so the wipe
-// does not depend on the bridge state left by a preceding read-only utility.
-// The captured delete.pcap erase sequence below remains otherwise unchanged.
-static bool cartridge_ready_preflight(libusb_device_handle* h)
-{
-    const std::vector<uint8_t> c97 = {
-        0x5A,0xA5,0x97,0,0,0,0,0,0,0,0,0,0
-    };
-    const std::vector<uint8_t> c98 = {
-        0x5A,0xA5,0x98,0,0,0,0,0,0,0,0,0,0
-    };
-    const std::vector<uint8_t> c99 = {
-        0x5A,0xA5,0x99,0,0x01,0,0,0,0,0,0,0,0
-    };
-
-    std::vector<uint8_t> response;
-
-    std::cout << "\n========================================\n"
-              << "CARTRIDGE PREFLIGHT\n"
-              << "========================================\n";
-
-    if (!bulk_out(h, c97, 5000) ||
-        !bulk_in_max(h, response, 1, 5000) ||
-        response.size() != 1 || response[0] != 0x00) {
-        std::cerr
-            << "CARTRIDGE PREFLIGHT FAILED: 0x97 bridge reset did not "
-               "return 00.\n"
-            << "No erase operation was attempted.\n";
-        return false;
-    }
-    std::cout << "0x97 -> 00 (bridge reset)\n";
-
-    bool ready = false;
-    for (unsigned attempt = 1; attempt <= READINESS_ATTEMPTS; ++attempt) {
-        if (!bulk_out(h, c98, 5000)) {
-            std::cerr
-                << "CARTRIDGE PREFLIGHT FAILED: could not send the 0x98 "
-                   "readiness command.\n"
-                << "Check the EZF Advance III USB connection and try again.\n"
-                << "No erase operation was attempted.\n";
-            return false;
-        }
-        if (!bulk_in_max(h, response, 1, 5000) || response.size() != 1) {
-            std::cerr
-                << "GBA CARTRIDGE NOT DETECTED / NOT READY.\n"
-                << "The EZF Advance III did not return the required 0x98 "
-                   "readiness byte (expected 01).\n"
-                << "No erase operation was attempted.\n";
-            return false;
-        }
-        if (response[0] == 0x01) {
-            ready = true;
-            break;
-        }
-        if (response[0] != 0x00) {
-            std::cerr << "Unexpected 0x98 readiness value 0x"
-                      << std::hex << std::setw(2) << std::setfill('0')
-                      << static_cast<unsigned>(response[0])
-                      << std::dec << std::setfill(' ') << ".\n"
-                      << "No erase operation was attempted.\n";
-            return false;
-        }
-        if (attempt != READINESS_ATTEMPTS) {
-            std::cout << "0x98 readiness returned 00; retrying ("
-                      << attempt << '/' << READINESS_ATTEMPTS << ")...\n";
-            std::this_thread::sleep_for(READINESS_RETRY_DELAY);
-        }
-    }
-    if (!ready) {
-        std::cerr
-            << "GBA CARTRIDGE NOT DETECTED / NOT READY.\n"
-            << "0x98 readiness remained 0x00 after " << READINESS_ATTEMPTS
-            << " checks.\n"
-            << "Make sure an EZ-Flash Advance III cartridge is fully inserted, "
-               "then retry.\n"
-            << "No erase operation was attempted.\n";
-        return false;
-    }
-
-    std::cout << "0x98 -> 01 (cartridge inserted / ready)\n";
-
-    if (!bulk_out(h, c99, 5000) ||
-        !bulk_in_max(h, response, c99.size(), 5000) ||
-        response != c99) {
-        std::cerr
-            << "CARTRIDGE PREFLIGHT FAILED: 0x99 bridge setup echo "
-               "did not match.\n"
-            << "No erase operation was attempted.\n";
-        return false;
-    }
-    std::cout << "0x99 parameter 01 echo OK (bridge configured)\n";
-    return true;
-}
-
-static std::vector<uint8_t> cmd92_2()
-{
-    // delete.pcap:
-    // 5A A5 92 02 00 00 00 00 02 00 00 00 00
-    return ezfadvance::Protocol::command92Two();
-}
-
-static bool command_data_echo(libusb_device_handle* h,
-                              const std::vector<uint8_t>& command,
-                              const std::vector<uint8_t>& data,
-                              const char* label,
-                              unsigned timeout_ms = 5000)
-{
-    return ezfadvance::Protocol(h).commandDataEcho(
-        command, data, label, {timeout_ms, 0, true});
-}
-
-static bool tx92_2(libusb_device_handle* h,
-                   uint8_t a, uint8_t b,
-                   const char* label)
-{
-    return command_data_echo(h, cmd92_2(), {a,b}, label);
-}
-
-static bool final_cleanup(libusb_device_handle* h)
-{
-    // Exact cleanup immediately before blank verification in delete.pcap.
-    if (!tx92_2(h, 0x55,0xAA, "CLEANUP 55AA")) return false;
-    if (!tx92_2(h, 0x00,0x00, "CLEANUP 0000 A")) return false;
-    if (!tx92_2(h, 0x00,0x00, "CLEANUP 0000 B")) return false;
-    if (!tx92_2(h, 0x00,0x00, "CLEANUP 0000 C")) return false;
-    return true;
-}
-
-static std::vector<uint32_t> bottom_boot_sector_addresses()
-{
-    std::vector<uint32_t> v;
-    // 9 small sectors: 0x0000 .. 0x8000, step 0x1000.
-    for (uint32_t a = 0x000000; a <= 0x008000; a += 0x001000)
-        v.push_back(a);
-    // 126 large sectors: 0x010000 .. 0x3F8000, step 0x8000.
-    for (uint32_t a = 0x010000; a <= 0x3F8000; a += 0x008000)
-        v.push_back(a);
-    return v;
-}
-
-static std::vector<uint32_t> top_boot_sector_addresses()
-{
-    std::vector<uint32_t> v;
-    // 128 large sectors: 0x000000 .. 0x3F8000, step 0x8000.
-    for (uint32_t a = 0x000000; a <= 0x3F8000; a += 0x008000)
-        v.push_back(a);
-    // 7 small sectors: 0x3F9000 .. 0x3FF000, step 0x1000.
-    for (uint32_t a = 0x3F9000; a <= 0x3FF000; a += 0x001000)
-        v.push_back(a);
-    return v;
-}
-
-static bool erase_sector(libusb_device_handle* h,
-                         uint32_t address,
-                         unsigned bank,
-                         size_t sector_index,
-                         size_t sector_count)
-{
-    std::vector<uint8_t> cmd = {
-        0x5A,0xA5,0x96,0x00,
-        static_cast<uint8_t>(address >> 0),
-        static_cast<uint8_t>(address >> 8),
-        static_cast<uint8_t>(address >> 16),
-        static_cast<uint8_t>(address >> 24),
-        0x00,0x00,0x00,0x00,0x00
-    };
-
-    if (!bulk_out(h, cmd, 5000)) {
-        std::cerr << "Erase command failed at bank " << bank
-                  << " address 0x" << std::hex << address << std::dec << '\n';
-        return false;
-    }
-
-    std::vector<uint8_t> response;
-    if (!bulk_in_max(h, response, 64, 5000)) {
-        std::cerr << "Erase response failed at bank " << bank
-                  << " address 0x" << std::hex << address << std::dec << '\n';
-        return false;
-    }
-
-    if (response.size() != 13 ||
-        !std::equal(cmd.begin(), cmd.begin() + 12, response.begin())) {
-        std::cerr << "Unexpected 0x96 response at bank " << bank
-                  << " address 0x" << std::hex << address << std::dec << "\nExpected prefix:\n";
-        print_hex(cmd.data(), 12, 12);
-        std::cerr << "Received:\n";
-        print_hex(response.data(), response.size(), response.size());
-        return false;
-    }
-
-    // In delete.pcap, byte 12 is 0x00 for every successful erase.
-    // During earlier non-erasing live tests it was 0x01, so treat non-zero as failure.
-    if (response[12] != 0x00) {
-        std::cerr << "0x96 erase status is non-zero at bank " << bank
-                  << " address 0x" << std::hex << address
-                  << ": status=0x" << static_cast<unsigned>(response[12])
-                  << std::dec << '\n';
-        return false;
-    }
-
-    if (sector_index == 0 || ((sector_index + 1) % 8) == 0 || sector_index + 1 == sector_count) {
-        std::cout << "  bank " << (bank + 1) << "/4: sector "
-                  << (sector_index + 1) << "/" << sector_count
-                  << " @ 0x" << std::hex << std::setw(6) << std::setfill('0')
-                  << address << std::dec << '\n';
-    }
-
-    return true;
-}
-
-static bool erase_bank(libusb_device_handle* h,
-                       ezfadvance::FlashWindowSelector& windows,
-                       unsigned bank)
-{
-    const std::vector<uint32_t> sectors =
-        (bank == 0 || bank == 2)
-        ? bottom_boot_sector_addresses()
-        : top_boot_sector_addresses();
-
-    if (sectors.size() != 135) {
-        std::cerr << "Internal error: expected 135 sectors, got "
-                  << sectors.size() << '\n';
-        return false;
-    }
-
-    std::cout << "\n========================================\n";
-    std::cout << "ERASING FLASH BANK " << (bank + 1) << "/4\n";
-    std::cout << "========================================\n";
-
-    if (!windows.select(bank)) {
-        std::cerr << "Bank setup failed for bank " << bank << '\n';
-        return false;
-    }
-
-    for (size_t i = 0; i < sectors.size(); ++i) {
-        if (!erase_sector(h, sectors[i], bank, i, sectors.size()))
-            return false;
-    }
-
-    if (!windows.finishOperation()) {
-        std::cerr << "Post-erase status sequence failed for bank " << bank << '\n';
-        return false;
-    }
-
-    return true;
-}
-
-static bool read_region(libusb_device_handle* h,
-                        const std::vector<uint8_t>& command,
-                        size_t expected_len,
-                        std::vector<uint8_t>& result)
-{
-    if (!bulk_out(h, command, 5000)) return false;
-    if (!bulk_in_max(h, result, expected_len, 10000)) return false;
-    if (result.size() != expected_len) {
-        std::cerr << "Blank verification read returned " << result.size()
-                  << " bytes, expected " << expected_len << '\n';
-        return false;
-    }
-    return true;
-}
-
-static bool all_ff(const std::vector<uint8_t>& v)
-{
-    return std::all_of(v.begin(), v.end(), [](uint8_t b) { return b == 0xFF; });
-}
-
-static bool verify_blank_like_capture(libusb_device_handle* h)
+void printSummary(bool succeeded)
 {
     std::cout << "\n========================================\n";
-    std::cout << "CAPTURE-DERIVED BLANK VERIFICATION\n";
+    if (succeeded) {
+        std::cout
+            << "CARD WIPE COMPLETED.\n"
+            << "The two blank-check reads captured by Windows both returned "
+               "all FF.\n"
+            << "All four 32-KiB save banks were explicitly written with "
+               "zeros.\n";
+    } else {
+        std::cout
+            << "CARD WIPE FAILED OR COULD NOT BE VERIFIED.\n"
+            << "Please unplug and reconnect the EZF Advance III, then try "
+               "again.\n";
+    }
     std::cout << "========================================\n";
-
-    // delete.pcap: read 172 bytes from address 0.
-    const std::vector<uint8_t> q1 = {
-        0x5A,0xA5,0x91,0x00,
-        0x00,0x00,0x00,0x00,
-        0xAC,0x00,0x00,0x00,
-        0x00
-    };
-
-    // delete.pcap: read 32 bytes from address/selector 0x02000002.
-    const std::vector<uint8_t> q2 = {
-        0x5A,0xA5,0x91,0x00,
-        0x02,0x00,0x00,0x02,
-        0x20,0x00,0x00,0x00,
-        0x00
-    };
-
-    std::vector<uint8_t> r1, r2;
-    if (!read_region(h, q1, 172, r1)) return false;
-    if (!all_ff(r1)) {
-        auto it = std::find_if(r1.begin(), r1.end(), [](uint8_t b){ return b != 0xFF; });
-        size_t off = static_cast<size_t>(std::distance(r1.begin(), it));
-        std::cerr << "Blank verification #1 failed at offset 0x"
-                  << std::hex << off << std::dec << ": 0x"
-                  << std::hex << static_cast<unsigned>(*it) << std::dec << '\n';
-        return false;
-    }
-    std::cout << "Verification #1: 172/172 bytes are FF\n";
-
-    if (!read_region(h, q2, 32, r2)) return false;
-    if (!all_ff(r2)) {
-        auto it = std::find_if(r2.begin(), r2.end(), [](uint8_t b){ return b != 0xFF; });
-        size_t off = static_cast<size_t>(std::distance(r2.begin(), it));
-        std::cerr << "Blank verification #2 failed at offset 0x"
-                  << std::hex << off << std::dec << ": 0x"
-                  << std::hex << static_cast<unsigned>(*it) << std::dec << '\n';
-        return false;
-    }
-    std::cout << "Verification #2: 32/32 bytes are FF\n";
-
-    return true;
 }
 
-class CardEraser final {
-public:
-    explicit CardEraser(libusb_device_handle* handle) noexcept
-        : handle_(handle), transport_(handle),
-          flash_windows_(transport_, ezfadvance::FlashWindowSelector::wipeTiming()),
-          save_bank_cleaner_(transport_)
-    {
-    }
-
-    bool execute()
-    {
-        // Safety gate: no destructive 0x96 erase command is sent until the
-        // cartridge has returned the proven 0x98 readiness byte.
-        bool ok = cartridge_ready_preflight(handle_);
-        for (unsigned bank = 0; bank < 4 && ok; ++bank)
-            ok = erase_bank(handle_, flash_windows_, bank);
-
-        if (ok) {
-            std::cout << "\n========================================\n"
-                      << "CLEARING SAVE MEMORY\n"
-                      << "========================================\n";
-            ok = save_bank_cleaner_.clearAll(std::cout);
-            if (ok)
-                std::cout << "All four save banks explicitly cleared to zero.\n";
-        }
-
-        if (ok) {
-            std::cout << "\nRunning final cleanup sequence...\n";
-            ok = final_cleanup(handle_);
-        }
-        if (ok)
-            ok = verify_blank_like_capture(handle_);
-        return ok;
-    }
-
-private:
-    libusb_device_handle* handle_;
-    ezfadvance::BulkTransport transport_;
-    ezfadvance::FlashWindowSelector flash_windows_;
-    ezfadvance::SaveBankCleaner save_bank_cleaner_;
-};
+} // namespace
 
 int main(int argc, char** argv)
 {
@@ -433,15 +67,7 @@ int main(int argc, char** argv)
     }
 
     if (argc != 2 || std::string(argv[1]) != "--yes-really-wipe") {
-        std::cerr
-            << "EZF Advance III card wipe utility (" << ezfadvance::hostPlatformName() << ")\n\n"
-            << "WARNING: This operation is destructive and erases cartridge "
-               "flash and all four save banks.\n\n"
-            << "RECOMMENDED BEFORE USE:\n"
-            << "  Unplug the EZF Advance III USB device, then plug it back in before running\n"
-            << "  this wipe utility. This gives the wipe a fresh USB/bridge session.\n\n"
-            << "Usage: " << argv[0] << " --yes-really-wipe\n"
-            << "       " << argv[0] << " --version\n";
+        printUsage(argv[0]);
         return 1;
     }
 
@@ -449,10 +75,13 @@ int main(int argc, char** argv)
         << "========================================\n"
         << "BEFORE WIPING\n"
         << "========================================\n"
-        << "Recommended: unplug the EZF Advance III USB device and plug it back in\n"
-        << "before using this wipe utility, so the wipe starts from a fresh USB/bridge session.\n\n"
+        << "Recommended: unplug the EZF Advance III USB device and plug it "
+           "back in\n"
+        << "before using this wipe utility, so the wipe starts from a fresh "
+           "USB/bridge session.\n\n"
         << "WARNING: ERASE REQUEST CONFIRMED.\n"
-        << "This erases ROM flash and explicitly zeroes all four 32-KiB save banks.\n";
+        << "This erases ROM flash and explicitly zeroes all four 32-KiB save "
+           "banks.\n";
 
     ezfadvance::UsbDevice device;
     const auto open_result = device.open(std::cerr);
@@ -460,25 +89,19 @@ int main(int argc, char** argv)
         ezfadvance::reportUsbOpenFailure(open_result, std::cerr);
         return 1;
     }
-    libusb_device_handle* h = device.handle();
 
-    std::cout << "EZF Advance III opened on " << ezfadvance::hostPlatformName()
+    std::cout << "EZF Advance III opened on "
+              << ezfadvance::hostPlatformName()
               << "; interface 0 claimed.\n";
 
-    CardEraser eraser(h);
-    const bool ok = eraser.execute();
+    ezfadvance::BulkTransport transport(device.handle());
+    ezfadvance::FlashWindowSelector flash_windows(
+        transport, ezfadvance::FlashWindowSelector::wipeTiming());
+    ezfadvance::SaveBankCleaner save_bank_cleaner(transport);
+    ezfadvance::CardWipeWorkflow workflow(
+        transport, flash_windows, save_bank_cleaner, std::cout, std::cerr);
+    const bool succeeded = workflow.execute();
 
-    std::cout << "\n========================================\n";
-    if (ok) {
-        std::cout << "CARD WIPE COMPLETED.\n";
-        std::cout << "The two blank-check reads captured by Windows both returned all FF.\n";
-        std::cout << "All four 32-KiB save banks were explicitly written with zeros.\n";
-    } else {
-        std::cout << "CARD WIPE FAILED OR COULD NOT BE VERIFIED.\n"
-                  << "Please unplug and reconnect the EZF Advance III, "
-                     "then try again.\n";
-    }
-    std::cout << "========================================\n";
-
-    return ok ? 0 : 2;
+    printSummary(succeeded);
+    return succeeded ? 0 : 2;
 }
