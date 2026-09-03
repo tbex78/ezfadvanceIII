@@ -877,8 +877,8 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms,
 static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms,
                                               std::ostream& report)
 {
-    if (roms.size() < 2)
-        throw std::runtime_error("multi image builder requires at least two ROMs");
+    if (roms.empty())
+        throw std::runtime_error("multi-loader image builder requires at least one ROM");
     if (roms.size() > MULTI_CATALOG_MAX_ENTRIES) {
         std::ostringstream oss;
         oss << "multi-ROM catalog has " << MULTI_CATALOG_MAX_ENTRIES
@@ -912,7 +912,9 @@ static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms,
     }
 
     report << "\n========================================\n"
-              << "CAPTURE-DERIVED MULTI-ROM PACKING\n"
+              << (roms.size() == 1
+                      ? "EXPERIMENTAL ONE-ENTRY MULTI-LOADER PACKING\n"
+                      : "CAPTURE-DERIVED MULTI-ROM PACKING\n")
               << "========================================\n"
               << "Ordering: stable descending ROM file size\n";
     if (reordered)
@@ -1099,7 +1101,12 @@ static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms,
     report << "Multi-ROM loader/menu @ byte 0x"
               << std::hex << loader_start << std::dec << '\n';
 
-    if (roms.size() == 2) {
+    if (roms.size() == 1) {
+        report << "Experimental one-entry multi-loader extent: 0x"
+                  << std::hex << loader_copy_len
+                  << " bytes; image end 0x" << image.size()
+                  << std::dec << '\n';
+    } else if (roms.size() == 2) {
         report << "Two-ROM capture-exact loader extent: 0x"
                   << std::hex << loader_copy_len
                   << " bytes; image end 0x" << image.size()
@@ -1122,10 +1129,13 @@ static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms,
 
 bool CartridgeImageBuilder::build(std::vector<RomInfo>& roms,
                                   BuiltCartridgeImage& result,
-                                  std::string& error) const
+                                  std::string& error,
+                                  const CartridgeImageBuildOptions& options) const
 {
     std::ostringstream report;
-    result.bytes = roms.size() == 1
+    const bool use_single_loader =
+        roms.size() == 1 && !options.use_multi_loader_for_single_rom;
+    result.bytes = use_single_loader
         ? build_single_image(roms, report)
         : build_multi_image(roms, report);
     result.report = report.str();

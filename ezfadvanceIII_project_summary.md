@@ -12,7 +12,7 @@ The project is intentionally **evidence-driven**:
 - Unproven read/write mappings are not guessed.
 - The writer never silently patches ROM save routines.
 
-Current shared project/toolset version covered by this summary: **0.20.7**.
+Current shared project/toolset version covered by this summary: **0.21.0**.
 
 All mainline utilities carry this same version:
 
@@ -237,6 +237,12 @@ Length:              0x660
 Relocation entries:  13
 Catalog entry:       offset 0x4F8
 ```
+
+Version 0.21.0 adds an explicitly selected one-entry multi-loader experiment
+for small-ROM boot investigation. It sets both multi-loader catalog counts to
+one and writes one entry without changing the established default single-ROM
+path. This is an experimental construction rather than an original-manager
+layout and requires controlled hardware validation.
 
 ### Multi-ROM loader
 
@@ -861,7 +867,7 @@ Four 8-MiB windows establish the tested 32-MiB geometry, but there is not yet a 
 
 ## Current native platform scope
 
-Shared version 0.20.7 follows the C++17/libusb platform policy while preserving
+Shared version 0.21.0 follows the C++17/libusb platform policy while preserving
 the established Unix-like build path:
 
 ```text

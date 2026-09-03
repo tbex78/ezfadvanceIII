@@ -1,6 +1,6 @@
 # EZF Advance III Software Specification
 
-**Specification baseline:** shared `0.20.7` toolset, including guarded
+**Specification baseline:** shared `0.21.0` toolset, including guarded
 official-cartridge extraction and hardware-proven EZ3 catalogued-ROM
 extraction.
 
@@ -655,6 +655,13 @@ capture-exact two-ROM extent is `0x6F80`. Four-or-more-ROM images apply the
 captured final 26-byte zero tail. The loader may be appended or embedded in a
 sufficiently large erased run; only physical/catalog ROM 1 is patched to branch
 to it.
+
+The opt-in `--experimental-single-multi-loader` mode accepts exactly one ROM
+and constructs a multi-loader image whose two count fields are one and whose
+first catalog slot describes that ROM. It must be visibly identified as
+experimental. It must not alter default single-ROM construction or infer the
+mode from a title, game code, ROM size, or save marker. This one-entry form is
+not capture-derived and remains hardware-unqualified.
 
 The minimum programmed extent is 64 KiB. A larger constructed extent is
 rounded up to a `0x100`-byte boundary.

@@ -4,7 +4,7 @@
 
 This repository provides four native C++17/libusb command-line tools for the
 32-MiB / 256-Mbit EZF Advance III cartridge. The current synchronized toolset
-version is **0.20.7**.
+version is **0.21.0**.
 
 See the [project summary](ezfadvanceIII_project_summary.md),
 [software specification](SOFTWARE_SPECIFICATION.md), and
@@ -13,7 +13,7 @@ for the evidence history and protocol details.
 
 Markdown files named for older releases, reviews, recommendations, or test
 plans are retained as historical snapshots. Their words such as “current,”
-“pending,” and “next” describe the named review point, not the present 0.20.7
+“pending,” and “next” describe the named review point, not the present 0.21.0
 support boundary.
 
 Version 0.20.7 completes the architecture migration. On real EZF Advance III
@@ -23,6 +23,18 @@ save range, and read the resulting cartridge. This qualifies only the
 exercised direct-bank workflow; it does not generalize catalog allocation for
 every save marker or ROM layout. Linux and Windows CI pass, while physical
 Windows USB operation remains unqualified.
+
+Version 0.21.0 adds the explicitly opt-in
+`--experimental-single-multi-loader` writer mode. It constructs a one-ROM
+image using the multi-ROM loader and a one-entry catalog for controlled
+hardware investigation. This layout is not capture-derived or hardware-proven
+and does not change the default single-ROM path.
+
+```sh
+./ezfadvanceIII_multirom_writer \
+  --experimental-single-multi-loader \
+  assets/homebrew/Bios_Dumper.gba
+```
 
 ## Build and test
 

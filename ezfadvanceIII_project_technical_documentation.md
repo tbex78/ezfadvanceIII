@@ -1,11 +1,11 @@
 # EZF Advance III Reverse-Engineering Project
 
 **Technical architecture, protocol, image-format, and validation documentation**  
-**Current project/toolset version:** `0.20.7`<br>
-**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.20.7`<br>
+**Current project/toolset version:** `0.21.0`<br>
+**Current writer implementation:** `ezfadvanceIII_multirom_writer 0.21.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.20.7; its latest changes await compilation and validation. The 0.15.2 baseline was compiled and transcript-tested on macOS / Apple Silicon. Linux CI covers the existing Makefile path, and Windows CMake/MSVC CI is defined for the new port. The 0.9.0 extracted libusb writer backend was specifically hardware-requalified with the two-ROM 8-MiB F-Zero/Mario Kart case: exact-8-MiB full read-back verification succeeded, the EZ3 menu booted, and both games launched successfully on a real GBA. Version 0.11.2 hardware-requalifies the partial-first-window, partial 12-/20-/28-MiB, exact 16-/24-/32-MiB, and tiny-tail ROM-verification paths together with final four-bank clearing. Corrected 32-KiB DumpRom save writing at `0x0920` is hardware-qualified. Controlled hardware isolation proved that one-byte mapping transactions wrote save offsets 0 and 1; the staged two-byte-only 16-/24-MiB mapping preserved bank `0x0900` and exposed the genuine two-ROM catalog. Official-cartridge detection, header confirmation, the guarded full scan, the correct 8-MiB Golden Sun trim, the trusted SHA-256 match, and extracted-file boot are hardware-confirmed. EZ3 ROM 1 and ROM 2 extraction from a two-ROM layout are hardware-confirmed by SHA-256 equality with both original files. The 1-MiB official extraction extent is unit-tested but awaits a physical-cartridge dump/hash comparison. Linux/BSD/Windows physical-USB validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.21.0. The 0.20.7 migrated stack is compiled, CI-tested, and hardware-qualified for the documented workflows. Version 0.21.0 adds an opt-in one-entry multi-loader experiment that remains hardware-unqualified. Linux/BSD/Windows physical-USB validation remains pending.
 
 ---
 
@@ -3376,6 +3376,18 @@ EEPROM structures, or unsupported verification geometries.
 Linux build/tests and Windows build/offline tests pass. Windows physical USB
 operation remains a separate, unqualified hardware checkpoint.
 
+### 36.107 0.21.0 — experimental one-entry multi-loader image
+
+The writer accepts `--experimental-single-multi-loader` only with exactly one
+ROM. This mode uses the multi-ROM loader template with both catalog count
+fields set to one and one populated catalog entry. It is intended to determine
+whether the multi-loader setup can launch a small ROM that does not boot under
+the original manager's single-ROM layout.
+
+The experiment is structural and opt-in: normal single-ROM construction is
+unchanged, no game-code or title exception is used, and the generated layout
+is explicitly reported as neither capture-derived nor hardware-qualified.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -3855,7 +3867,7 @@ The project is therefore not merely a USB flasher. It is a reconstruction of the
 
 ## 43. Current project status
 
-At shared source version **0.20.7**, the project has an object-oriented structural model:
+At shared source version **0.21.0**, the project has an object-oriented structural model:
 
 - all four mainline utilities share one synchronized version; a code change in at least one utility bumps the version for the entire toolset;
 - normal runtime banners do not embed the project version; from 0.7.29,

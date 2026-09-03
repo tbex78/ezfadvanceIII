@@ -25,13 +25,18 @@ struct BuiltCartridgeImage {
     std::string report;
 };
 
+struct CartridgeImageBuildOptions {
+    bool use_multi_loader_for_single_rom = false;
+};
+
 class CartridgeImageBuilder final {
 public:
     static constexpr std::size_t catalog_slots = 120;
 
     bool build(std::vector<RomInfo>& roms,
                BuiltCartridgeImage& result,
-               std::string& error) const;
+               std::string& error,
+               const CartridgeImageBuildOptions& options = {}) const;
 };
 
 } // namespace ezfadvance

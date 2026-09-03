@@ -1,4 +1,5 @@
 #include "ezfadvance/cartridge_image_builder.hpp"
+#include "ezfadvance/cartridge_format.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -35,12 +36,13 @@ std::uint64_t hash(const std::vector<std::uint8_t>& bytes)
 void verify(std::vector<ezfadvance::RomInfo> roms,
             std::size_t expected_size,
             std::uint64_t expected_hash,
-            const std::vector<std::uint32_t>& expected_starts)
+            const std::vector<std::uint32_t>& expected_starts,
+            const ezfadvance::CartridgeImageBuildOptions& options = {})
 {
     ezfadvance::BuiltCartridgeImage image;
     std::string error;
     const bool ok = ezfadvance::CartridgeImageBuilder{}.build(
-        roms, image, error);
+        roms, image, error, options);
     if (!ok) {
         std::cerr << error << '\n';
         std::abort();
@@ -60,6 +62,34 @@ int main()
     auto single = rom("Single", 0x10000, 0xFF, 9);
     for (std::size_t i = 0; i < 0x200; ++i) single.data[i] = 0x11;
     verify({single}, 65536, 0xfb860f668ace9a0bull, {0});
+
+    ezfadvance::BuiltCartridgeImage experimental_image;
+    std::string experimental_error;
+    std::vector experimental_roms{single};
+    ezfadvance::CartridgeImageBuildOptions experimental_options;
+    experimental_options.use_multi_loader_for_single_rom = true;
+    const bool experimental_ok = ezfadvance::CartridgeImageBuilder{}.build(
+        experimental_roms, experimental_image, experimental_error,
+        experimental_options);
+    assert(experimental_ok);
+    assert(experimental_error.empty());
+    assert(experimental_roms[0].start == 0);
+    assert(experimental_image.report.find(
+               "EXPERIMENTAL ONE-ENTRY MULTI-LOADER PACKING") !=
+           std::string::npos);
+    assert(experimental_image.report.find(
+               "Experimental one-entry multi-loader extent") !=
+           std::string::npos);
+    const auto loader_start = ezfadvance::CartridgeFormat::armBranchTarget(
+        ezfadvance::CartridgeFormat::readLe32(experimental_image.bytes.data()));
+    assert(loader_start);
+    constexpr std::size_t multi_header_offset = 0x475E;
+    assert(ezfadvance::CartridgeFormat::readLe16(
+               experimental_image.bytes.data() + *loader_start +
+               multi_header_offset) == 1);
+    assert(ezfadvance::CartridgeFormat::readLe16(
+               experimental_image.bytes.data() + *loader_start +
+               multi_header_offset + 14) == 1);
 
     verify({
         rom("Large", 0x100000, 0x21, 5),
