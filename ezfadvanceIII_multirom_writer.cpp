@@ -10,30 +10,21 @@
 #  include <libusb-1.0/libusb.h>
 #endif
 
-#include <algorithm>
-#include <array>
-#include <cctype>
 #include <cstdint>
-#include <chrono>
-#include <fstream>
-#include <iomanip>
 #include <iostream>
-#include <iterator>
-#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "ezfadvance/usb_device.hpp"
 #include "ezfadvance/cartridge_image_builder.hpp"
 #include "ezfadvance/card_writer.hpp"
 #include "ezfadvance/card_write_presenter.hpp"
+#include "ezfadvance/cartridge_layout_presenter.hpp"
 #include "ezfadvance/libusb_writer_backend.hpp"
-#include "ezfadvance/protocol.hpp"
 #include "ezfadvance/platform.hpp"
-#include "ezfadvance/rom_analyzer.hpp"
+#include "ezfadvance/rom_input_loader.hpp"
 #include "ezfadvance/verification_session.hpp"
 #include "ezfadvance/writer_options.hpp"
 #include "ezfadvance/verification_policy.hpp"
@@ -44,17 +35,6 @@ static constexpr size_t MAX_CARD_IMAGE = 0x2000000;   // 256 Mbit / 32 MiB card
 using RomInfo = ezfadvance::RomInfo;
 using BuiltCartridgeImage = ezfadvance::BuiltCartridgeImage;
 using CartridgeImageBuilder = ezfadvance::CartridgeImageBuilder;
-static void print_hex(const uint8_t* p, size_t n, size_t max = 64)
-{
-    const size_t shown = std::min(n, max);
-    for (size_t i = 0; i < shown; ++i) {
-        if (i && (i % 16) == 0) std::cout << '\n';
-        std::cout << std::hex << std::setw(2) << std::setfill('0')
-                  << static_cast<unsigned>(p[i]) << ' ';
-    }
-    if (shown < n) std::cout << "...";
-    std::cout << std::dec << '\n';
-}
 
 // ezfadvanceIII multi-ROM writer for macOS, Linux, BSD, and Windows 10/11.
 //
@@ -267,178 +247,6 @@ static void print_hex(const uint8_t* p, size_t n, size_t max = 64)
 //   * Kingdom Hearts' SRAM_F_V103 catalog entry is type 0 / mapping 3.
 // Existing v33 cartridge-readiness, EEPROM safety, loader templates, and all
 // previously hardware-proven <=16-MiB behaviors are preserved.
-static bool warn_and_confirm_non_sram_save(const RomInfo& r,
-                                           const ezfadvance::NonSramSaveInfo& info)
-{
-    std::cerr
-        << "\n========================================\n"
-        << "WARNING: NON-SRAM SAVE FORMAT\n"
-        << "========================================\n"
-        << "ROM: " << r.path << '\n'
-        << "Detected save library: " << info.signature << '\n'
-        << "Embedded save-library signature family: " << info.family << "\n\n"
-        << "This marker normally identifies a non-SRAM GBA save library. However,\n"
-        << "manual SRAM patching can leave the original FLASH/EEPROM signature in\n"
-        << "the ROM, so the marker does NOT prove the active runtime save method.\n\n"
-        << "This writer NEVER patches or converts ROM save routines automatically.\n"
-        << "If SRAM conversion is needed, do it manually with a separate save-patching\n"
-        << "tool BEFORE running this writer. If the ROM is already SRAM-patched, this\n"
-        << "signature warning may be safely expected.\n"
-        << "========================================\n"
-        << "Continue anyway? [y/N]: " << std::flush;
-
-    std::string answer;
-    if (!std::getline(std::cin, answer)) {
-        std::cerr << "\nNo response received; aborting safely.\n";
-        return false;
-    }
-
-    // Trim surrounding whitespace and accept only an explicit y/yes.
-    const auto first = answer.find_first_not_of(" \t\r\n");
-    const auto last  = answer.find_last_not_of(" \t\r\n");
-    if (first == std::string::npos) {
-        std::cerr << "No selected; aborting safely.\n";
-        return false;
-    }
-
-    std::string normalized = answer.substr(first, last - first + 1);
-    std::transform(normalized.begin(), normalized.end(), normalized.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
-    if (normalized == "y" || normalized == "yes") {
-        std::cerr << "Yes selected; continuing.\n";
-        return true;
-    }
-
-    std::cerr << "No selected; aborting safely.\n";
-    return false;
-}
-
-static std::string derive_name(const std::string& path)
-{
-    // Avoid std::filesystem so the same source builds cleanly on older BSD
-    // C++17 toolchains as well as Linux and macOS. Accept both Unix '/' and
-    // Windows-style '\\' separators because ROM paths may come from shared
-    // folders mounted inside a VM.
-    const size_t slash = path.find_last_of("/\\");
-    std::string stem =
-        (slash == std::string::npos) ? path : path.substr(slash + 1);
-
-    const size_t dot = stem.find_last_of('.');
-    if (dot != std::string::npos && dot != 0)
-        stem.resize(dot);
-
-    std::string out;
-    for (unsigned char c : stem) {
-        if (out.size() >= 16) break;
-        if (c >= 0x20 && c <= 0x7E)
-            out.push_back(static_cast<char>(c));
-        else
-            out.push_back('_');
-    }
-
-    if (out.empty()) out = "ROM";
-    return out;
-}
-
-static bool load_rom(RomInfo& r)
-{
-    std::ifstream f(r.path, std::ios::binary);
-    if (!f) {
-        std::cerr << "Cannot open ROM: " << r.path << '\n';
-        return false;
-    }
-
-    r.data.assign(
-        std::istreambuf_iterator<char>(f),
-        std::istreambuf_iterator<char>());
-
-    if (r.data.empty()) {
-        std::cerr << "ROM is empty: " << r.path << '\n';
-        return false;
-    }
-
-    const auto analysis = ezfadvance::RomAnalyzer{}.analyze(r.data);
-    if (!analysis.original_entry_target) {
-        std::cerr << "ROM does not begin with the capture-supported "
-                     "EAxxxxxx ARM branch: " << r.path << '\n';
-        return false;
-    }
-
-    if (analysis.non_sram_save) {
-        const auto& non_sram = *analysis.non_sram_save;
-        if (!warn_and_confirm_non_sram_save(r, non_sram)) {
-            std::cerr << "ROM processing cancelled before image construction; "
-                         "no USB write was attempted.\n";
-            return false;
-        }
-    }
-
-    r.original_entry_target = *analysis.original_entry_target;
-    if (r.name.empty()) r.name = derive_name(r.path);
-    if (!r.entry_type_overridden)
-        r.entry_type = analysis.entry_type;
-
-    if (!r.mapping_flag_overridden) {
-        if (analysis.has_eeprom_library) {
-            r.mapping_flag = analysis.mapping_flag;
-            if (r.mapping_flag == 0) {
-                std::cerr
-                    << "EEPROM capacity could not be proven from ROM structure: "
-                    << r.path << '\n'
-                    << "Catalog map 4 requires 4-Kbit/512-byte EEPROM; map 5 "
-                       "requires 64-Kbit/8-KiB EEPROM.\n"
-                    << "Specify the evidence-appropriate value explicitly with "
-                       "--mapN=4 or --mapN=5 for this ROM slot.\n"
-                    << "No USB write was attempted.\n";
-                return false;
-            }
-            std::cout << "EEPROM SDK initialization selects "
-                      << (r.mapping_flag == 4 ? "4-Kbit / 512-byte" :
-                                                "64-Kbit / 8-KiB")
-                      << " capacity; using catalog map "
-                      << static_cast<unsigned>(r.mapping_flag) << ".\n";
-        } else {
-            r.mapping_flag = analysis.mapping_flag;
-        }
-    }
-
-    return true;
-}
-
-static void print_layout(const std::vector<RomInfo>& roms,
-                         const std::vector<uint8_t>& image,
-                         size_t programmed_size)
-{
-    std::cout << "\n========================================\n"
-              << "IMAGE LAYOUT\n"
-              << "========================================\n";
-
-    for (size_t i = 0; i < roms.size(); ++i) {
-        const auto& r = roms[i];
-        std::cout << "ROM " << (i + 1)
-                  << ": " << r.name
-                  << "\n  file: " << r.path
-                  << "\n  size: " << r.data.size()
-                  << " (0x" << std::hex << r.data.size() << std::dec << ")"
-                  << "\n  byte start: 0x" << std::hex << r.start << std::dec
-                  << "\n  original entry target: 0x"
-                  << std::hex << r.original_entry_target << std::dec
-                  << "\n  catalog type: " << static_cast<unsigned>(r.entry_type)
-                  << (r.entry_type_overridden ? " (override)" : " (size-class rule)")
-                  << "\n  mapping flag: " << static_cast<unsigned>(r.mapping_flag)
-                  << (r.mapping_flag_overridden ? " (override)" : " (signature/map rule)")
-                  << "\n";
-    }
-
-    std::cout << "Constructed image bytes: " << image.size()
-              << " (0x" << std::hex << image.size() << std::dec << ")\n"
-              << "Programmed bytes: " << programmed_size
-              << " (0x" << std::hex << programmed_size << std::dec << ")\n"
-              << "Patched ROM #1 first 4 bytes: ";
-    print_hex(image.data(), std::min<size_t>(4, image.size()), 4);
-}
-
 static void usage(const char* argv0)
 {
     std::cerr
@@ -495,11 +303,13 @@ int main(int argc, char** argv)
             return 1;
         }
 
+        const ezfadvance::RomInputLoader rom_loader(
+            std::cin, std::cout, std::cerr);
         std::vector<RomInfo> roms;
         for (size_t i = 0; i < rom_paths.size(); ++i) {
             RomInfo r;
             r.path = rom_paths[i];
-            r.name = derive_name(r.path);
+            r.name = ezfadvance::RomInputLoader::deriveCatalogName(r.path);
             if (type_override[i]) {
                 r.entry_type = *type_override[i];
                 r.entry_type_overridden = true;
@@ -509,7 +319,7 @@ int main(int argc, char** argv)
                 r.mapping_flag_overridden = true;
             }
 
-            if (!load_rom(r))
+            if (!rom_loader.load(r))
                 return 1;
 
             roms.push_back(std::move(r));
@@ -541,7 +351,8 @@ int main(int argc, char** argv)
         std::vector<uint8_t>& image = built_image.bytes;
         const size_t programmed_size = built_image.programmed_size;
 
-        print_layout(roms, image, programmed_size);
+        ezfadvance::CartridgeLayoutPresenter{std::cout}.print(
+            roms, image, programmed_size);
 
         if (!do_write) {
             std::cout

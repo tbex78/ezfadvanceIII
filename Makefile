@@ -41,12 +41,12 @@ WIPE = ezfadvanceIII_wipe_card
 PROGRAMS = $(WRITER) $(CARD_READER) $(SAVE_READER) $(WIPE)
 TRANSPORT_SOURCES = src/usb_device.cpp src/protocol.cpp src/platform.cpp
 PRESENTATION_SOURCES = src/progress_bar.cpp
-WRITER_SOURCES = $(TRANSPORT_SOURCES) $(PRESENTATION_SOURCES) src/card_write_presenter.cpp src/flash_window_selector.cpp src/save_bank_access.cpp src/save_bank_cleaner.cpp src/card_writer.cpp src/libusb_writer_backend.cpp src/cartridge_format.cpp src/cartridge_image_builder.cpp src/eeprom_mapping.cpp src/rom_analyzer.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
+WRITER_SOURCES = $(TRANSPORT_SOURCES) $(PRESENTATION_SOURCES) src/card_write_presenter.cpp src/cartridge_layout_presenter.cpp src/flash_window_selector.cpp src/save_bank_access.cpp src/save_bank_cleaner.cpp src/card_writer.cpp src/libusb_writer_backend.cpp src/cartridge_format.cpp src/cartridge_image_builder.cpp src/eeprom_mapping.cpp src/rom_analyzer.cpp src/rom_input_loader.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 READ_ONLY_SOURCES = $(TRANSPORT_SOURCES) src/cartridge_format.cpp src/ez3_catalog.cpp src/ez3_catalog_reader.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp
 CARD_READER_SOURCES = $(READ_ONLY_SOURCES) $(PRESENTATION_SOURCES) src/card_reader_options.cpp src/ez3_card_workflow.cpp
 SAVE_READER_SOURCES = $(READ_ONLY_SOURCES) src/save_reader_options.cpp src/save_access_planner.cpp src/save_file_store.cpp src/save_bank_workflow.cpp src/save_catalog_analyzer.cpp src/save_bank_access.cpp src/save_bank_cleaner.cpp src/save_memory_reader.cpp src/save_memory_writer.cpp src/save_bank_selector.cpp
 WIPE_SOURCES = $(TRANSPORT_SOURCES) src/flash_window_selector.cpp src/save_bank_access.cpp src/save_bank_cleaner.cpp
-ALL_SUPPORT_SOURCES = $(SAVE_READER_SOURCES) src/card_reader_options.cpp src/ez3_card_workflow.cpp src/card_writer.cpp src/libusb_writer_backend.cpp src/cartridge_image_builder.cpp src/eeprom_mapping.cpp src/rom_analyzer.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
+ALL_SUPPORT_SOURCES = $(SAVE_READER_SOURCES) src/card_reader_options.cpp src/ez3_card_workflow.cpp src/card_writer.cpp src/card_write_presenter.cpp src/cartridge_layout_presenter.cpp src/libusb_writer_backend.cpp src/cartridge_image_builder.cpp src/eeprom_mapping.cpp src/rom_analyzer.cpp src/rom_input_loader.cpp src/verification_policy.cpp src/verification_session.cpp src/writer_options.cpp
 
 # Source selection is performed by the POSIX shell in each recipe so this
 # Makefile does not depend on GNU/BSD make conditionals.
@@ -128,6 +128,8 @@ test: check
 	./build/card_writer_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/card_write_presenter_test.cpp src/card_write_presenter.cpp -o build/card_write_presenter_test
 	./build/card_write_presenter_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/cartridge_layout_presenter_test.cpp src/cartridge_layout_presenter.cpp -o build/cartridge_layout_presenter_test
+	./build/cartridge_layout_presenter_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/ez3_catalog_test.cpp src/ez3_catalog.cpp src/cartridge_format.cpp -o build/ez3_catalog_test
 	./build/ez3_catalog_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/ez3_catalog_reader_test.cpp src/ez3_catalog_reader.cpp src/ez3_catalog.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/ez3_catalog_reader_test
@@ -136,6 +138,8 @@ test: check
 	./build/eeprom_mapping_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/rom_analyzer_test.cpp src/rom_analyzer.cpp src/cartridge_format.cpp src/eeprom_mapping.cpp -o build/rom_analyzer_test
 	./build/rom_analyzer_test
+	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/rom_input_loader_test.cpp src/rom_input_loader.cpp src/rom_analyzer.cpp src/cartridge_format.cpp src/eeprom_mapping.cpp -o build/rom_input_loader_test
+	./build/rom_input_loader_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/card_reader_options_test.cpp src/card_reader_options.cpp -o build/card_reader_options_test
 	./build/card_reader_options_test
 	$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS) tests/protocol_test.cpp src/protocol.cpp src/usb_device.cpp $(ALL_LDLIBS) -o build/protocol_test
@@ -205,6 +209,6 @@ print-config:
 	done
 
 clean:
-	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/cartridge_image_builder_test build/card_writer_test build/card_write_presenter_test build/ez3_catalog_test build/ez3_catalog_reader_test build/eeprom_mapping_test build/rom_analyzer_test build/card_reader_options_test build/protocol_test build/flash_window_selector_test build/usb_device_test build/platform_test build/progress_bar_test build/read_session_transition_test build/official_cartridge_read_test build/verification_exact_8mib_test build/verification_partial_12mib_test build/verification_exact_16mib_test build/verification_tiny_tail_above_16mib_test build/verification_partial_20mib_test build/verification_exact_24mib_test build/verification_partial_28mib_test build/verification_exact_32mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test build/version_test build/save_selection_test build/save_reader_options_test build/save_access_planner_test build/save_file_store_test build/save_bank_selector_test build/save_catalog_analyzer_test build/save_memory_test build/save_bank_cleaner_test
+	rm -f $(PROGRAMS) build/arm_branch_test build/cartridge_format_test build/cartridge_image_builder_test build/card_writer_test build/card_write_presenter_test build/cartridge_layout_presenter_test build/ez3_catalog_test build/ez3_catalog_reader_test build/eeprom_mapping_test build/rom_analyzer_test build/rom_input_loader_test build/card_reader_options_test build/protocol_test build/flash_window_selector_test build/usb_device_test build/platform_test build/progress_bar_test build/read_session_transition_test build/official_cartridge_read_test build/verification_exact_8mib_test build/verification_partial_12mib_test build/verification_exact_16mib_test build/verification_tiny_tail_above_16mib_test build/verification_partial_20mib_test build/verification_exact_24mib_test build/verification_partial_28mib_test build/verification_exact_32mib_test build/verification_policy_test build/verification_partial_first_window_test build/writer_options_test build/version_test build/save_selection_test build/save_reader_options_test build/save_access_planner_test build/save_file_store_test build/save_bank_selector_test build/save_catalog_analyzer_test build/save_memory_test build/save_bank_cleaner_test
 
 FORCE:

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.19.4 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.19.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,6 +50,7 @@ set(EZF_WRITER_SOURCES
     ${EZF_TRANSPORT_SOURCES}
     src/progress_bar.cpp
     src/card_write_presenter.cpp
+    src/cartridge_layout_presenter.cpp
     src/flash_window_selector.cpp
     src/save_bank_access.cpp
     src/save_bank_cleaner.cpp
@@ -59,6 +60,7 @@ set(EZF_WRITER_SOURCES
     src/cartridge_image_builder.cpp
     src/eeprom_mapping.cpp
     src/rom_analyzer.cpp
+    src/rom_input_loader.cpp
     src/verification_policy.cpp
     src/verification_session.cpp
     src/writer_options.cpp)
@@ -118,10 +120,12 @@ if(BUILD_TESTING)
     ezf_add_test(cartridge_image_builder_test tests/cartridge_image_builder_test.cpp src/cartridge_image_builder.cpp src/cartridge_format.cpp)
     ezf_add_test(card_writer_test tests/card_writer_test.cpp src/card_writer.cpp src/verification_policy.cpp)
     ezf_add_test(card_write_presenter_test tests/card_write_presenter_test.cpp src/card_write_presenter.cpp)
+    ezf_add_test(cartridge_layout_presenter_test tests/cartridge_layout_presenter_test.cpp src/cartridge_layout_presenter.cpp)
     ezf_add_test(ez3_catalog_test tests/ez3_catalog_test.cpp src/ez3_catalog.cpp src/cartridge_format.cpp)
     ezf_add_usb_test(ez3_catalog_reader_test tests/ez3_catalog_reader_test.cpp src/ez3_catalog_reader.cpp src/ez3_catalog.cpp src/read_only_cartridge.cpp src/read_session_transition.cpp src/cartridge_format.cpp src/protocol.cpp src/usb_device.cpp)
     ezf_add_test(eeprom_mapping_test tests/eeprom_mapping_test.cpp src/eeprom_mapping.cpp)
     ezf_add_test(rom_analyzer_test tests/rom_analyzer_test.cpp src/rom_analyzer.cpp src/cartridge_format.cpp src/eeprom_mapping.cpp)
+    ezf_add_test(rom_input_loader_test tests/rom_input_loader_test.cpp src/rom_input_loader.cpp src/rom_analyzer.cpp src/cartridge_format.cpp src/eeprom_mapping.cpp)
     ezf_add_test(card_reader_options_test tests/card_reader_options_test.cpp src/card_reader_options.cpp)
     ezf_add_usb_test(protocol_test tests/protocol_test.cpp src/protocol.cpp src/usb_device.cpp)
     ezf_add_usb_test(flash_window_selector_test tests/flash_window_selector_test.cpp src/flash_window_selector.cpp src/protocol.cpp src/usb_device.cpp)
