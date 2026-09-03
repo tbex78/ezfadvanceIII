@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ezfadvanceIII VERSION 0.20.4 LANGUAGES CXX)
+project(ezfadvanceIII VERSION 0.20.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -91,6 +91,7 @@ ezf_add_tool(ezfadvanceIII_card_reader
     src/progress_bar.cpp)
 ezf_add_tool(ezfadvanceIII_save_reader
     ezfadvanceIII_save_reader.cpp ${EZF_READ_ONLY_SOURCES}
+    src/save_reader_application.cpp
     src/save_reader_options.cpp
     src/save_access_planner.cpp
     src/save_file_store.cpp src/save_bank_workflow.cpp
