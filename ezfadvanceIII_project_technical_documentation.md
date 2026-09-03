@@ -3090,8 +3090,11 @@ capture-derived `0x92/01` transaction, and the application validates the input
 size and final selector before opening the device. The established destructive
 safeguards remain mandatory: a new backup path, `--yes-really-write`, complete
 pre-write backup, and full byte-for-byte read-back verification. Direct
-four-bank extraction is hardware-qualified for `BPEF`; the matching 128-KiB
-write workflow awaits controlled hardware validation.
+four-bank extraction is hardware-qualified for `BPEF`. The matching explicit
+128-KiB write across `0x0900` through `0x0930` subsequently passed full
+post-write read-back and produced a working save on real hardware. This result
+qualifies direct-bank access only and does not infer catalog ownership for
+other four-bank layouts.
 
 ### 36.78 0.16.1 — idempotent read-mapping preparation
 
@@ -3361,6 +3364,18 @@ orchestration, policies are independently testable, and infrastructure
 dependencies are explicit. No duplicate legacy implementation or temporary
 compatibility architecture remains. This closes the planned migration.
 
+### 36.106 0.20.7 — migrated-stack hardware finalization
+
+The migrated executable stack was rerun on real EZF Advance III hardware.
+Custom-title ROM programming, explicit four-bank 128-KiB save writing with
+full read-back verification, and cartridge reading completed successfully.
+This closes the migration's hardware-validation gate for the exercised
+workflows without broadening the evidence for catalog allocation, unrecognized
+EEPROM structures, or unsupported verification geometries.
+
+Linux build/tests and Windows build/offline tests pass. Windows physical USB
+operation remains a separate, unqualified hardware checkpoint.
+
 ---
 
 ## 37. Build environment and native platform scope
@@ -3373,13 +3388,13 @@ the cross-platform path and builds the same four executables and offline suite.
 Native project scope:
 
 ```text
-macOS       supported target; 0.15.2 baseline compiled and transcript-tested; current 0.20.7 source awaits validation; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
+macOS       supported target; current migrated executable stack and explicit direct four-bank save write hardware-validated; all writer verification geometries and final four-bank clearing hardware-requalified; corrected DumpRom bank-2 save writing and save-safe staged 16-/24-MiB catalog mapping are hardware-proven; 1-MiB official extraction awaits hardware qualification
 Linux       supported target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     supported target; validation pending
 OpenBSD     supported target; validation pending
 NetBSD      supported target; validation pending
 DragonFly   supported target; validation pending
-Windows 10/11 CMake/MSVC or MinGW-w64 source target; CI and physical USB qualification pending
+Windows 10/11 CMake/MSVC or MinGW-w64 source target; CI build/offline tests pass; physical USB qualification pending
 ```
 
 Build all four programs:

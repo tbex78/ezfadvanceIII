@@ -431,8 +431,10 @@ For metadata families with a generic captured rule, classification remains metad
 
 `FLASH1MB.pcap` directly proves `BPEF / FLASH1M_V103 -> map 7`.
 The same ROM-programming workflow explicitly clears all four 32-KiB save-bank
-selectors before programming. A 128-KiB save import/export cycle remains
-unproven.
+selectors before programming. A later direct-bank test wrote a 128-KiB save
+across selectors `0x0900` through `0x0930`, passed full read-back verification,
+and produced a working save on real hardware. This qualifies that explicit
+range only, not a general catalog-allocation rule.
 
 `EEPROM_V124` is directly capture-proven with **map 4** in Classic NES Super Mario/Castlevania and **map 5** in Tales of Phantasia. The open problem is the generic capacity/configuration discriminator, not the marker revision.
 
@@ -827,8 +829,10 @@ one through four consecutive banks while remaining bounded by the four
 observed selectors. `--consecutive-bank N` can explicitly select the count for
 either extraction or writing without assigning the range to catalog entries.
 The input size must match an explicit write count. A direct four-bank
-extraction produced a working `BPEF` save; the matching four-bank write path
-awaits controlled hardware validation.
+extraction produced a working `BPEF` save. The matching explicit four-bank
+write passed full post-write read-back and produced a working save on real
+hardware. This does not generalize four-bank ownership to other catalog
+layouts.
 
 Save erasure is also available independently of catalog selection. `--erase`
 zeroes and verifies all four banks, while `--save-bank` and an optional
@@ -861,13 +865,13 @@ Shared version 0.20.7 follows the C++17/libusb platform policy while preserving
 the established Unix-like build path:
 
 ```text
-macOS       target; 0.15.2 baseline compiled on Apple Silicon/Homebrew; current 0.20.7 source awaits validation
+macOS       target; current migrated executable stack and direct four-bank save write hardware-validated
 Linux       target; CI compile/offline tests pass; physical USB validation pending
 FreeBSD     target; validation pending
 OpenBSD     target; validation pending
 NetBSD      target; validation pending
 DragonFly   target; validation pending
-Windows 10/11 CMake/MSVC or MinGW-w64 source target; CI and physical USB qualification pending
+Windows 10/11 CMake/MSVC or MinGW-w64 source target; CI passes; physical USB qualification pending
 ```
 
 The USB protocol remains shared across platforms. Windows-specific code is

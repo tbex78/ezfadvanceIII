@@ -297,8 +297,10 @@ fully capture-proven protocol rule. It reserves one bank for SRAM/EEPROM, two
 for FLASH512/FLASH, and four for FLASH1M according to marker-derived capacity.
 `FLASH1MB.pcap` directly proves `BPEF` with `FLASH1M_V103` is catalogued with
 map `7` and that the original manager clears selectors `0x0900` through
-`0x0930` before programming it. A complete 128-KiB save import/export cycle
-remains to be hardware-qualified.
+`0x0930` before programming it. A later direct-bank test wrote a complete
+128-KiB save across those four selectors, passed full post-write read-back,
+and produced a working save on real hardware. This qualifies the explicit
+range only, not a general catalog ownership or allocation rule.
 Only the observed `FLASH512` FFTA allocation at `0x0900`/`0x0910`, followed by
 `SRAM_V111` DumpRom at `0x0920`, is hardware-qualified. EEPROM predecessors,
 generic FLASH predecessors, and FLASH1M predecessors still require direct

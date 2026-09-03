@@ -16,6 +16,14 @@ plans are retained as historical snapshots. Their words such as “current,”
 “pending,” and “next” describe the named review point, not the present 0.20.7
 support boundary.
 
+Version 0.20.7 completes the architecture migration. On real EZF Advance III
+hardware, the migrated executables successfully programmed an EZ3 image with a
+custom menu title, wrote and verified an explicitly selected four-bank 128-KiB
+save range, and read the resulting cartridge. This qualifies only the
+exercised direct-bank workflow; it does not generalize catalog allocation for
+every save marker or ROM layout. Linux and Windows CI pass, while physical
+Windows USB operation remains unqualified.
+
 ## Build and test
 
 The command-line tools require a C++17 compiler and libusb 1.0:
