@@ -38,7 +38,7 @@ int main()
         ezfadvance::WriterOptions options;
         std::ostringstream errors;
         const auto result = parse(
-            {"writer", "--experimental-clean-start",
+            {"writer", "--experimental-direct-boot",
              "--map1=4", "--map120=6", "--type10=3",
              "--title1=Menu Name", "rom.gba"},
             options, errors);
@@ -48,7 +48,7 @@ int main()
         assert(options.mapping_overrides[119] == 6);
         assert(options.type_overrides[9] == 3);
         assert(options.title_overrides[0] == "Menu Name");
-        assert(options.experimental_clean_start);
+        assert(options.experimental_direct_boot);
         assert(options.rom_paths.size() == 1);
         assert(options.rom_paths[0] == "rom.gba");
     }

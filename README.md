@@ -25,16 +25,15 @@ every save marker or ROM layout. Linux and Windows CI pass, while physical
 Windows USB operation remains unqualified.
 
 Version 0.21.0 adds the explicitly opt-in
-`--experimental-clean-start` writer mode. It keeps the single ROM at cartridge
-offset zero and uses the normal single-ROM loader, but returns through a small
-ARM trampoline that calls BIOS `RegisterRamReset` before entering the ROM's
-original entry point. This tests whether DROM's direct-boot failure is caused
-by runtime state left by the loader. The construction is not capture-derived
-or hardware-proven and does not change the default single-ROM path.
+`--experimental-direct-boot` writer mode. It writes the single ROM unchanged
+at cartridge offset zero, without an EZ3 loader, catalog, entry patch, or
+runtime trampoline. This tests DROM against the cartridge's cold power-on
+mapping. The construction is not capture-derived or hardware-proven and does
+not change the default single-ROM path.
 
 ```sh
 ./ezfadvanceIII_multirom_writer \
-  --experimental-clean-start \
+  --experimental-direct-boot \
   assets/homebrew/Bios_Dumper.gba
 ```
 

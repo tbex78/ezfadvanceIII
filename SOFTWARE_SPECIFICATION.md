@@ -656,15 +656,13 @@ captured final 26-byte zero tail. The loader may be appended or embedded in a
 sufficiently large erased run; only physical/catalog ROM 1 is patched to branch
 to it.
 
-The opt-in `--experimental-clean-start` mode accepts exactly one ROM. It keeps
-the normal single-ROM placement and loader, but makes the first catalog entry
-return through an appended three-instruction ARM trampoline. The trampoline
-loads `r0 = 0xFF`, calls BIOS SWI `0x01` (`RegisterRamReset`), and branches to
-the ROM's original entry target. It must be visibly identified as experimental.
-It must not alter default single-ROM construction or infer the mode from a
-title, game code, ROM size, or save marker. This trampoline is motivated by
-captured type-9 startup behavior but is not itself capture-derived and remains
-hardware-unqualified.
+The opt-in `--experimental-direct-boot` mode accepts exactly one ROM. It writes
+that ROM unchanged at byte zero and deliberately omits the EZ3 loader, catalog,
+entry patch, and runtime trampoline. The normal minimum programmed extent and
+read-back verification still apply. It must be visibly identified as
+experimental. It must not alter default single-ROM construction or infer the
+mode from a title, game code, ROM size, or save marker. Loaderless cold-boot
+behavior is not capture-derived and remains hardware-unqualified.
 
 The minimum programmed extent is 64 KiB. A larger constructed extent is
 rounded up to a `0x100`-byte boundary.

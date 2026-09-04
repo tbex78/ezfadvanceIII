@@ -26,7 +26,7 @@ public:
     bool write = false;
     bool skip_verify = false;
     bool verbose = false;
-    bool experimental_clean_start = false;
+    bool experimental_direct_boot = false;
     std::array<std::optional<std::uint8_t>, catalog_slots> type_overrides{};
     std::array<std::optional<std::uint8_t>, catalog_slots> mapping_overrides{};
     std::array<std::optional<std::string>, catalog_slots> title_overrides{};

@@ -26,7 +26,7 @@ struct BuiltCartridgeImage {
 };
 
 struct CartridgeImageBuildOptions {
-    bool clean_start_single_rom = false;
+    bool direct_boot_single_rom = false;
 };
 
 class CartridgeImageBuilder final {

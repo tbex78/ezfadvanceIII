@@ -59,9 +59,9 @@ static void usage(const char* argv0)
         << "  --type1=2   --type6=3   --type10=4\n"
         << "  --map1=6    --map6=6    --map10=3\n\n"
         << "Experimental image construction:\n"
-        << "  --experimental-clean-start\n"
-        << "      Reset GBA runtime state before entering a single ROM.\n"
-        << "      Intended for ROMs such as DROM that assume a cold start.\n";
+        << "  --experimental-direct-boot\n"
+        << "      Program one ROM at byte zero without an EZ3 loader, catalog,\n"
+        << "      entry patch, or runtime trampoline.\n";
 }
 
 int main(int argc, char** argv)
@@ -82,8 +82,8 @@ int main(int argc, char** argv)
         const bool do_write = options.write;
         const bool skip_verify = options.skip_verify;
         const bool verbose = options.verbose;
-        const bool experimental_clean_start =
-            options.experimental_clean_start;
+        const bool experimental_direct_boot =
+            options.experimental_direct_boot;
         const auto& type_override = options.type_overrides;
         const auto& mapping_override = options.mapping_overrides;
         const auto& title_override = options.title_overrides;
@@ -93,8 +93,8 @@ int main(int argc, char** argv)
             usage(argv[0]);
             return 1;
         }
-        if (experimental_clean_start && rom_paths.size() != 1) {
-            std::cerr << "--experimental-clean-start requires exactly one ROM.\n";
+        if (experimental_direct_boot && rom_paths.size() != 1) {
+            std::cerr << "--experimental-direct-boot requires exactly one ROM.\n";
             return 1;
         }
         if (rom_paths.size() > CartridgeImageBuilder::catalog_slots) {
@@ -147,18 +147,18 @@ int main(int argc, char** argv)
         BuiltCartridgeImage built_image;
         std::string image_build_error;
         const ezfadvance::CartridgeImageBuildOptions image_options{
-            experimental_clean_start};
+            experimental_direct_boot};
         if (!image_builder.build(
                 roms, built_image, image_build_error, image_options)) {
             std::cerr << image_build_error << '\n';
             return 1;
         }
         std::cout << built_image.report;
-        if (experimental_clean_start) {
+        if (experimental_direct_boot) {
             std::cout
-                << "WARNING: experimental clean-start single-ROM image.\n"
-                << "The loader returns through a BIOS-reset trampoline before "
-                   "entering the ROM. This requires real-hardware qualification.\n";
+                << "WARNING: experimental loaderless direct-boot image.\n"
+                << "Cold-boot behavior depends on the cartridge's power-on "
+                   "mapping and requires real-hardware qualification.\n";
         }
         std::vector<uint8_t>& image = built_image.bytes;
         const size_t programmed_size = built_image.programmed_size;

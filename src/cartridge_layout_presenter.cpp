@@ -58,7 +58,7 @@ void CartridgeLayoutPresenter::print(const std::vector<RomInfo>& roms,
             << " (0x" << std::hex << image.size() << std::dec << ")\n"
             << "Programmed bytes: " << programmed_size
             << " (0x" << std::hex << programmed_size << std::dec << ")\n"
-            << "Patched ROM #1 first 4 bytes: ";
+            << "Image first 4 bytes: ";
     printHex(output_, image.data(), std::min<std::size_t>(4, image.size()), 4);
 }
 

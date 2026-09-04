@@ -25,6 +25,6 @@ int main()
     assert(text.find("byte start: 0x10000") != std::string::npos);
     assert(text.find("catalog type: 3 (size-class rule)") != std::string::npos);
     assert(text.find("mapping flag: 6 (signature/map rule)") != std::string::npos);
-    assert(text.find("Patched ROM #1 first 4 bytes: 12 34 56 78") !=
+    assert(text.find("Image first 4 bytes: 12 34 56 78") !=
            std::string::npos);
 }

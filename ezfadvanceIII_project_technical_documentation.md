@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.21.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.21.0. The 0.20.7 migrated stack is compiled, CI-tested, and hardware-qualified for the documented workflows. Version 0.21.0 adds an opt-in clean-start single-ROM experiment that remains hardware-unqualified. Linux/BSD/Windows physical-USB validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.21.0. The 0.20.7 migrated stack is compiled, CI-tested, and hardware-qualified for the documented workflows. Version 0.21.0 adds an opt-in loaderless direct-boot experiment that remains hardware-unqualified. Linux/BSD/Windows physical-USB validation remains pending.
 
 ---
 
@@ -3376,7 +3376,7 @@ EEPROM structures, or unsupported verification geometries.
 Linux build/tests and Windows build/offline tests pass. Windows physical USB
 operation remains a separate, unqualified hardware checkpoint.
 
-### 36.107 0.21.0 — experimental clean-start single-ROM image
+### 36.107 0.21.0 — experimental loaderless direct-boot image
 
 DROM does not boot through the normal single-ROM loader. Two one-entry
 multi-loader constructions were tested and also failed: the first kept DROM at
@@ -3389,15 +3389,15 @@ Assembly inspection shows DROM branches from `0x00000000` to `0x000000C0`, then
 to `0x000000E0`, where it establishes its IRQ and System stacks before entering
 Thumb startup code. It does not perform the early BIOS runtime reset present in
 captured type-9 startup code, which loads `r0 = 0xFF` and invokes SWI `0x01`
-(`RegisterRamReset`). The working later-entry path therefore plausibly provides
-a cleaner runtime state that DROM assumes.
+(`RegisterRamReset`). A third experiment added that reset in a trampoline
+between the normal single-ROM loader and DROM's original entry point; it also
+failed on hardware. Missing BIOS reset alone is therefore disproven.
 
-The writer now accepts `--experimental-clean-start` only with exactly one ROM.
-The normal single-ROM loader and ROM-at-zero layout are retained. The catalog's
-first-entry return target is changed from the original ROM target to an
-appended, 16-byte-aligned ARM trampoline containing `MOV r0,#0xFF`, `SWI 0x01`,
-and a branch to the real original entry target. No ROM instruction other than
-the established loader branch at byte zero is changed.
+The writer now accepts `--experimental-direct-boot` only with exactly one ROM.
+It places the input ROM unchanged at byte zero and creates no EZ3 loader,
+catalog, entry patch, or trampoline. Only normal programmed-extent padding may
+follow the input bytes. This isolates whether DROM can start from the
+cartridge's cold power-on mapping without any loader-mediated transition.
 
 The mode is explicitly reported as experimental and hardware-unqualified. It
 is never selected from a title, game code, ROM size, or save marker, and normal

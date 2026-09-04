@@ -758,32 +758,8 @@ static void write_catalog_entry(std::vector<uint8_t>& t,
                first ? r.original_entry_target : r.start);
 }
 
-static uint32_t make_arm_branch_from(uint32_t instruction_address,
-                                     uint32_t target_address)
-{
-    const int64_t delta = static_cast<int64_t>(target_address) -
-                          static_cast<int64_t>(instruction_address) - 8;
-    if ((delta & 3) != 0 || delta < -0x02000000ll || delta > 0x01FFFFFCll)
-        throw std::runtime_error("clean-start trampoline branch is out of range");
-    return 0xEA000000u |
-           (static_cast<uint32_t>(delta / 4) & 0x00FFFFFFu);
-}
-
-static void write_clean_start_trampoline(std::vector<uint8_t>& image,
-                                         uint32_t trampoline_start,
-                                         uint32_t rom_entry_target)
-{
-    // DROM initializes its own stacks but, unlike captured type-9 startup
-    // code, does not first reset the remaining GBA runtime state.
-    write_le32(image, trampoline_start, 0xE3A000FFu);     // MOV r0, #0xFF
-    write_le32(image, trampoline_start + 4, 0xEF010000u); // SWI 0x01
-    write_le32(image, trampoline_start + 8,
-               make_arm_branch_from(trampoline_start + 8, rom_entry_target));
-}
-
 static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms,
-                                               std::ostream& report,
-                                               bool clean_start)
+                                               std::ostream& report)
 {
     if (roms.size() != 1)
         throw std::runtime_error("single image builder requires exactly one ROM");
@@ -797,11 +773,6 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms,
 
     const size_t meaningful_end = meaningful_rom_end(r.data);
     uint32_t loader_start = align_up_u32(static_cast<uint32_t>(meaningful_end), 16u);
-    uint32_t trampoline_start = 0;
-    if (clean_start) {
-        trampoline_start = loader_start;
-        loader_start = align_up_u32(trampoline_start + 12u, 16u);
-    }
 
     // Original-manager single-ROM captures reserve a multi-loader-sized FF
     // footprint even though only the 0x660-byte single loader is copied. Tales
@@ -810,7 +781,7 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms,
     const size_t single_slot_reserve = std::max(t.size(), MULTI_TEMPLATE_LEN);
 
     bool loader_fits_in_padding = false;
-    if (!clean_start && loader_start <= r.data.size() &&
+    if (loader_start <= r.data.size() &&
         static_cast<uint64_t>(loader_start) + single_slot_reserve <= r.data.size()) {
         loader_fits_in_padding = std::all_of(
             r.data.begin() + static_cast<std::ptrdiff_t>(loader_start),
@@ -821,7 +792,7 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms,
     bool loader_fits_in_internal_gap = false;
     bool loader_in_second_half = false;
 
-    if (!clean_start && !loader_fits_in_padding) {
+    if (!loader_fits_in_padding) {
         if (r.data.size() == CARD_HALF_SIZE) {
             // Preserve FFTA first: the original manager uses its internal FF
             // gap even on a 256-Mbit cartridge.
@@ -856,10 +827,7 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms,
     write_le16(t, SINGLE_HEADER_OFF, 1);
     write_le16(t, SINGLE_HEADER_COUNT2_OFF, 1);
 
-    RomInfo catalog_rom = r;
-    if (clean_start)
-        catalog_rom.original_entry_target = trampoline_start;
-    write_catalog_entry(t, SINGLE_ENTRY_OFF, catalog_rom, true);
+    write_catalog_entry(t, SINGLE_ENTRY_OFF, r, true);
 
     if (r.mapping_flag == 6 || r.mapping_flag == 7) {
         report << "FLASH catalog mapping: type "
@@ -879,9 +847,6 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms,
 
     std::vector<uint8_t> image(image_size, 0xFF);
     std::copy(r.data.begin(), r.data.end(), image.begin());
-    if (clean_start)
-        write_clean_start_trampoline(
-            image, trampoline_start, r.original_entry_target);
     if (loader_in_second_half) {
         std::fill(image.begin() + static_cast<std::ptrdiff_t>(CARD_HALF_SIZE),
                   image.begin() + static_cast<std::ptrdiff_t>(loader_start),
@@ -905,14 +870,23 @@ static std::vector<uint8_t> build_single_image(std::vector<RomInfo>& roms,
     else if (loader_in_second_half)
         report << " (second 16-MiB half; fireemblem.pcap behavior)";
     report << '\n';
-    if (clean_start) {
-        report << "Experimental clean-start trampoline @ byte 0x"
-               << std::hex << trampoline_start
-               << ", ROM entry target 0x" << r.original_entry_target
-               << std::dec << '\n';
-    }
-
     return image;
+}
+
+static std::vector<uint8_t> build_direct_boot_image(
+    std::vector<RomInfo>& roms,
+    std::ostream& report)
+{
+    if (roms.size() != 1)
+        throw std::runtime_error("direct-boot image builder requires exactly one ROM");
+
+    RomInfo& rom = roms[0];
+    rom.start = 0;
+    report << "Experimental direct-boot image: ROM bytes are unchanged; "
+              "no loader or catalog is present.\n";
+    report << "Direct-boot meaningful data end @ byte 0x"
+           << std::hex << meaningful_rom_end(rom.data) << std::dec << '\n';
+    return rom.data;
 }
 
 static std::vector<uint8_t> build_multi_image(std::vector<RomInfo>& roms,
@@ -1167,9 +1141,12 @@ bool CartridgeImageBuilder::build(std::vector<RomInfo>& roms,
                                   const CartridgeImageBuildOptions& options) const
 {
     std::ostringstream report;
-    result.bytes = roms.size() == 1
-        ? build_single_image(roms, report, options.clean_start_single_rom)
-        : build_multi_image(roms, report);
+    if (roms.size() == 1 && options.direct_boot_single_rom)
+        result.bytes = build_direct_boot_image(roms, report);
+    else if (roms.size() == 1)
+        result.bytes = build_single_image(roms, report);
+    else
+        result.bytes = build_multi_image(roms, report);
     result.report = report.str();
     if (result.bytes.size() > MAX_CARD_IMAGE) {
         std::ostringstream message;
