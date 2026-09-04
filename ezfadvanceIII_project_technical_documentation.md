@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.21.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.21.0. The 0.20.7 migrated stack is compiled, CI-tested, and hardware-qualified for the documented workflows. Version 0.21.0 adds an opt-in loaderless direct-boot experiment that remains hardware-unqualified. Linux/BSD/Windows physical-USB validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.21.0. The 0.20.7 migrated stack is compiled, CI-tested, and hardware-qualified for the documented workflows. Version 0.21.0 adds an opt-in loaderless direct-boot mode whose exact DROM workflow is hardware-qualified. Linux/BSD/Windows physical-USB validation remains pending.
 
 ---
 
@@ -3399,9 +3399,13 @@ catalog, entry patch, or trampoline. Only normal programmed-extent padding may
 follow the input bytes. This isolates whether DROM can start from the
 cartridge's cold power-on mapping without any loader-mediated transition.
 
-The mode is explicitly reported as experimental and hardware-unqualified. It
-is never selected from a title, game code, ROM size, or save marker, and normal
-single-ROM construction remains unchanged.
+The loaderless DROM image was programmed, the cartridge was fully disconnected,
+and DROM booted successfully on real GBA hardware. This qualifies the exact
+DROM direct-boot workflow and disproves the need for an EZ3 loader for that
+ROM. The mode remains explicitly marked experimental because cold-boot behavior
+for other ROMs has not been established. It is never selected from a title,
+game code, ROM size, or save marker, and normal single-ROM construction remains
+unchanged.
 
 ---
 

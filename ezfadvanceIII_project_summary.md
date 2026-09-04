@@ -243,7 +243,8 @@ one-entry multi-loader layouts and a normal single-loader layout with a BIOS
 reset trampoline. The current explicitly selected experiment writes DROM
 unchanged at byte zero with no loader or catalog, testing the cartridge's cold
 power-on mapping directly. The default single-ROM path is preserved, and the
-experiment requires controlled hardware validation.
+loaderless DROM image boots on real GBA hardware after a full disconnect. This
+qualifies DROM only and does not generalize loaderless booting to other ROMs.
 
 ### Multi-ROM loader
 

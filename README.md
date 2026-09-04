@@ -28,8 +28,9 @@ Version 0.21.0 adds the explicitly opt-in
 `--experimental-direct-boot` writer mode. It writes the single ROM unchanged
 at cartridge offset zero, without an EZ3 loader, catalog, entry patch, or
 runtime trampoline. This tests DROM against the cartridge's cold power-on
-mapping. The construction is not capture-derived or hardware-proven and does
-not change the default single-ROM path.
+mapping. The resulting loaderless image boots DROM on real GBA hardware. This
+qualification applies to DROM only; the construction is not capture-derived,
+and it does not change the default single-ROM path.
 
 ```sh
 ./ezfadvanceIII_multirom_writer \

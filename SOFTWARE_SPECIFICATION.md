@@ -662,7 +662,9 @@ entry patch, and runtime trampoline. The normal minimum programmed extent and
 read-back verification still apply. It must be visibly identified as
 experimental. It must not alter default single-ROM construction or infer the
 mode from a title, game code, ROM size, or save marker. Loaderless cold-boot
-behavior is not capture-derived and remains hardware-unqualified.
+behavior is not capture-derived. The exact DROM workflow is hardware-qualified:
+after programming and fully disconnecting the cartridge, DROM boots directly
+on a real GBA. Other ROMs remain outside that evidence boundary.
 
 The minimum programmed extent is 64 KiB. A larger constructed extent is
 rounded up to a `0x100`-byte boundary.
