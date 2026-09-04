@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.21.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.21.0. The 0.20.7 migrated stack is compiled, CI-tested, and hardware-qualified for the documented workflows. Version 0.21.0 adds an opt-in one-entry multi-loader experiment that remains hardware-unqualified. Linux/BSD/Windows physical-USB validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.21.0. The 0.20.7 migrated stack is compiled, CI-tested, and hardware-qualified for the documented workflows. Version 0.21.0 adds an opt-in clean-start single-ROM experiment that remains hardware-unqualified. Linux/BSD/Windows physical-USB validation remains pending.
 
 ---
 
@@ -3376,20 +3376,32 @@ EEPROM structures, or unsupported verification geometries.
 Linux build/tests and Windows build/offline tests pass. Windows physical USB
 operation remains a separate, unqualified hardware checkpoint.
 
-### 36.107 0.21.0 — experimental one-entry multi-loader image
+### 36.107 0.21.0 — experimental clean-start single-ROM image
 
-The writer accepts `--experimental-single-multi-loader` only with exactly one
-ROM. The first experimental form used the multi-ROM loader with the ROM still
-at physical offset zero; it did not boot on real hardware. The revised mode
-reserves a synthetic first size-class block, places the complete unmodified
-ROM at the following size-class boundary, and encodes the sole catalog entry
-with later-ROM start semantics. Both catalog count fields remain one. This
-isolates the selection path that successfully launches the same ROM when it is
-a later entry in a conventional multi-ROM layout.
+DROM does not boot through the normal single-ROM loader. Two one-entry
+multi-loader constructions were tested and also failed: the first kept DROM at
+physical offset zero, while the second relocated the unmodified ROM to the next
+size-class boundary and used later-entry catalog semantics. A conventional
+two-entry image established that the first DROM entry fails while the second
+entry boots, narrowing the problem to the state of the first-entry launch path.
 
-The experiment is structural and opt-in: normal single-ROM construction is
-unchanged, no game-code or title exception is used, and the generated layout
-is explicitly reported as neither capture-derived nor hardware-qualified.
+Assembly inspection shows DROM branches from `0x00000000` to `0x000000C0`, then
+to `0x000000E0`, where it establishes its IRQ and System stacks before entering
+Thumb startup code. It does not perform the early BIOS runtime reset present in
+captured type-9 startup code, which loads `r0 = 0xFF` and invokes SWI `0x01`
+(`RegisterRamReset`). The working later-entry path therefore plausibly provides
+a cleaner runtime state that DROM assumes.
+
+The writer now accepts `--experimental-clean-start` only with exactly one ROM.
+The normal single-ROM loader and ROM-at-zero layout are retained. The catalog's
+first-entry return target is changed from the original ROM target to an
+appended, 16-byte-aligned ARM trampoline containing `MOV r0,#0xFF`, `SWI 0x01`,
+and a branch to the real original entry target. No ROM instruction other than
+the established loader branch at byte zero is changed.
+
+The mode is explicitly reported as experimental and hardware-unqualified. It
+is never selected from a title, game code, ROM size, or save marker, and normal
+single-ROM construction remains unchanged.
 
 ---
 

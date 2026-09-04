@@ -656,13 +656,14 @@ captured final 26-byte zero tail. The loader may be appended or embedded in a
 sufficiently large erased run; only physical/catalog ROM 1 is patched to branch
 to it.
 
-The opt-in `--experimental-single-multi-loader` mode accepts exactly one ROM.
-It reserves the first size-class block as a synthetic bootstrap, relocates the
-unmodified ROM to the next size-class boundary, and describes that location as
-a later-ROM-style entry in a multi-loader catalog whose two count fields are
-one. It must be visibly identified as experimental. It must not alter default
-single-ROM construction or infer the mode from a title, game code, ROM size,
-or save marker. This one-entry form is not capture-derived and remains
+The opt-in `--experimental-clean-start` mode accepts exactly one ROM. It keeps
+the normal single-ROM placement and loader, but makes the first catalog entry
+return through an appended three-instruction ARM trampoline. The trampoline
+loads `r0 = 0xFF`, calls BIOS SWI `0x01` (`RegisterRamReset`), and branches to
+the ROM's original entry target. It must be visibly identified as experimental.
+It must not alter default single-ROM construction or infer the mode from a
+title, game code, ROM size, or save marker. This trampoline is motivated by
+captured type-9 startup behavior but is not itself capture-derived and remains
 hardware-unqualified.
 
 The minimum programmed extent is 64 KiB. A larger constructed extent is

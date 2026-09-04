@@ -59,8 +59,8 @@ WriterParseResult WriterOptions::parse(int argc, char** argv,
             options.skip_verify = true;
         } else if (argument == "--verbose") {
             options.verbose = true;
-        } else if (argument == "--experimental-single-multi-loader") {
-            options.experimental_single_multi_loader = true;
+        } else if (argument == "--experimental-clean-start") {
+            options.experimental_clean_start = true;
         } else if (argument.rfind("--title", 0) == 0) {
             const auto equals = argument.find('=');
             std::size_t slot = 0;

@@ -67,37 +67,46 @@ int main()
     std::string experimental_error;
     std::vector experimental_roms{single};
     ezfadvance::CartridgeImageBuildOptions experimental_options;
-    experimental_options.use_multi_loader_for_single_rom = true;
+    experimental_options.clean_start_single_rom = true;
     const bool experimental_ok = ezfadvance::CartridgeImageBuilder{}.build(
         experimental_roms, experimental_image, experimental_error,
         experimental_options);
     assert(experimental_ok);
     assert(experimental_error.empty());
-    assert(experimental_roms[0].start == 0x10000);
+    assert(experimental_roms[0].start == 0);
     assert(experimental_image.report.find(
-               "EXPERIMENTAL ONE-ENTRY MULTI-LOADER PACKING") !=
-           std::string::npos);
-    assert(experimental_image.report.find(
-               "Experimental one-entry multi-loader extent") !=
-           std::string::npos);
+               "Experimental clean-start trampoline") != std::string::npos);
     const auto loader_start = ezfadvance::CartridgeFormat::armBranchTarget(
         ezfadvance::CartridgeFormat::readLe32(experimental_image.bytes.data()));
     assert(loader_start);
-    constexpr std::size_t multi_header_offset = 0x475E;
+    constexpr std::size_t single_header_offset = 0x4E8;
     assert(ezfadvance::CartridgeFormat::readLe16(
                experimental_image.bytes.data() + *loader_start +
-               multi_header_offset) == 1);
+               single_header_offset) == 1);
     assert(ezfadvance::CartridgeFormat::readLe16(
                experimental_image.bytes.data() + *loader_start +
-               multi_header_offset + 14) == 1);
-    assert(experimental_image.bytes[experimental_roms[0].start] == 0x11);
-    constexpr std::size_t multi_entry_offset = 0x476E;
+               single_header_offset + 14) == 1);
+    constexpr std::size_t single_entry_offset = 0x4F8;
     const auto entry = ezfadvance::CatalogEntry::parse(
         experimental_image.bytes,
-        *loader_start + multi_entry_offset,
-        false);
-    assert(entry.start == experimental_roms[0].start);
-    assert(entry.target_or_start == experimental_roms[0].start);
+        *loader_start + single_entry_offset,
+        true);
+    const std::uint32_t trampoline_start = entry.target_or_start;
+    assert(entry.start == 0);
+    assert(trampoline_start + 16 == *loader_start);
+    assert(ezfadvance::CartridgeFormat::readLe32(
+               experimental_image.bytes.data() + trampoline_start) ==
+           0xE3A000FFu);
+    assert(ezfadvance::CartridgeFormat::readLe32(
+               experimental_image.bytes.data() + trampoline_start + 4) ==
+           0xEF010000u);
+    const std::uint32_t branch = ezfadvance::CartridgeFormat::readLe32(
+        experimental_image.bytes.data() + trampoline_start + 8);
+    std::int32_t displacement = static_cast<std::int32_t>(
+        (branch & 0x00FFFFFFu) << 8) >> 6;
+    assert(static_cast<std::uint32_t>(
+               static_cast<std::int64_t>(trampoline_start + 16) +
+               displacement) == single.original_entry_target);
 
     verify({
         rom("Large", 0x100000, 0x21, 5),

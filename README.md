@@ -25,16 +25,16 @@ every save marker or ROM layout. Linux and Windows CI pass, while physical
 Windows USB operation remains unqualified.
 
 Version 0.21.0 adds the explicitly opt-in
-`--experimental-single-multi-loader` writer mode. It places a synthetic
-bootstrap at cartridge offset zero, relocates the unmodified ROM behind it,
-and launches that ROM through a one-entry multi-loader catalog. This tests the
-later-ROM selection path used by working multi-ROM layouts. The construction
-is not capture-derived or hardware-proven and does not change the default
-single-ROM path.
+`--experimental-clean-start` writer mode. It keeps the single ROM at cartridge
+offset zero and uses the normal single-ROM loader, but returns through a small
+ARM trampoline that calls BIOS `RegisterRamReset` before entering the ROM's
+original entry point. This tests whether DROM's direct-boot failure is caused
+by runtime state left by the loader. The construction is not capture-derived
+or hardware-proven and does not change the default single-ROM path.
 
 ```sh
 ./ezfadvanceIII_multirom_writer \
-  --experimental-single-multi-loader \
+  --experimental-clean-start \
   assets/homebrew/Bios_Dumper.gba
 ```
 

@@ -238,12 +238,13 @@ Relocation entries:  13
 Catalog entry:       offset 0x4F8
 ```
 
-Version 0.21.0 adds an explicitly selected one-entry multi-loader experiment
-for small-ROM boot investigation. The initial direct-ROM-1 form did not boot
-on hardware. The revised form reserves a synthetic first size-class block,
-relocates the unmodified ROM to the following boundary, and encodes its sole
-catalog entry with later-ROM start semantics. This preserves the established
-default single-ROM path and requires controlled hardware validation.
+Version 0.21.0 records two failed one-entry multi-loader experiments for DROM:
+one retained the ROM at offset zero and one relocated it to the next size-class
+boundary. The current explicitly selected experiment instead retains the
+normal single-ROM loader and inserts a clean-start trampoline before DROM's
+original entry. It performs the BIOS reset seen in captured type-9 startup
+code, then enters the unchanged ROM. The default single-ROM path is preserved,
+and the experiment requires controlled hardware validation.
 
 ### Multi-ROM loader
 

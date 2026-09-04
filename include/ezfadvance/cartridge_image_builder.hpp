@@ -26,7 +26,7 @@ struct BuiltCartridgeImage {
 };
 
 struct CartridgeImageBuildOptions {
-    bool use_multi_loader_for_single_rom = false;
+    bool clean_start_single_rom = false;
 };
 
 class CartridgeImageBuilder final {
