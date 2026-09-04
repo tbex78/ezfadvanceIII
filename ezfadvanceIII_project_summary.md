@@ -242,9 +242,20 @@ Version 0.21.0 records three failed loader-mediated experiments for DROM: two
 one-entry multi-loader layouts and a normal single-loader layout with a BIOS
 reset trampoline. The current explicitly selected experiment writes DROM
 unchanged at byte zero with no loader or catalog, testing the cartridge's cold
-power-on mapping directly. The default single-ROM path is preserved, and the
-loaderless DROM image boots on real GBA hardware after a full disconnect. This
-qualifies DROM only and does not generalize loaderless booting to other ROMs.
+power-on mapping directly. The default single-ROM path is preserved.
+
+Hardware tests subsequently established loaderless ROM access across the card:
+DROM and representative 4-MiB and 8-MiB images boot, AE7X boots at exactly
+16 MiB, and B8CP boots at the full 32-MiB capacity. DROM produces a usable
+32-KiB save. AWRP (`FLASH_V121`, 8 MiB) loads a 64-KiB save written directly
+to `0x0900`/`0x0910` and saves in game. AE7X and B8CP likewise load explicitly
+written saves and save successfully in game.
+
+The boundary is save mapping rather than ROM size. Loaderless map-4 EEPROM
+software boots but cannot save; observed handling ranges from a Game Pak error
+in FADE/FSME-class cases to a save failure without that message in ALUP. AN8P
+boots at 16 MiB but freezes when its map-5 EEPROM save routine runs. BPEF map 7
+does not boot. Those mappings continue to require an EZ3 loader/catalog entry.
 
 ### Multi-ROM loader
 

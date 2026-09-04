@@ -27,10 +27,12 @@ Windows USB operation remains unqualified.
 Version 0.21.0 adds the explicitly opt-in
 `--experimental-direct-boot` writer mode. It writes the single ROM unchanged
 at cartridge offset zero, without an EZ3 loader, catalog, entry patch, or
-runtime trampoline. This tests DROM against the cartridge's cold power-on
-mapping. The resulting loaderless image boots DROM on real GBA hardware. This
-qualification applies to DROM only; the construction is not capture-derived,
-and it does not change the default single-ROM path.
+runtime trampoline. Hardware tests prove cold-boot ROM access from the small
+DROM image through the full 32-MiB B8CP image. Direct save access and in-game
+persistence work for the tested DROM SRAM, 8-MiB AWRP `FLASH_V121`, AE7X, and
+B8CP cases. EEPROM map 4/5 and BPEF map 7 remain loader/catalog-dependent. The
+construction is not capture-derived and does not change the default single-ROM
+path.
 
 ```sh
 ./ezfadvanceIII_multirom_writer \

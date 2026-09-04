@@ -662,9 +662,17 @@ entry patch, and runtime trampoline. The normal minimum programmed extent and
 read-back verification still apply. It must be visibly identified as
 experimental. It must not alter default single-ROM construction or infer the
 mode from a title, game code, ROM size, or save marker. Loaderless cold-boot
-behavior is not capture-derived. The exact DROM workflow is hardware-qualified:
-after programming and fully disconnecting the cartridge, DROM boots directly
-on a real GBA. Other ROMs remain outside that evidence boundary.
+behavior is not capture-derived. Hardware qualification covers DROM and
+representative 4-, 8-, 16-, and 32-MiB images. The 8-MiB AWRP `FLASH_V121`
+case loads an explicitly written 64-KiB save from `0x0900`/`0x0910` and saves
+in game. AE7X and B8CP also load explicitly written saves and save in game.
+DROM produces an exploitable 32-KiB save.
+
+This does not establish generic save compatibility. Loaderless AN8P boots but
+freezes on its map-5 EEPROM save operation; tested map-4 EEPROM cases boot but
+cannot save, with FADE/FSME-style software potentially reporting a Game Pak
+error while ALUP fails without that message. BPEF map 7 does not boot. These
+cases require the normal EZ3 loader and catalog mapping.
 
 The minimum programmed extent is 64 KiB. A larger constructed extent is
 rounded up to a `0x100`-byte boundary.

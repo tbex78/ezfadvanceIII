@@ -5,7 +5,7 @@
 **Current writer implementation:** `ezfadvanceIII_multirom_writer 0.21.0`<br>
 **Version-synchronized utilities:** `ezfadvanceIII_multirom_writer`, `ezfadvanceIII_card_reader`, `ezfadvanceIII_save_reader`, `ezfadvanceIII_wipe_card`<br>
 **Target hardware:** EZ-Flash Advance III / EZF Advance III, 256 Mbit (32 MiB) GBA flash cartridge<br>
-**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.21.0. The 0.20.7 migrated stack is compiled, CI-tested, and hardware-qualified for the documented workflows. Version 0.21.0 adds an opt-in loaderless direct-boot mode whose exact DROM workflow is hardware-qualified. Linux/BSD/Windows physical-USB validation remains pending.
+**Host implementation:** object-oriented C++17 + libusb; native source scope is macOS, Linux, BSD, and Windows 10/11. The current shared source version is 0.21.0. The 0.20.7 migrated stack is compiled, CI-tested, and hardware-qualified for the documented workflows. Version 0.21.0 adds an opt-in loaderless direct-boot mode hardware-qualified across tested small through full-32-MiB ROM geometries, with save support bounded by the cartridge's cold-start mapping. Linux/BSD/Windows physical-USB validation remains pending.
 
 ---
 
@@ -3400,12 +3400,32 @@ follow the input bytes. This isolates whether DROM can start from the
 cartridge's cold power-on mapping without any loader-mediated transition.
 
 The loaderless DROM image was programmed, the cartridge was fully disconnected,
-and DROM booted successfully on real GBA hardware. This qualifies the exact
-DROM direct-boot workflow and disproves the need for an EZ3 loader for that
-ROM. The mode remains explicitly marked experimental because cold-boot behavior
-for other ROMs has not been established. It is never selected from a title,
-game code, ROM size, or save marker, and normal single-ROM construction remains
-unchanged.
+and DROM booted successfully on real GBA hardware. Further tests establish that
+the cold-start mapping exposes the complete cartridge ROM address space:
+
+| Game code / geometry | Loaderless ROM result | Loaderless save result |
+|---|---|---|
+| DROM / small image | boots | produces an exploitable 32-KiB save |
+| representative 4-MiB image | boots | not part of that test |
+| AWRP / 8 MiB / `FLASH_V121` | boots | explicit 64-KiB `0x0900` + `0x0910` save loads; in-game saving works |
+| AE7X / exact 16 MiB | boots | explicit save loads; in-game saving works |
+| B8CP / exact 32 MiB | boots | explicit bank save loads; in-game saving works |
+| map-4 EEPROM (FADE/FSME class) | boots | save fails and may report a Game Pak error |
+| ALUP / map-4 EEPROM | boots | save fails without a Game Pak error |
+| AN8P / exact 16 MiB / map-5 EEPROM | boots | save attempt freezes |
+| BPEF / map 7 / `FLASH1M` | does not boot | not reachable |
+
+The maximum-size B8CP result proves that loaderless ROM visibility is not
+limited to an 8- or 16-MiB window. Save compatibility is a separate property:
+the tested cold-start state supports the successful DROM, AWRP, AE7X, and B8CP
+workflows, but it does not apply the map 4, 5, or 7 configuration required by
+the failing cases. Such ROMs must use the normal single-ROM loader and catalog;
+for example, AN8P requires map 5.
+
+The mode remains explicitly marked experimental because the successful samples
+do not prove every ROM or save implementation. It is never selected from a
+title, game code, ROM size, or save marker, and normal single-ROM construction
+remains unchanged.
 
 ---
 
