@@ -119,7 +119,7 @@ read-only: it performs a guarded full 32-MiB scan using 512 global-linear
 1/2/4/8/16/32-MiB extent containing all non-`FF` data. This trailing-`FF`
 sizing is a generic heuristic, not a recovered original-manager algorithm.
 
-A Golden Sun 8-MiB extraction is hardware-proven by trusted SHA-256 equality
+A AGSF 8-MiB extraction is hardware-proven by trusted SHA-256 equality
 and real-hardware boot. Other extraction sizes, including the new 1-MiB
 extent, still require equivalent physical-cartridge dump/hash qualification.
 

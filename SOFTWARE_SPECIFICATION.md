@@ -253,7 +253,7 @@ input byte. A mismatch is failure,
 not partial success. The save tool must never erase flash or program ROM data.
 
 Immediate same-session verification is distinct from persistence across a
-completed session and later initialization. In the 0.11.0 FFTA hardware test,
+completed session and later initialization. In the 0.11.0 AFXP hardware test,
 the immediate 65536-byte comparison passed, while a fresh extraction differed
 only at offsets 0 and 1 (`FF FF` became `00 04`). The software must not silently
 normalize or ignore those bytes until the mutation's cause and meaning are
@@ -263,12 +263,12 @@ Controlled tests isolated the mutation to one-byte `0x92` transfers in the
 linear mapping sequence: selector/value `1/04` writes save offset 1, while
 `0/00`, `0/AA`, and `0/55` write save offset 0. The production read mapping
 must therefore use only the proven two-byte control transfers. A staged
-tx92Two-only 16-to-24-MiB transition exposed the genuine two-ROM FFTA/DumpRom
+tx92Two-only 16-to-24-MiB transition exposed the genuine two-ROM AFXP/DROM
 catalog while preserving all 32768 bytes of bank `0x0900`.
 The production save tool was then hardware-qualified end to end: it wrote both
-FFTA banks, passed immediate byte-for-byte verification, and a separate fresh
+AFXP banks, passed immediate byte-for-byte verification, and a separate fresh
 invocation extracted a 65536-byte file whose SHA-256 exactly matched the input.
-After another complete FFTA write, the adjacent DumpRom bank at `0x0920` also
+After another complete AFXP write, the adjacent DROM bank at `0x0920` also
 retained its trusted SHA-256 across a fresh extraction.
 Shared read-only ROM and save discovery must follow the same rule: no
 `tx92One` mapping or status transaction is permitted. Writer post-program
@@ -278,7 +278,7 @@ window, the writer must reproduce that exact sequence and must subsequently
 clear and verify all four known save banks. Those writer-only operations must
 never be reused by read-only applications.
 
-For the Fire Emblem tiny-tail geometry, the final USB read remains a complete
+For the AE7X tiny-tail geometry, the final USB read remains a complete
 64-KiB transport block, but comparison stops at the constructed image end.
 The capture erases and programs only the small sector containing the loader;
 bytes in later sectors of the rounded read block are outside the image and are
@@ -301,8 +301,8 @@ map `7` and that the original manager clears selectors `0x0900` through
 128-KiB save across those four selectors, passed full post-write read-back,
 and produced a working save on real hardware. This qualifies the explicit
 range only, not a general catalog ownership or allocation rule.
-Only the observed `FLASH512` FFTA allocation at `0x0900`/`0x0910`, followed by
-`SRAM_V111` DumpRom at `0x0920`, is hardware-qualified. EEPROM predecessors,
+Only the observed `FLASH512` AFXP allocation at `0x0900`/`0x0910`, followed by
+`SRAM_V111` DROM at `0x0920`, is hardware-qualified. EEPROM predecessors,
 generic FLASH predecessors, and FLASH1M predecessors still require direct
 manager captures or controlled hardware validation. Unknown predecessor
 capacity and total allocation beyond four banks must be refused.
@@ -467,7 +467,7 @@ Read-only initialization preserves two classification-relevant four-byte
 captured flash-ID attempt selects the official-ROM path. Any other changed
 response is unknown and fails before later EZ3-only probing. This decision is
 based on probe behavior; it must not classify from an ARM branch or from the
-captured Golden Sun word `EE 00 00 EA` alone.
+captured AGSF word `EE 00 00 EA` alone.
 
 For manager-style command/data transactions, the implementation preserves the
 legacy 750 microsecond command-to-data delay. The wipe workflow retains its
@@ -916,15 +916,15 @@ The current durable support boundary is:
 |---|---|---|---|
 | EZ3 inspection and catalog parsing | yes | partial/pure parsing | yes |
 | EZ3 catalogued-ROM extraction | manager/builder layout evidence | entry reconstruction unit test | yes, ROM 1 and ROM 2 from a two-ROM card matched their originals by SHA-256 on macOS |
-| Official-ROM detection and header inspection | yes | yes | yes, Golden Sun on macOS |
-| Official full scan with 1/2/4/8/16/32-MiB trailing-`FF` sizing | scan yes / generic sizing heuristic | yes | 8 MiB only: Golden Sun trim/hash/boot on macOS; 1/2/4/16/32-MiB sizing not yet hardware-generalized |
+| Official-ROM detection and header inspection | yes | yes | yes, AGSF on macOS |
+| Official full scan with 1/2/4/8/16/32-MiB trailing-`FF` sizing | scan yes / generic sizing heuristic | yes | 8 MiB only: AGSF trim/hash/boot on macOS; 1/2/4/16/32-MiB sizing not yet hardware-generalized |
 | Partial first-window verification, including 1/2/4-MiB checkpoints | yes | yes | yes |
 | Exact 8/16/24/32-MiB verification | yes | yes | yes |
 | Tiny tail immediately above 16 MiB | yes | yes | yes |
 | Representative 12/20/28-MiB verification | yes | yes | yes |
 | Other arbitrary partial higher extents | no | no | no |
 | `SRAM_V111` 32-KiB save extraction | yes | protocol component coverage | yes |
-| EEPROM map-4/map-5 structural discriminator | TOF direct 64-Kbit initialization and Super Monkey wrapped 4-Kbit initialization recognized | focused fixtures | automatic Super Monkey map 4 and TOF map 5 both boot and save on hardware; unresolved ROMs retain explicit override |
+| EEPROM map-4/map-5 structural discriminator | AN8P direct 64-Kbit initialization and ALUP wrapped 4-Kbit initialization recognized | focused fixtures | automatic ALUP map 4 and AN8P map 5 both boot and save on hardware; unresolved ROMs retain explicit override |
 | More than 8 active menu entries | structural slots only | parser bound | pending |
 | Linux/BSD physical hardware operation | applicable | build target | pending |
 

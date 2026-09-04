@@ -158,7 +158,7 @@ partial 28 MiB:
 exact 16 MiB
 exact 24 MiB
 exact 32 MiB
-Fire-Emblem-style tiny tail immediately above 16 MiB
+AE7X-style tiny tail immediately above 16 MiB
 ```
 
 The sub-8-MiB rule is supported by a single 1-MiB capture, a two-1-MiB /
@@ -386,15 +386,15 @@ Catalog `map` is separate from ROM size. Current evidence links it to metadata c
 
 ```text
 SRAM / SRAM_F / ordinary non-FLASH metadata -> map 3
-Classic NES EEPROM_V124                     -> map 4
-Tales of Phantasia EEPROM_V124              -> map 5
+FSME/FADE EEPROM_V124                     -> map 4
+AN8P EEPROM_V124              -> map 5
 FLASH_V / FLASH512_V metadata               -> map 6
 FLASH1M_V metadata                          -> map 7
 ```
 
 The same `EEPROM_V124` marker therefore occurs with both map 4 and map 5. Version 0.12.0 does not guess from the marker or ROM size: it follows a structurally recognized Nintendo SDK capacity initializer. Argument `4` (4 Kbit/512 bytes) selects map 4 and `0x40` (64 Kbit/8 KiB) selects map 5. Unresolved ROMs retain explicit `--mapN=4` or `--mapN=5`.
 
-Controlled hardware A/B tests show that the distinction is functionally significant. Both Classic NES titles work with map 4. When either one is forced to map 5, programming and full read-back verification still succeed, but the game displays the same runtime error screen:
+Controlled hardware A/B tests show that the distinction is functionally significant. Both FSME and FADE work with map 4. When either one is forced to map 5, programming and full read-back verification still succeed, but the game displays the same runtime error screen:
 
 ```text
 GAME PACK ERROR
@@ -406,26 +406,26 @@ The screen has a black background, a centered white rectangular border, `GAME PA
 Capture examples:
 
 ```text
-F-Zero             SRAM_V111      -> map 3
-MegaManZ           SRAM_V112      -> map 3
-Fire Emblem        SRAM_F_V102    -> map 3
-Kingdom Hearts     SRAM_F_V103    -> map 3
+AFZE             SRAM_V111      -> map 3
+AZCE           SRAM_V112      -> map 3
+AE7X        SRAM_F_V102    -> map 3
+B8CP     SRAM_F_V103    -> map 3
 
-Advance Wars       FLASH_V121     -> map 6
-Mario Kart         FLASH_V124     -> map 6
-Advance Wars 2     FLASH_V126     -> map 6
-FFTA                FLASH512_V130  -> map 6
+AWRP       FLASH_V121     -> map 6
+AMKE         FLASH_V124     -> map 6
+AW2E     FLASH_V126     -> map 6
+AFXP                FLASH512_V130  -> map 6
 
-Classic NES Super Mario EEPROM_V124 -> map 4
-Classic NES Castlevania EEPROM_V124  -> map 4
-Tales of Phantasia EEPROM_V124       -> map 5
+FSME EEPROM_V124 -> map 4
+FADE EEPROM_V124  -> map 4
+AN8P EEPROM_V124       -> map 5
 ```
 
-### Critical FFTA paired-control result
+### Critical AFXP paired-control result
 
-The project now has an unpatched FFTA control plus the exact SRAM-patched ROM pair.
+The project now has an unpatched AFXP control plus the exact SRAM-patched ROM pair.
 
-Unpatched FFTA:
+Unpatched AFXP:
 
 ```text
 ROM size:       16 MiB
@@ -436,7 +436,7 @@ loader:         0xD97730
 
 Direct comparison with the SRAM-patched ROM shows only **94 changed bytes**, grouped into five localized regions from `0x1454D8` through `0x145B4D`. The patch redirects save reads/writes to SRAM at `0x0E000000`, bypasses FLASH-management code, and leaves `FLASH512_V130` unchanged at `0x370820`.
 
-Earlier EZ3Manager evidence for the SRAM-patched FFTA also produced `type 1 / map 6` with loader `0xD97730`.
+Earlier EZ3Manager evidence for the SRAM-patched AFXP also produced `type 1 / map 6` with loader `0xD97730`.
 
 Therefore:
 
@@ -455,7 +455,7 @@ across selectors `0x0900` through `0x0930`, passed full read-back verification,
 and produced a working save on real hardware. This qualifies that explicit
 range only, not a general catalog-allocation rule.
 
-`EEPROM_V124` is directly capture-proven with **map 4** in Classic NES Super Mario/Castlevania and **map 5** in Tales of Phantasia. The open problem is the generic capacity/configuration discriminator, not the marker revision.
+`EEPROM_V124` is directly capture-proven with **map 4** in FSME/FADE and **map 5** in AN8P. The open problem is the generic capacity/configuration discriminator, not the marker revision.
 
 ---
 
@@ -480,7 +480,7 @@ Continue anyway? [y/N]:
 
 Only explicit `y` / `yes` continues.
 
-This warning is **conservative and signature-based**. An already SRAM-patched ROM may still trigger it if the old FLASH/EEPROM marker remains in the file. FFTA is now byte-level proof: 94 executable bytes are changed to redirect save handling to SRAM while `FLASH512_V130` remains untouched.
+This warning is **conservative and signature-based**. An already SRAM-patched ROM may still trigger it if the old FLASH/EEPROM marker remains in the file. AFXP is now byte-level proof: 94 executable bytes are changed to redirect save handling to SRAM while `FLASH512_V130` remains untouched.
 
 ROM save conversion, when desired, is a separate manual operation performed with a dedicated patching tool before writing. This matches the original Windows workflow.
 
@@ -502,13 +502,13 @@ Therefore:
 Examples:
 
 ```text
-Input:  Piano 64 KiB, MegaManZ 8 MiB
-Final:  MegaManZ, Piano
+Input:  PIAN 64 KiB, AZCE 8 MiB
+Final:  AZCE, PIAN
 ```
 
 ```text
-Input:  Advance Wars 8 MiB, MegaManZ 8 MiB, Fire Emblem 16 MiB
-Final:  Fire Emblem, Advance Wars, MegaManZ
+Input:  AWRP 8 MiB, AZCE 8 MiB, AE7X 16 MiB
+Final:  AE7X, AWRP, AZCE
 ```
 
 Four equal-size 8-MiB ROMs preserve their original order.
@@ -558,12 +558,12 @@ Single-ROM behavior is more specialized. Although the copied single loader is on
 Important examples:
 
 ```text
-Advance Wars loader:       0x5C2360
-FFTA loader:               0xD97730
-Tales of Phantasia loader: 0xD49020
+AWRP loader:       0x5C2360
+AFXP loader:               0xD97730
+AN8P loader: 0xD49020
 ```
 
-Fire Emblem, a full 16-MiB ROM with no suitable internal gap, uses the capture-proven fallback just above 16 MiB:
+AE7X, a full 16-MiB ROM with no suitable internal gap, uses the capture-proven fallback just above 16 MiB:
 
 ```text
 loader = 0x01000010
@@ -573,46 +573,46 @@ loader = 0x01000010
 
 ## Critical validated layouts
 
-### MegaManZ + Piano
+### AZCE + PIAN
 
 ```text
-MegaManZ @ 0x000000
-Piano    @ 0x7F0000
+AZCE @ 0x000000
+PIAN    @ 0x7F0000
 loader   @ 0x2CC420
 end      @ 0x800000
 ```
 
 This proves compact packing using trailing and internal `FF` space.
 
-### F-Zero + Mario Kart
+### AFZE + AMKE
 
 ```text
-F-Zero       @ 0x000000  type 3 / map 3
-Mario Kart   @ 0x400000  type 3 / map 6
+AFZE       @ 0x000000  type 3 / map 3
+AMKE   @ 0x400000  type 3 / map 6
 loader       @ 0x5E9C30
 end          @ 0x800000
 ```
 
 This case proved that the 4-MiB geometry was correct and that the earlier launch failure came from wrong catalog metadata.
 
-### Advance Wars 2 + Mario Kart + F-Zero
+### AW2E + AMKE + AFZE
 
 ```text
-Advance Wars 2 @ 0x0000000  type 2 / map 6
-Mario Kart     @ 0x0800000  type 3 / map 6
-F-Zero         @ 0x0C00000  type 3 / map 3
+AW2E @ 0x0000000  type 2 / map 6
+AMKE     @ 0x0800000  type 3 / map 6
+AFZE         @ 0x0C00000  type 3 / map 3
 loader         @ 0x0617EF0
 end            @ 0x1000000
 ```
 
 This is a strong mixed-size validation of the current generic classifier and allocator.
 
-### Fire Emblem + Advance Wars + MegaManZ
+### AE7X + AWRP + AZCE
 
 ```text
-Fire Emblem  @ 0x0000000
-Advance Wars @ 0x1000000
-MegaManZ     @ 0x1800000
+AE7X  @ 0x0000000
+AWRP @ 0x1000000
+AZCE     @ 0x1800000
 loader       @ 0x15C2360
 end          @ 0x2000000
 ```
@@ -641,23 +641,23 @@ This is capture + hardware proven.
 | 8 MiB + 8 MiB | historical/partial | yes |
 | 16 MiB + 8 MiB + 8 MiB | yes | yes |
 | 8 MiB + 8 MiB + 8 MiB + 8 MiB | yes | yes |
-| single 1 MiB Classic NES Super Mario, map 4 | yes | yes |
-| single 1 MiB Classic NES Castlevania, map 4 | yes | yes |
-| single 1 MiB Classic NES Super Mario, forced map 5 | full verify succeeds | runtime `GAME PACK ERROR` |
-| single 1 MiB Classic NES Castlevania, forced map 5 | full verify succeeds | identical runtime `GAME PACK ERROR` |
-| 1 MiB + 1 MiB Classic NES, map 4 + 4 | yes | yes |
-| single 4 MiB F-Zero | yes | yes |
+| single 1 MiB FSME, map 4 | yes | yes |
+| single 1 MiB FADE, map 4 | yes | yes |
+| single 1 MiB FSME, forced map 5 | full verify succeeds | runtime `GAME PACK ERROR` |
+| single 1 MiB FADE, forced map 5 | full verify succeeds | identical runtime `GAME PACK ERROR` |
+| 1 MiB FSME + 1 MiB FADE, map 4 + 4 | yes | yes |
+| single 4 MiB AFZE | yes | yes |
 | 4 MiB + 1 MiB, map 3 + 4 | derived from captured rules | yes |
 | 4 MiB + 1 MiB + 1 MiB, map 3 + 4 + 4 | derived from captured rules | yes |
-| ~14 MiB: Advance Wars + F-Zero + two Classic NES, maps 6 + 3 + 4 + 4 | partial verify unproven | yes |
-| ~22 MiB: Tales + F-Zero + two Classic NES, maps 5 + 3 + 4 + 4 | partial verify unproven | yes |
-| single 8 MiB Advance Wars | yes | yes |
+| ~14 MiB: AWRP + AFZE + two FSME/FADE images, maps 6 + 3 + 4 + 4 | partial verify unproven | yes |
+| ~22 MiB: AN8P + AFZE + two FSME/FADE images, maps 5 + 3 + 4 + 4 | partial verify unproven | yes |
+| single 8 MiB AWRP | yes | yes |
 | 6 ROMs / 24 MiB | yes | yes |
 | 6 ROMs / 32 MiB | yes | yes |
-| single 16 MiB FFTA | yes | yes |
-| single 16 MiB Fire Emblem | yes | yes |
-| single 32 MiB Kingdom Hearts | yes | yes |
-| single 16 MiB Tales / EEPROM_V124 | yes | save-cycle validation still useful |
+| single 16 MiB AFXP | yes | yes |
+| single 16 MiB AE7X | yes | yes |
+| single 32 MiB B8CP | yes | yes |
+| single 16 MiB AN8P / EEPROM_V124 | yes | save-cycle validation still useful |
 
 A successful USB verify is **not** sufficient proof that menu/game launch behavior is correct.
 
@@ -759,21 +759,21 @@ That assumption was removed.
 
 ### ROM order and packing affect real GBA launch behavior
 
-Piano-first + MegaManZ-second caused MegaManZ to straddle an 8-MiB hardware boundary and fail to launch, even though the loader/menu worked.
+PIAN-first + AZCE-second caused AZCE to straddle an 8-MiB hardware boundary and fail to launch, even though the loader/menu worked.
 
 Original EZ3Manager reordered the games and compacted them into a valid 8-MiB image.
 
 ### Successful verification does not prove catalog correctness
 
-The first custom F-Zero + Mario Kart image wrote and verified perfectly and displayed the chooser, but neither game launched.
+The first custom AFZE + AMKE image wrote and verified perfectly and displayed the chooser, but neither game launched.
 
 The physical layout was correct. The catalog `type/map` metadata was wrong.
 
 Correcting:
 
 ```text
-F-Zero     -> type 3 / map 3
-Mario Kart -> type 3 / map 6
+AFZE     -> type 3 / map 3
+AMKE -> type 3 / map 6
 ```
 
 fixed both games and led to the generic size-class plus signature-associated map classifier.
@@ -789,7 +789,7 @@ Original-manager captures now prove 1 through 8 active catalog entries. The load
 ### Other partial higher-window readback geometries
 
 Exact 8-, 16-, 24-, and 32-MiB verification mappings, explicit partial 12-,
-20-, and 28-MiB checkpoints, and the tiny Fire-Emblem-style tail immediately
+20-, and 28-MiB checkpoints, and the tiny AE7X-style tail immediately
 above 16 MiB are capture-proven. The partial first-window path includes
 hardware-proven 1-, 2-, and 4-MiB checkpoints. Other arbitrary partial
 higher-window extents remain deliberately unproven.
@@ -805,22 +805,22 @@ write/read cycle and real-hardware save reload.
 ### EEPROM map-4 / map-5 discriminator
 
 `EEPROM_V124` is proven with both map 4 and map 5. Save files from the tested
-Classic NES samples are 512 bytes (4 Kbit), while the Tales of Phantasia save
+FSME and FADE samples are 512 bytes (4 Kbit), while the AN8P save
 is 8 KiB (64 Kbit):
 
 ```text
-Classic NES EEPROM_V124 -> 512-byte EEPROM -> map 4
-Tales of Phantasia      -> 8-KiB EEPROM    -> map 5
+FSME/FADE EEPROM_V124 -> 512-byte EEPROM -> map 4
+AN8P      -> 8-KiB EEPROM    -> map 5
 ```
 
-Super Monkey Ball Jr. supplies the independent controlled case: its V122 SDK
+ALUP supplies the independent controlled case: its V122 SDK
 wrapper passes capacity argument `4`; map 4 boots and saves, while map 5 boots
-but the game rejects saving. TOF directly calls the V124 identifier with
+but the game rejects saving. AN8P directly calls the V124 identifier with
 `0x40`, and its native 8-KiB EEPROM save works with map 5. This establishes the
 capacity/map rule for those structurally visible SDK forms.
 
 Both 0.12.0 automatic paths are hardware-qualified. The writer selected map 4
-for Super Monkey and map 5 for TOF without overrides; each game booted and
+for ALUP and map 5 for AN8P without overrides; each game booted and
 saved successfully.
 
 The `EEPROM_V124` marker does not encode capacity. A static ROM analyzer may be
@@ -829,11 +829,11 @@ able to distinguish the formats by recognizing the EEPROM command widths: the
 command), while the 8-KiB device uses 14 address bits (17-bit read command and
 81-bit write command). Compiler variation, dynamically selected capacity, and
 custom routines make searches for those numeric constants alone unreliable.
-Version 0.12.0 recognizes the direct TOF initializer and the one-level Super
+Version 0.12.0 recognizes the direct AN8P initializer and the one-level Super
 Monkey wrapper. A selector without a recoverable capacity call remains
 unknown; the detector does not use absence of a call as 512-byte evidence.
 
-The Classic NES A/B tests prove map 4 and map 5 are not interchangeable: map 4 works, while map 5 still writes and fully verifies but is rejected at runtime with the same `GAME PACK ERROR / TURN THE POWER OFF.` screen in both tested titles.
+The FSME/FADE A/B tests prove map 4 and map 5 are not interchangeable: map 4 works, while map 5 still writes and fully verifies but is rejected at runtime with the same `GAME PACK ERROR / TURN THE POWER OFF.` screen in both tested titles.
 
 EEPROM map selection is automatic for recognized SDK initialization and
 remains explicit for unresolved or contradictory structures.
@@ -950,7 +950,7 @@ the absence of exact-window mapping selectors and unlock transitions. Exact
 8/16/24/32-MiB and tiny-tail paths remain unchanged in the writer.
 
 The extracted path was subsequently hardware-confirmed with a single 4-MiB
-F-Zero image after a full card wipe: programming and full read-back verification
+AFZE image after a full card wipe: programming and full read-back verification
 succeeded, and the cartridge booted successfully on a real Game Boy Advance.
 
 ## 0.7.6 release changes
@@ -1000,7 +1000,7 @@ zero verification delays, and the absence of `0020`, `0040`, `0080`, `00C0`,
 verifier, and other partial higher-window geometries remain unsupported.
 
 The extracted path was subsequently confirmed with the capture-derived single
-Fire Emblem layout. The loader was placed at `0x01000010`, producing a
+AE7X layout. The loader was placed at `0x01000010`, producing a
 `0x1000700` image and a `0x700`-byte BANK2 program tail. Full read-back
 verification completed through the rounded final block at `0x01000000`, the
 card reader identified the single-ROM layout and valid header, and the game
@@ -1048,7 +1048,7 @@ path delegated, the now-dead legacy writer-side read command, extent,
 comparison, and generic verifier were removed.
 
 The extracted path was subsequently hardware-confirmed twice at the full
-`0x02000000`-byte extent. A single 32-MiB Kingdom Hearts image fully wrote and
+`0x02000000`-byte extent. A single 32-MiB B8CP image fully wrote and
 verified through final 64-KiB block `0x01ff0000`, then booted on a real GBA. A
 three-ROM 16+8+8-MiB image likewise completed all 512 read-back blocks through
 `0x01ff0000`; its menu and all three games booted without issue on real GBA
@@ -1100,7 +1100,7 @@ read-only inspection. The shared initializer preserves both relevant
 four-byte `0x91/sub2` results, continues the established EZ3 path only for the
 known `1C 00 B8 00` / `1C 00 B9 00` IDs, branches away from later EZ3-only
 probes for unchanged official-ROM behavior, and rejects other changed behavior.
-Golden Sun header inspection is hardware-confirmed on macOS.
+AGSF header inspection is hardware-confirmed on macOS.
 
 ## 0.7.16 release changes
 
@@ -1130,7 +1130,7 @@ written `.gba` using a documented generic heuristic. After successful reading
 and cleanup, the reader finds the final non-`FF` byte and selects the smallest
 2-, 4-, 8-, 16-, or 32-MiB extent that contains it. All bytes inside that
 extent are preserved; only trailing erased address-space padding is omitted.
-Hardware testing with Golden Sun completed the guarded 32-MiB scan, selected
+Hardware testing with AGSF completed the guarded 32-MiB scan, selected
 the correct 8-MiB output, matched the trusted SHA-256
 `5eb59f508c25548fb0ef72911cc75a81867f16b0ef8fca2a22cb6d026a862cd8`,
 and booted the extracted file successfully on real hardware. That result
@@ -1155,8 +1155,8 @@ global-linear 64-KiB reads through final offset `0x00BF0000`. It emits no
 `0200`, size selector, `AA55`, selector tail, or inferred delay. Exact-size,
 tiny-tail, erase, program, startup, and read-only paths are unchanged. Offline
 transcript coverage is complete. Hardware testing completed all 192 reads
-through final offset `0x00BF0000`; the menu booted and both Advance Wars and
-F-Zero launched successfully on a real GBA.
+through final offset `0x00BF0000`; the menu booted and both AWRP and
+AFZE launched successfully on a real GBA.
 
 ## 0.7.21 release changes
 
@@ -1168,7 +1168,7 @@ official-header confirmation, read-session cleanup, and all EZ3 writer paths
 are unchanged.
 
 The project already has hardware evidence for building, programming,
-verifying, and booting 1-MiB Classic NES ROM images on EZ3. That evidence does
+verifying, and booting 1-MiB FSME/FADE ROM images on EZ3. That evidence does
 not qualify physical official-cartridge extraction at 1 MiB, which remains
 pending a trusted dump/hash comparison.
 
@@ -1183,7 +1183,7 @@ selector tail, or inferred delay. Existing exact-size, 12-MiB, tiny-tail,
 erase, program, extraction, and startup paths are unchanged. Offline transcript
 coverage is complete. Hardware testing without a preliminary full-card wipe
 completed all 320 reads through final offset `0x013F0000`; the menu booted and
-both Tales of Phantasia and F-Zero launched successfully on a real GBA.
+both AN8P and AFZE launched successfully on a real GBA.
 
 ## 0.7.23 release changes
 
@@ -1195,7 +1195,7 @@ global-linear 64-KiB reads through final offset `0x01BF0000`. It emits no
 exact-size, 12-/20-MiB, tiny-tail, erase, program, extraction, and startup paths
 are unchanged. Offline transcript coverage is complete. Hardware testing
 completed all 448 reads through final offset `0x01BF0000`; the menu booted and
-Tales of Phantasia, Advance Wars, and F-Zero all launched successfully on a
+AN8P, AWRP, and AFZE all launched successfully on a
 real GBA.
 
 ## 0.7.24 release changes
@@ -1244,7 +1244,7 @@ extraction now requires an explicit `--rom N` on multi-ROM layouts; single-ROM
 selection remains automatic. The 0.8.1 evidence-policy correction additionally
 requires exactly one supported `SRAM_V111` candidate and requires `N` to match
 it, because no hardware save-slot switching command is capture-proven. The
-corrected behavior is hardware-confirmed on the Castlevania + Bios_Dumper
+corrected behavior is hardware-confirmed on the FADE + DROM
 layout: selecting ROM 1 was refused without creating an output file, while
 selecting the unique ROM-2 `SRAM_V111` entry produced the expected save.
 
@@ -1286,7 +1286,7 @@ factory supplies the concrete `WriterBackend` to `CardWriter`. USB commands,
 delays, erase/program geometry, progress reporting, and explicit verification
 paths are mechanically preserved.
 The 0.9.0 extracted backend is specifically hardware-requalified with the
-established two-ROM 8-MiB F-Zero/Mario Kart image: exact-8-MiB full read-back
+established two-ROM 8-MiB AFZE/AMKE image: exact-8-MiB full read-back
 verification succeeded, the EZ3 menu booted, and both games launched on a real
 GBA. The remaining capture-proven verification paths retain their earlier
 hardware qualification and are mechanically preserved in 0.9.0; they were not
@@ -1308,7 +1308,7 @@ At shared version **0.9.0**, the project has an object-oriented structural model
 - single and multi loaders are capture-derived and relocatable; the same `0x7080` multi-loader with 125 relocations matches captured 2–8 ROM configurations;
 - catalog `type` is ROM-size based;
 - catalog `map` uses capture-derived values `3`, `4`, `5`, and `6`; recognized 4-Kbit/64-Kbit EEPROM initialization selects map 4/5, while unresolved structures remain explicit;
-- hardware A/B testing proves map correctness is independent of flash verification: both Classic NES map-5 images fully verify but fail at runtime with an identical Game Pak error screen, whereas map 4 works;
+- hardware A/B testing proves map correctness is independent of flash verification: both FSME and FADE map-5 images fully verify but fail at runtime with an identical Game Pak error screen, whereas map 4 works;
 - 0.7.14 no-unplug transition tests pass for card-reader-to-wipe and save-reader-to-writer workflows;
 - 0.7.15 official-ROM detection/header inspection is hardware-proven on macOS;
 - 0.7.16 adds the transcript-tested 32-MiB raw extraction interface;
@@ -1320,14 +1320,14 @@ At shared version **0.9.0**, the project has an object-oriented structural model
 - 0.7.22 adds the explicit capture-, transcript-, and hardware-proven 20-MiB partial higher-window verification checkpoint, including a successful no-pre-wipe write, menu boot, and launch of both games;
 - 0.7.23 adds the explicit capture-, transcript-, and hardware-proven 28-MiB partial higher-window verification checkpoint, including menu boot and successful launch of all three games;
 - two independent exactly 2-MiB single-ROM sources are hardware-proven through `0x200700` construction/programming, 33-block padded verification to `0x210000`, and real-GBA boot; physical 2-MiB official-cartridge extraction remains a separate pending gate;
-- official Golden Sun extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot; other heuristic trim sizes are not yet hardware-generalized;
+- official AGSF extraction is hardware-proven through the guarded full 32-MiB scan, correct 8-MiB trim, trusted SHA-256 match, and real-hardware boot; other heuristic trim sizes are not yet hardware-generalized;
 - EZ3 catalogued-ROM extraction is hardware-proven on a two-ROM card: reconstructed ROM 1 and unchanged-entry ROM 2 both match their original files by SHA-256; separate single-ROM-layout qualification remains pending;
 - partial first-window verification, including explicit 1-/2-/4-MiB checkpoints, and exact 8-/16-/24-/32-MiB verification are capture-, transcript-, and hardware-proven in the tested layouts;
 - partial first-window programming rounds to `0x100` and verification to `0x10000`;
 - default destructive-write output uses progress bars, while `--verbose` exposes per-operation diagnostics;
-- paired FFTA evidence proves that non-SRAM save-library signatures may survive SRAM patching while runtime save code changes;
+- paired AFXP evidence proves that non-SRAM save-library signatures may survive SRAM patching while runtime save code changes;
 - native scope is macOS/Linux/BSD/Windows through libusb; Windows 10/11 uses CMake and WinUSB/libusbK, with physical qualification pending;
-- real hardware now validates 1-/2-/4-MiB partial-first-window checkpoints, exact 8-/16-/24-/32-MiB paths, explicit partial 12-/20-/28-MiB paths, and the Fire-Emblem-style tiny-tail checkpoint, plus the documented map and multi-ROM layouts.
+- real hardware now validates 1-/2-/4-MiB partial-first-window checkpoints, exact 8-/16-/24-/32-MiB paths, explicit partial 12-/20-/28-MiB paths, and the AE7X-style tiny-tail checkpoint, plus the documented map and multi-ROM layouts.
 
 The next EEPROM task is broadening the **map-4/map-5 structural detector**,
 which requires direct capture or controlled hardware evidence. Later work
@@ -1370,7 +1370,7 @@ is not yet hardware-qualified and must remain described as capture-derived and
 transcript-tested until the planned real-card save/restore test succeeds.
 
 The save tool now shares the card reader's capture-proven 16-/24-/32-MiB
-catalog mapping boundary. This admits the hardware-observed FFTA + Bios_Dumper
+catalog mapping boundary. This admits the hardware-observed AFXP + DROM
 layout whose ROM 2 starts at exactly `0x01000000`, while the actual save access
 remains restricted to the unique `SRAM_V111` candidate and selector `0x0900`.
 
@@ -1391,17 +1391,17 @@ existing `--rom N --output FILE` extraction workflow. Focused policy tests
 cover absent, partial, distinct, and identical path pairs.
 
 New paired captures expose four shared 32-KiB banks at `0x0900`, `0x0910`,
-`0x0920`, and `0x0930`. ROM programming clears all four. A 64-KiB FFTA save is
+`0x0920`, and `0x0930`. ROM programming clears all four. A 64-KiB AFXP save is
 written to the first two banks, but the original manager then incorrectly
-restarts a 32-KiB DumpRom save at `0x0900`, overwriting FFTA. The corrected
-tool uses a cumulative marker-capacity allocation policy, placing DumpRom at
+restarts a 32-KiB DROM save at `0x0900`, overwriting AFXP. The corrected
+tool uses a cumulative marker-capacity allocation policy, placing DROM at
 `0x0920` in this layout. Unknown or overflowing layouts are refused. Only this
-observed `FLASH512` FFTA (`AFXP`) followed by `SRAM_V111` DumpRom (`DROM`)
+observed `FLASH512` AFXP (`AFXP`) followed by `SRAM_V111` DROM (`DROM`)
 allocation is hardware-qualified. The analogous EEPROM- and generic-FLASH
 predecessor layouts remain inferred. `FLASH1MB.pcap` directly supports
 four-bank initialization for `BPEF`, while its complete 128-KiB save
 import/export protocol and use as a predecessor remain pending controlled
-hardware evidence. DumpRom (`DROM`) was written and verified at `0x0920`,
+hardware evidence. DROM (`DROM`) was written and verified at `0x0920`,
 then extracted in a fresh tool session; the input and extracted files shared
 SHA-256
 `c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
@@ -1415,8 +1415,8 @@ selectors, and verifies all 65536 bytes. Offline transcripts cover the exact
 `0x0900` and `0x0910` sequence.
 
 On real hardware, both writes and immediate byte-for-byte verification passed,
-FFTA loaded successfully on a GBA, and the following DumpRom save at `0x0920`
-remained SHA-256 identical. A fresh FFTA extraction differed from the input in
+AFXP loaded successfully on a GBA, and the following DROM save at `0x0920`
+remained SHA-256 identical. A fresh AFXP extraction differed from the input in
 exactly two bytes: offsets 0 and 1 changed from `FF FF` to `00 04`; bytes
 `0x0002..0xFFFF` were identical.
 
@@ -1424,16 +1424,16 @@ A standalone hardware diagnostic established that initialization changed zero
 bytes, then isolated every one-byte mapping transaction as a direct save write:
 `1/04` changes offset 1, and selector-0 values change offset 0. Removing those
 transactions and retaining the two-byte control sequence exposed the genuine
-two-ROM FFTA/DumpRom catalog through staged 16-/24-MiB mapping while preserving
+two-ROM AFXP/DROM catalog through staged 16-/24-MiB mapping while preserving
 all 32768 bytes of bank `0x0900`. No automatic normalization or ignored-byte
 verification is used.
 
-The corrected production workflow subsequently wrote the complete 64-KiB FFTA
+The corrected production workflow subsequently wrote the complete 64-KiB AFXP
 save across `0x0900` and `0x0910`, passed immediate read-back verification, and
 survived a separate fresh extraction. Input and extracted SHA-256 were both
 `822db2704ddc1287c8deac4980e6200f1a5a46445bd996ff55f482392f9e3611`.
-An adjacent-bank regression test then rewrote both FFTA banks and freshly
-extracted DumpRom from `0x0920`; its before/after/trusted SHA-256 remained
+An adjacent-bank regression test then rewrote both AFXP banks and freshly
+extracted DROM from `0x0920`; its before/after/trusted SHA-256 remained
 `c018bc0ba86de98199fb873bcc0e766ba1138c7a75f81608f78dfdbb042d6aac`.
 
 ## 0.11.1 development changes
@@ -1441,13 +1441,13 @@ extracted DumpRom from `0x0920`; its before/after/trusted SHA-256 remained
 Hardware isolation proved that one-byte mapping/status operations directly
 write save offsets 0 and 1. Card/save reading and every writer verification
 geometry now use control-only two-byte mapping sequences. The complete offline
-verification transcript matrix passes, and the corrected FFTA/DumpRom workflow
+verification transcript matrix passes, and the corrected AFXP/DROM workflow
 is hardware-qualified by fresh SHA-256 equality for both saves.
 
 Capture-required ROM erase/program window selection still uses the one-byte
 operations after the writer's initial save clear. The writer therefore repeats
 the four-bank zeroing after verification or cleanup and attempts it after any
-post-setup failure. The final exact-8-MiB F-Zero/Mario Kart hardware run passed
+post-setup failure. The final exact-8-MiB AFZE/AMKE hardware run passed
 programming, verification, menu boot, and both game boots; subsequent read-only
 checks verified all 32768 bytes of each selector `0x0900`, `0x0910`, `0x0920`,
 and `0x0930` were zero.
